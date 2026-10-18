@@ -3,3 +3,4 @@ uvicorn[standard]
 websockets
 pymongo[srv]
 dnspython
+pwdlib[argon2]
