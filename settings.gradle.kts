@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ScreenLinkRemote"
+rootProject.name = "DESIVIDEOS"
 include(":app")
