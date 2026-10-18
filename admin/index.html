@@ -3,486 +3,1580 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0c1120">
+    <meta name="theme-color" content="#080d18">
     <title>ScreenLink Remote — Admin</title>
 
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+        :root {
+            --bg: #080d18;
+            --panel: #101827;
+            --panel-light: #151f31;
+            --border: #243147;
+            --text: #eef3ff;
+            --muted: #91a0b8;
+            --accent: #6d8cff;
+            --accent-hover: #5475f0;
+            --green: #39d9a2;
+            --red: #ff6b78;
+            --yellow: #ffca70;
+            --radius: 16px;
         }
 
-        :root {
-            --bg: #0c1120;
-            --panel: #151d30;
-            --border: #27334b;
-            --green: #46dc96;
-            --text: #f4f7ff;
-            --muted: #9aa9c2;
+        * {
+            box-sizing: border-box;
+        }
+
+        [hidden] {
+            display: none !important;
         }
 
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: Arial, sans-serif;
+            margin: 0;
             min-height: 100vh;
+            background:
+                radial-gradient(ellipse at top left, #172448 0, transparent 38%),
+                var(--bg);
+            color: var(--text);
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                "Segoe UI", sans-serif;
         }
 
-        button, input {
+        button,
+        input {
             font: inherit;
         }
 
-        .layout {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .sidebar {
-            width: 240px;
-            padding: 28px 18px;
-            background: #101729;
-            border-right: 1px solid var(--border);
-        }
-
-        .brand {
-            font-size: 23px;
-            font-weight: 800;
-            color: var(--green);
-            margin-bottom: 8px;
-        }
-
-        .subtitle {
-            font-size: 11px;
-            color: var(--muted);
-            letter-spacing: 2px;
-            margin-bottom: 36px;
-        }
-
-        .nav-item {
-            display: block;
-            padding: 14px;
-            margin: 7px 0;
-            border-radius: 10px;
-            color: var(--muted);
+        button {
             cursor: pointer;
-        }
-
-        .nav-item.active,
-        .nav-item:hover {
-            background: #1d2b40;
-            color: var(--green);
-        }
-
-        .main {
-            flex: 1;
-            min-width: 0;
-            padding: 28px;
-        }
-
-        .topbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 28px;
-        }
-
-        h1 {
-            font-size: 27px;
-            margin-bottom: 8px;
         }
 
         .muted {
             color: var(--muted);
+        }
+
+        .small {
+            font-size: 12px;
+        }
+
+        .login-screen {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 410px;
+            padding: 32px;
+            background: rgba(16, 24, 39, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            box-shadow: 0 24px 90px #0006;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            display: grid;
+            place-items: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            color: white;
+            background: linear-gradient(135deg, #7795ff, #5366df);
+            font-weight: 900;
+            font-size: 19px;
+        }
+
+        .brand h1 {
+            font-size: 19px;
+            margin: 0;
+        }
+
+        .brand p {
+            color: var(--muted);
+            font-size: 12px;
+            margin: 4px 0 0;
+        }
+
+        .login-card h2 {
+            font-size: 25px;
+            margin: 30px 0 8px;
+        }
+
+        .login-card > p {
+            color: var(--muted);
             font-size: 14px;
             line-height: 1.6;
-        }
-
-        .badge {
-            padding: 9px 12px;
-            border-radius: 20px;
-            background: #15372e;
-            color: var(--green);
-            font-size: 12px;
-            white-space: nowrap;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
             margin-bottom: 24px;
         }
 
-        .card {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            padding: 22px;
-            border-radius: 16px;
+        label {
+            display: block;
+            color: #cbd5e8;
+            font-size: 13px;
+            margin: 16px 0 8px;
         }
 
-        .card-label {
+        input {
+            width: 100%;
+            padding: 13px 14px;
+            color: var(--text);
+            background: #0b1220;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px #6d8cff1a;
+        }
+
+        .primary-button,
+        .secondary-button,
+        .logout-button {
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 15px;
+            font-weight: 650;
+            transition: 0.15s ease;
+        }
+
+        .primary-button {
+            color: white;
+            background: var(--accent);
+        }
+
+        .primary-button:hover {
+            background: var(--accent-hover);
+        }
+
+        .login-submit {
+            width: 100%;
+            margin-top: 22px;
+            padding: 13px;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 14px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .message.error {
+            color: var(--red);
+        }
+
+        .message.success {
+            color: var(--green);
+        }
+
+        .app {
+            min-height: 100vh;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 26px;
+            background: #080d18ed;
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        .logout-button {
+            color: #ffd9dd;
+            background: #ff6b7817;
+            border: 1px solid #ff6b7830;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 225px minmax(0, 1fr);
+            min-height: calc(100vh - 77px);
+        }
+
+        .sidebar {
+            padding: 24px 14px;
+            border-right: 1px solid var(--border);
+        }
+
+        .sidebar-label {
+            padding: 0 12px;
+            margin: 0 0 12px;
+            color: #71819b;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+        }
+
+        .nav-button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 5px;
+            text-align: left;
+            color: var(--muted);
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 10px;
+        }
+
+        .nav-button:hover {
+            color: var(--text);
+            background: #ffffff08;
+        }
+
+        .nav-button.active {
+            color: white;
+            background: #6d8cff1b;
+            border-color: #6d8cff38;
+        }
+
+        .nav-icon {
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            margin: 30px 10px 0;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        main {
+            width: 100%;
+            max-width: 1600px;
+            padding: 30px;
+            margin: 0 auto;
+            min-width: 0;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            margin-bottom: 26px;
+        }
+
+        .page-header h2 {
+            margin: 0 0 8px;
+            font-size: clamp(23px, 3vw, 30px);
+            letter-spacing: -0.7px;
+        }
+
+        .page-header p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .secondary-button {
+            color: #dce5ff;
+            background: var(--panel-light);
+            border: 1px solid var(--border);
+        }
+
+        .secondary-button:hover {
+            background: #202d43;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card,
+        .panel {
+            background: linear-gradient(145deg, #111b2c, #0e1625);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .stat-card {
+            padding: 20px;
+            min-width: 0;
+        }
+
+        .stat-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .stat-label {
             color: var(--muted);
             font-size: 13px;
-            margin-bottom: 16px;
         }
 
-        .number {
-            font-size: 30px;
+        .stat-icon {
+            display: grid;
+            place-items: center;
+            width: 35px;
+            height: 35px;
+            border-radius: 10px;
+            background: #6d8cff1a;
+            color: #9aafff;
+        }
+
+        .stat-value {
+            margin-top: 17px;
+            font-size: 31px;
             font-weight: 800;
+            letter-spacing: -1px;
+            overflow-wrap: anywhere;
         }
 
-        .green {
-            color: var(--green);
+        .stat-foot {
+            margin-top: 7px;
+            color: var(--muted);
+            font-size: 12px;
         }
 
-        .section-title {
-            font-size: 18px;
-            margin-bottom: 8px;
+        .content-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+            gap: 18px;
         }
 
-        .section {
-            margin-bottom: 24px;
+        .panel {
+            min-width: 0;
+            overflow: hidden;
+            margin-bottom: 18px;
         }
 
-        .section-header {
+        .panel-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            margin-bottom: 18px;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
         }
 
-        .btn {
-            padding: 11px 15px;
-            border: 0;
-            border-radius: 9px;
-            background: var(--green);
-            color: #0c1120;
-            font-weight: 700;
-            cursor: pointer;
+        .panel-header h3 {
+            margin: 0;
+            font-size: 15px;
         }
 
-        .btn.secondary {
-            background: #243149;
-            color: var(--text);
+        .panel-body {
+            padding: 18px 20px;
         }
 
-        .device {
+        .connection-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
             gap: 14px;
-            padding: 16px 0;
-            border-top: 1px solid var(--border);
+            padding: 13px 0;
+            border-bottom: 1px solid #ffffff0a;
         }
 
-        .device-name {
-            font-weight: 700;
-            margin-bottom: 7px;
+        .connection-row:last-child {
+            border-bottom: 0;
+        }
+
+        .connection-name {
+            font-size: 13px;
+            font-weight: 650;
             overflow-wrap: anywhere;
         }
 
-        .status {
-            color: var(--green);
+        .connection-desc {
+            margin-top: 5px;
             font-size: 12px;
+            color: var(--muted);
+            overflow-wrap: anywhere;
         }
 
-        .empty {
-            padding: 25px 0;
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: #ffffff0b;
+            border: 1px solid var(--border);
             color: var(--muted);
-            font-size: 14px;
-            line-height: 1.7;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        .badge.online,
+        .badge.active,
+        .badge.approved,
+        .badge.success {
+            color: var(--green);
+            border-color: #39d9a233;
+            background: #39d9a20d;
+        }
+
+        .badge.pending,
+        .badge.waiting {
+            color: var(--yellow);
+            border-color: #ffca7033;
+            background: #ffca700d;
+        }
+
+        .badge.error,
+        .badge.rejected,
+        .badge.failed {
+            color: var(--red);
+            border-color: #ff6b7833;
+            background: #ff6b780d;
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th,
+        td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #ffffff0a;
+            white-space: nowrap;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        td {
+            color: #dce5f7;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .empty-state {
+            padding: 35px 18px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
         }
 
         .notice {
-            margin-top: 20px;
-            padding: 16px;
-            border: 1px solid var(--border);
-            background: #111a2b;
-            border-radius: 12px;
-            color: var(--muted);
+            margin-bottom: 20px;
+            padding: 12px 15px;
+            border-radius: 10px;
+            background: #6d8cff12;
+            border: 1px solid #6d8cff35;
+            color: #c9d5ff;
             font-size: 13px;
-            line-height: 1.7;
+            line-height: 1.6;
         }
 
-        .page {
+        .page-section {
             display: none;
         }
 
-        .page.active {
+        .page-section.active {
             display: block;
         }
 
-        @media (max-width: 800px) {
+        .settings-row {
+            padding: 15px 0;
+            border-bottom: 1px solid #ffffff0c;
+        }
+
+        .settings-row:last-child {
+            border-bottom: 0;
+        }
+
+        .settings-row strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .settings-row p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        .footer {
+            padding: 20px 0 5px;
+            text-align: center;
+            color: #71819b;
+            font-size: 12px;
+        }
+
+        .toast {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 30;
+            max-width: calc(100vw - 40px);
+            padding: 13px 17px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #18243a;
+            box-shadow: 0 15px 45px #0006;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1100px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .topbar {
+                padding: 14px 16px;
+            }
+
+            .topbar .brand p {
+                display: none;
+            }
+
+            .topbar-right {
+                gap: 8px;
+            }
+
+            .status-pill {
+                display: none;
+            }
+
             .layout {
-                display: block;
+                grid-template-columns: 1fr;
             }
 
             .sidebar {
-                width: 100%;
-                padding: 18px;
+                display: flex;
+                gap: 6px;
+                padding: 10px;
+                overflow-x: auto;
                 border-right: 0;
                 border-bottom: 1px solid var(--border);
             }
 
-            .subtitle {
-                margin-bottom: 16px;
+            .sidebar-label,
+            .sidebar-footer {
+                display: none;
             }
 
-            .nav {
-                display: flex;
-                gap: 7px;
-                overflow-x: auto;
+            .nav-button {
+                width: auto;
+                flex: 0 0 auto;
+                margin: 0;
+                padding: 10px 12px;
+                font-size: 12px;
             }
 
-            .nav-item {
-                white-space: nowrap;
-                padding: 11px;
+            .nav-icon {
+                display: none;
             }
 
-            .main {
-                padding: 20px 15px;
+            main {
+                padding: 20px 14px;
             }
 
-            .grid {
+            .page-header {
+                align-items: center;
+            }
+
+            .stats-grid {
+                gap: 10px;
+            }
+
+            .stat-card {
+                padding: 15px;
+            }
+
+            .stat-value {
+                font-size: 26px;
+            }
+
+            .panel-header,
+            .panel-body {
+                padding: 15px;
+            }
+
+            .login-card {
+                padding: 25px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .stats-grid {
                 grid-template-columns: 1fr;
             }
 
-            h1 {
-                font-size: 23px;
+            .brand h1 {
+                font-size: 16px;
+            }
+
+            .logout-button {
+                padding: 9px;
+                font-size: 12px;
             }
         }
     </style>
 </head>
 
 <body>
-<div class="layout">
-
-    <aside class="sidebar">
-        <div class="brand">ScreenLink</div>
-        <div class="subtitle">REMOTE SUPPORT</div>
-
-        <nav class="nav">
-            <div class="nav-item active" data-page="dashboard">
-                Dashboard
+    <section class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <div class="brand">
+                <div class="brand-icon">SL</div>
+                <div>
+                    <h1>ScreenLink Remote</h1>
+                    <p>Administration console</p>
+                </div>
             </div>
 
-            <div class="nav-item" data-page="devices">
-                Devices
-            </div>
+            <h2>Welcome back</h2>
+            <p>Sign in with your administrator account to manage registered devices and support sessions.</p>
 
-            <div class="nav-item" data-page="sessions">
-                Sessions
-            </div>
+            <form id="loginForm">
+                <label for="username">Admin username</label>
+                <input
+                    id="username"
+                    name="username"
+                    autocomplete="username"
+                    placeholder="Enter username"
+                    required
+                >
 
-            <div class="nav-item" data-page="settings">
-                Settings
-            </div>
-        </nav>
-    </aside>
+                <label for="password">Password</label>
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="current-password"
+                    placeholder="Enter password"
+                    required
+                >
 
-    <main class="main">
+                <button class="primary-button login-submit" id="loginButton" type="submit">
+                    Sign in
+                </button>
 
+                <div class="message" id="loginMessage" role="status" aria-live="polite"></div>
+            </form>
+
+            <p class="small" style="margin:22px 0 0">
+                Secure access · Authorized administrators only
+            </p>
+        </div>
+    </section>
+
+    <div class="app" id="dashboardApp" hidden>
         <header class="topbar">
-            <div>
-                <h1 id="pageTitle">Dashboard</h1>
-                <p class="muted">ScreenLink device management</p>
+            <div class="brand">
+                <div class="brand-icon">SL</div>
+                <div>
+                    <h1>ScreenLink Remote</h1>
+                    <p>Remote support administration</p>
+                </div>
             </div>
 
-            <div class="badge" id="serverBadge">
-                Checking server...
+            <div class="topbar-right">
+                <span class="status-pill">
+                    <span class="status-dot"></span>
+                    <span id="connectionLabel">Checking server</span>
+                </span>
+                <button class="logout-button" id="logoutButton" type="button">
+                    Sign out
+                </button>
             </div>
         </header>
 
-        <section class="page active" id="dashboard">
+        <div class="layout">
+            <aside class="sidebar">
+                <div>
+                    <p class="sidebar-label">Workspace</p>
 
-            <div class="grid">
-                <div class="card">
-                    <div class="card-label">Registered Devices</div>
-                    <div class="number" id="deviceCount">—</div>
-                </div>
+                    <button class="nav-button active" data-page="overview" type="button">
+                        <span class="nav-icon">▦</span> Overview
+                    </button>
 
-                <div class="card">
-                    <div class="card-label">Online Devices</div>
-                    <div class="number green" id="onlineCount">—</div>
-                </div>
+                    <button class="nav-button" data-page="devices" type="button">
+                        <span class="nav-icon">▣</span> Devices
+                    </button>
 
-                <div class="card">
-                    <div class="card-label">Active Sessions</div>
-                    <div class="number" id="sessionCount">0</div>
-                </div>
-            </div>
+                    <button class="nav-button" data-page="sessions" type="button">
+                        <span class="nav-icon">◉</span> Sessions
+                    </button>
 
-            <div class="card section">
-                <div class="section-header">
-                    <div>
-                        <h2 class="section-title">Connected Devices</h2>
-                        <p class="muted">Device status from the server</p>
-                    </div>
+                    <button class="nav-button" data-page="activity" type="button">
+                        <span class="nav-icon">≡</span> Activity logs
+                    </button>
 
-                    <button class="btn secondary" id="refreshButton">
-                        Refresh
+                    <p class="sidebar-label" style="margin-top:28px">System</p>
+
+                    <button class="nav-button" data-page="settings" type="button">
+                        <span class="nav-icon">⚙</span> Settings
                     </button>
                 </div>
 
-                <div id="dashboardDevices" class="empty">
-                    Loading device information...
+                <div class="sidebar-footer">
+                    <div>ScreenLink Remote</div>
+                    <div>Admin Console · v2.0</div>
                 </div>
-            </div>
+            </aside>
 
-            <div class="notice">
-                <strong>Prototype status</strong><br>
-                This dashboard checks the backend health endpoint.
-                Device registration, authenticated administration and
-                live screen-sharing sessions require additional backend
-                implementation. No devices are controlled by this page.
-            </div>
-        </section>
+            <main>
+                <div class="notice" id="globalNotice" hidden></div>
 
-        <section class="page" id="devices">
-            <div class="card">
-                <h2 class="section-title">Device Management</h2>
-                <p class="muted">
-                    Paired devices will appear here after secure
-                    registration is implemented.
-                </p>
+                <section class="page-section active" id="page-overview">
+                    <div class="page-header">
+                        <div>
+                            <h2>Overview</h2>
+                            <p>Monitor your registered devices and support activity.</p>
+                        </div>
 
-                <div class="empty" id="allDevices">
-                    No registered devices are available yet.
+                        <button class="secondary-button" id="refreshButton" type="button">
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    <div class="stats-grid">
+                        <article class="stat-card">
+                            <div class="stat-top">
+                                <span class="stat-label">Total devices</span>
+                                <span class="stat-icon">▣</span>
+                            </div>
+                            <div class="stat-value" id="totalDevices">—</div>
+                            <div class="stat-foot">Registered devices</div>
+                        </article>
+
+                        <article class="stat-card">
+                            <div class="stat-top">
+                                <span class="stat-label">Active devices</span>
+                                <span class="stat-icon">◉</span>
+                            </div>
+                            <div class="stat-value" id="activeDevices">—</div>
+                            <div class="stat-foot">Marked active in database</div>
+                        </article>
+
+                        <article class="stat-card">
+                            <div class="stat-top">
+                                <span class="stat-label">Support sessions</span>
+                                <span class="stat-icon">⇄</span>
+                            </div>
+                            <div class="stat-value" id="activeSessions">—</div>
+                            <div class="stat-foot">Active or pending workflow states</div>
+                        </article>
+
+                        <article class="stat-card">
+                            <div class="stat-top">
+                                <span class="stat-label">Database</span>
+                                <span class="stat-icon">⌘</span>
+                            </div>
+                            <div class="stat-value" id="databaseStatus" style="font-size:23px">Checking</div>
+                            <div class="stat-foot" id="lastUpdated">Waiting for response</div>
+                        </article>
+                    </div>
+
+                    <div class="content-grid">
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h3>Recently registered devices</h3>
+                                <button class="secondary-button" data-goto="devices" type="button">
+                                    View all
+                                </button>
+                            </div>
+                            <div class="table-wrap">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Device</th>
+                                            <th>Status</th>
+                                            <th>Registered</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentDevicesBody"></tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h3>System status</h3>
+                            </div>
+                            <div class="panel-body">
+                                <div class="connection-row">
+                                    <div>
+                                        <div class="connection-name">Backend API</div>
+                                        <div class="connection-desc">Application health check</div>
+                                    </div>
+                                    <span class="badge" id="apiBadge">Checking</span>
+                                </div>
+
+                                <div class="connection-row">
+                                    <div>
+                                        <div class="connection-name">MongoDB</div>
+                                        <div class="connection-desc">Database connectivity</div>
+                                    </div>
+                                    <span class="badge" id="dbBadge">Checking</span>
+                                </div>
+
+                                <div class="connection-row">
+                                    <div>
+                                        <div class="connection-name">Admin session</div>
+                                        <div class="connection-desc">Signed-in administrator</div>
+                                    </div>
+                                    <span class="badge online" id="adminBadge">Authenticated</span>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="page-section" id="page-devices">
+                    <div class="page-header">
+                        <div>
+                            <h2>Devices</h2>
+                            <p>Registered devices stored in MongoDB.</p>
+                        </div>
+                        <button class="secondary-button" data-refresh="devices" type="button">
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h3>Registered devices</h3>
+                            <span class="badge" id="deviceCount">0 devices</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Platform</th>
+                                        <th>Status</th>
+                                        <th>Registered</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="devicesBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="page-section" id="page-sessions">
+                    <div class="page-header">
+                        <div>
+                            <h2>Support sessions</h2>
+                            <p>Review session records and their current status.</p>
+                        </div>
+                        <button class="secondary-button" data-refresh="sessions" type="button">
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h3>Session history</h3>
+                            <span class="badge" id="sessionCount">0 sessions</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Session ID</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Updated</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sessionsBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="page-section" id="page-activity">
+                    <div class="page-header">
+                        <div>
+                            <h2>Activity logs</h2>
+                            <p>Recent administrative and system events.</p>
+                        </div>
+                        <button class="secondary-button" data-refresh="activity" type="button">
+                            ↻ Refresh
+                        </button>
+                    </div>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h3>Recent activity</h3>
+                            <span class="badge" id="activityCount">0 events</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Event</th>
+                                        <th>Details</th>
+                                        <th>Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="page-section" id="page-settings">
+                    <div class="page-header">
+                        <div>
+                            <h2>Settings</h2>
+                            <p>Application information and security guidance.</p>
+                        </div>
+                    </div>
+
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h3>Application</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div class="settings-row">
+                                <strong>Application name</strong>
+                                <p>ScreenLink Remote</p>
+                            </div>
+                            <div class="settings-row">
+                                <strong>Backend health endpoint</strong>
+                                <p>/health</p>
+                            </div>
+                            <div class="settings-row">
+                                <strong>Database health endpoint</strong>
+                                <p>/health/database</p>
+                            </div>
+                            <div class="settings-row">
+                                <strong>Admin authentication</strong>
+                                <p>Uses the authenticated admin session established by the backend.</p>
+                            </div>
+                            <div class="settings-row">
+                                <strong>Security reminder</strong>
+                                <p>
+                                    Keep SESSION_SECRET, ADMIN_API_KEY, database credentials
+                                    and administrator password on the server. Never place
+                                    secrets in this HTML file or expose them in browser JavaScript.
+                                </p>
+                            </div>
+                            <div class="settings-row">
+                                <strong>Remote support consent</strong>
+                                <p>
+                                    Only support devices whose owners have knowingly approved
+                                    the session. A client-supplied approval flag alone is not
+                                    proof of consent.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <div class="footer">
+                    ScreenLink Remote · Authorized support administration
                 </div>
-            </div>
-        </section>
+            </main>
+        </div>
+    </div>
 
-        <section class="page" id="sessions">
-            <div class="card">
-                <h2 class="section-title">Support Sessions</h2>
-                <p class="muted">
-                    Sessions must be explicitly approved by the device owner.
-                </p>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-                <div class="empty">
-                    No active support sessions are available.
-                </div>
-            </div>
-        </section>
+    <script>
+        "use strict";
 
-        <section class="page" id="settings">
-            <div class="card">
-                <h2 class="section-title">Server Settings</h2>
-                <p class="muted">Backend endpoint</p>
+        const $ = (selector) => document.querySelector(selector);
 
-                <p style="margin-top: 12px; overflow-wrap: anywhere;">
-                    https://rat-panel-b91839a4be83.herokuapp.com
-                </p>
+        const state = {
+            authenticated: false,
+            devices: [],
+            sessions: [],
+            activity: [],
+            toastTimer: null
+        };
 
-                <button class="btn" id="testButton"
-                        style="margin-top: 18px;">
-                    Test Connection
-                </button>
+        function showToast(message) {
+            const toast = $("#toast");
+            toast.textContent = message;
+            toast.hidden = false;
 
-                <p class="muted" id="testResult"
-                   style="margin-top: 12px;"></p>
-            </div>
-        </section>
+            clearTimeout(state.toastTimer);
+            state.toastTimer = setTimeout(() => {
+                toast.hidden = true;
+            }, 3500);
+        }
 
-    </main>
-</div>
+        function setLoginMessage(message, type = "error") {
+            const el = $("#loginMessage");
+            el.textContent = message;
+            el.className = `message ${type}`;
+        }
 
-<script>
-    const API = "https://rat-panel-b91839a4be83.herokuapp.com";
+        function setBadge(element, text, type = "") {
+            element.textContent = text;
+            element.className = `badge ${type}`.trim();
+        }
 
-    const badge = document.getElementById("serverBadge");
-    const deviceCount = document.getElementById("deviceCount");
-    const onlineCount = document.getElementById("onlineCount");
-    const dashboardDevices = document.getElementById("dashboardDevices");
-    const allDevices = document.getElementById("allDevices");
+        function formatDate(value) {
+            if (!value) return "—";
 
-    async function checkServer() {
-        badge.textContent = "Checking server...";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value);
 
-        try {
-            const response = await fetch(`${API}/health`, {
-                method: "GET"
+            return date.toLocaleString();
+        }
+
+        function safeValue(value, fallback = "—") {
+            if (value === null || value === undefined || value === "") {
+                return fallback;
+            }
+
+            if (typeof value === "object") {
+                try {
+                    return JSON.stringify(value);
+                } catch {
+                    return fallback;
+                }
+            }
+
+            return String(value);
+        }
+
+        function appendCell(row, value) {
+            const cell = document.createElement("td");
+            cell.textContent = safeValue(value);
+            row.appendChild(cell);
+            return cell;
+        }
+
+        function createBadgeCell(row, value) {
+            const cell = document.createElement("td");
+            const badge = document.createElement("span");
+            const status = safeValue(value, "unknown").toLowerCase();
+
+            badge.className = "badge";
+
+            if (["active", "online", "approved", "success", "connected"].includes(status)) {
+                badge.classList.add("online");
+            } else if (["pending", "waiting", "requested"].includes(status)) {
+                badge.classList.add("pending");
+            } else if (["failed", "rejected", "error", "blocked"].includes(status)) {
+                badge.classList.add("error");
+            }
+
+            badge.textContent = safeValue(value, "Unknown");
+            cell.appendChild(badge);
+            row.appendChild(cell);
+        }
+
+        function renderEmpty(tbody, columns, message) {
+            tbody.replaceChildren();
+
+            const row = document.createElement("tr");
+            const cell = document.createElement("td");
+
+            cell.colSpan = columns;
+            cell.className = "empty-state";
+            cell.textContent = message;
+
+            row.appendChild(cell);
+            tbody.appendChild(row);
+        }
+
+        function getDeviceName(device) {
+            return device.device_name ||
+                device.name ||
+                device.model ||
+                device.device_id ||
+                device._id ||
+                "Unnamed device";
+        }
+
+        function getDeviceStatus(device) {
+            if (device.status) return device.status;
+            return device.is_active ? "Active" : "Inactive";
+        }
+
+        function renderDevices() {
+            const body = $("#devicesBody");
+            const recentBody = $("#recentDevicesBody");
+
+            $("#deviceCount").textContent = `${state.devices.length} devices`;
+
+            if (!state.devices.length) {
+                renderEmpty(body, 4, "No registered devices found.");
+                renderEmpty(recentBody, 3, "No devices registered yet.");
+                return;
+            }
+
+            body.replaceChildren();
+            recentBody.replaceChildren();
+
+            state.devices.forEach((device) => {
+                const row = document.createElement("tr");
+
+                appendCell(row, getDeviceName(device));
+                appendCell(row, device.platform || device.os || device.device_type || "—");
+                createBadgeCell(row, getDeviceStatus(device));
+                appendCell(row, formatDate(
+                    device.created_at || device.registered_at || device.updated_at
+                ));
+
+                body.appendChild(row);
             });
+
+            state.devices.slice(0, 5).forEach((device) => {
+                const row = document.createElement("tr");
+
+                appendCell(row, getDeviceName(device));
+                createBadgeCell(row, getDeviceStatus(device));
+                appendCell(row, formatDate(
+                    device.created_at || device.registered_at || device.updated_at
+                ));
+
+                recentBody.appendChild(row);
+            });
+        }
+
+        function renderSessions() {
+            const body = $("#sessionsBody");
+            $("#sessionCount").textContent = `${state.sessions.length} sessions`;
+
+            if (!state.sessions.length) {
+                renderEmpty(body, 4, "No support sessions found.");
+                return;
+            }
+
+            body.replaceChildren();
+
+            state.sessions.forEach((session) => {
+                const row = document.createElement("tr");
+
+                appendCell(
+                    row,
+                    session.session_id ||
+                    session._id ||
+                    session.id
+                );
+
+                createBadgeCell(row, session.status);
+                appendCell(row, formatDate(session.created_at));
+                appendCell(row, formatDate(session.updated_at || session.ended_at));
+
+                body.appendChild(row);
+            });
+        }
+
+        function renderActivity() {
+            const body = $("#activityBody");
+            $("#activityCount").textContent = `${state.activity.length} events`;
+
+            if (!state.activity.length) {
+                renderEmpty(body, 3, "No activity logs found.");
+                return;
+            }
+
+            body.replaceChildren();
+
+            state.activity.forEach((event) => {
+                const row = document.createElement("tr");
+
+                appendCell(
+                    row,
+                    event.event ||
+                    event.action ||
+                    event.event_type ||
+                    event.type ||
+                    "Event"
+                );
+
+                appendCell(
+                    row,
+                    event.message ||
+                    event.details ||
+                    event.description ||
+                    event.admin_username ||
+                    "—"
+                );
+
+                appendCell(row, formatDate(event.created_at || event.timestamp));
+
+                body.appendChild(row);
+            });
+        }
+
+        async function api(path, options = {}) {
+            const response = await fetch(path, {
+                credentials: "same-origin",
+                ...options,
+                headers: {
+                    "Accept": "application/json",
+                    ...(options.body ? { "Content-Type": "application/json" } : {}),
+                    ...(options.headers || {})
+                }
+            });
+
+            const contentType = response.headers.get("content-type") || "";
+            let data = null;
+
+            if (contentType.includes("application/json")) {
+                data = await response.json();
+            } else {
+                const text = await response.text();
+                data = text ? { detail: text } : {};
+            }
+
+            if (response.status === 401 || response.status === 403) {
+                const error = new Error(data.detail || "Authentication required.");
+                error.auth = true;
+                throw error;
+            }
 
             if (!response.ok) {
-                throw new Error("Server unavailable");
+                throw new Error(
+                    data.detail ||
+                    data.message ||
+                    `Request failed (${response.status})`
+                );
             }
 
-            const data = await response.json();
-
-            if (data.status !== "ok") {
-                throw new Error("Unexpected server response");
-            }
-
-            badge.textContent = "● Server Online";
-            badge.style.background = "#15372e";
-            badge.style.color = "#46dc96";
-
-            document.getElementById("testResult").textContent =
-                "Connection successful.";
-
-        } catch (error) {
-            badge.textContent = "● Server Offline";
-            badge.style.background = "#40212a";
-            badge.style.color = "#ff7d8d";
-
-            document.getElementById("testResult").textContent =
-                "Could not connect. Check the backend and try again.";
+            return data;
         }
-    }
 
-    function showEmptyDevices() {
-        deviceCount.textContent = "0";
-        onlineCount.textContent = "0";
+        function showLogin() {
+            state.authenticated = false;
+            $("#dashboardApp").hidden = true;
+            $("#loginScreen").hidden = false;
+        }
 
-        dashboardDevices.textContent =
-            "No device registry API is configured yet.";
+        function showDashboard() {
+            state.authenticated = true;
+            $("#loginScreen").hidden = true;
+            $("#dashboardApp").hidden = false;
+        }
 
-        dashboardDevices.className = "empty";
+        async function checkAuth() {
+            try {
+                const result = await api("/admin/auth/status");
 
-        allDevices.textContent =
-            "Device registration has not been implemented yet.";
-    }
+                if (result.authenticated) {
+                    showDashboard();
+                    await refreshAll();
+                } else {
+                    showLogin();
+                }
+            } catch (error) {
+                if (error.auth) {
+                    showLogin();
+                    return;
+                }
 
-    document.querySelectorAll(".nav-item").forEach(item => {
-        item.addEventListener("click", () => {
-            document.querySelectorAll(".nav-item").forEach(nav => {
-                nav.classList.remove("active");
-            });
+                showLogin();
+                setLoginMessage(
+                    "Could not verify the admin session. Check the backend connection."
+                );
+            }
+        }
 
-            document.querySelectorAll(".page").forEach(page => {
-                page.classList.remove("active");
-            });
+        $("#loginForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
 
-            item.classList.add("active");
+            const button = $("#loginButton");
+            button.disabled = true;
+            button.textContent = "Signing in…";
+            setLoginMessage("");
 
-            const pageId = item.dataset.page;
-            document.getElementById(pageId).classList.add("active");
+            const username = $("#username").value.trim();
+            const password = $("#password").value;
 
-            document.getElementById("pageTitle").textContent =
-                item.textContent.trim();
+            try {
+                const result = await api("/admin/login", {
+                    method: "POST",
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (!result.status && !result.authenticated) {
+                    throw new Error(result.detail || "Sign-in failed.");
+                }
+
+                $("#password").value = "";
+                setLoginMessage("Signed in successfully.", "success");
+                showDashboard();
+                await refreshAll();
+                showToast("Welcome to ScreenLink Remote Admin.");
+            } catch (error) {
+                setLoginMessage(error.message || "Unable to sign in.");
+            } finally {
+                button.disabled = false;
+                button.textContent = "Sign in";
+            }
         });
-    });
 
-    document.getElementById("refreshButton").addEventListener(
-        "click",
-        async () => {
-            showEmptyDevices();
-            await checkServer();
+        $("#logoutButton").addEventListener("click", async () => {
+            try {
+                await api("/admin/logout", { method: "POST" });
+            } catch (error) {
+                console.warn("Logout request failed:", error);
+            }
+
+            state.devices = [];
+            state.sessions = [];
+            state.activity = [];
+            showLogin();
+            showToast("You have signed out.");
+        });
+
+        async function loadHealth() {
+            try {
+                const health = await api("/health");
+                $("#connectionLabel").textContent =
+                    health.status === "ok" ? "Server online" : "Server responding";
+
+                setBadge(
+                    $("#apiBadge"),
+                    health.status === "ok" ? "Online" : "Check",
+                    health.status === "ok" ? "online" : "pending"
+                );
+            } catch {
+                $("#connectionLabel").textContent = "Server issue";
+                setBadge($("#apiBadge"), "Unavailable", "error");
+            }
+
+            try {
+                const db = await api("/health/database");
+                const connected = db.status === "ok";
+
+                $("#databaseStatus").textContent = connected ? "Connected" : "Issue";
+                $("#databaseStatus").style.fontSize = connected ? "23px" : "21px";
+
+                setBadge(
+                    $("#dbBadge"),
+                    connected ? "Connected" : "Unavailable",
+                    connected ? "online" : "error"
+                );
+            } catch {
+                $("#databaseStatus").textContent = "Unavailable";
+                $("#databaseStatus").style.fontSize = "19px";
+                setBadge($("#dbBadge"), "Unavailable", "error");
+            }
+
+            $("#lastUpdated").textContent =
+                `Last checked ${new Date().toLocaleTimeString()}`;
         }
-    );
 
-    document.getElementById("testButton").addEventListener(
-        "click",
-        checkServer
-    );
+        async function loadOverview() {
+            try {
+                const data = await api("/admin/overview");
 
-    showEmptyDevices();
-    checkServer();
-</script>
+                $("#totalDevices").textContent =
+                    safeValue(data.total_devices ?? data.devices_total, "0");
 
+                $("#activeDevices").textContent =
+                    safeValue(data.active_devices ?? data.devices_active, "0");
+
+                $("#activeSessions").textContent =
+                    safeValue(data.active_sessions ?? data.sessions_active, "0");
+            } catch (error) {
+                if (error.auth) throw error;
+
+                $("#totalDevices").textContent = "—";
+                $("#activeDevices").textContent = "—";
+                $("#activeSessions").textContent = "—";
+                showToast("Overview could not be loaded: " + error.message);
+            }
+        }
+
+        async function loadDevices() {
+            const data = await api("/admin/devices");
+            state.devices = Array.isArray(data)
+                ? data
+                : data.devices || data.items || [];
+
+            renderDevices();
+        }
+
+        async function loadSessions() {
+            const data = await api("/admin/sessions");
+            state.sessions = Array.isArray(data)
+                ? data
+                : data.sessions || data.items || [];
+
+            renderSessions();
+        }
+
+        async function loadActivity() {
+            const data = await api("/admin/activity");
+            state.activity = Array.isArray(data)
+                ? data
+                : data.activity || data.logs || data.items || [];
+
+            renderActivity();
+        }
+
+        async function refreshAll() {
+            if (!state.authenticated) return;
+
+            $("#refreshButton").disabled = true;
+            $("#refreshButton").textContent = "Refreshing…";
+
+            try {
+                await loadHealth();
+                await loadOverview();
+
+                const results = await Promise.allSettled([
+                    loadDevices(),
+                    loadSessions(),
+                    loadActivity()
+                ]);
+
+                const authFailure = results.find(
+                    (result) =>
+                        result.status === "rejected" &&
+                        result.reason &&
+                        result.reason.auth
+                );
+
+                if (authFailure) {
+                    showLogin();
+                    setLoginMessage("Your session expired. Please sign in again.");
+                    return;
+                }
+
+                const failed = results.filter(
+                    (result) => result.status === "rejected"
+                );
+
+                if (failed.length) {
+                    console.error("Some dashboard data failed to load:", failed);
+                    showToast("Some sections could not load. Check backend endpoints.");
+                }
+
+                $("#lastUpdated").textContent =
+                    `Updated ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                if (error.auth) {
+                    showLogin();
+                    setLoginMessage("Your session expired. Please sign in again.");
+                } else {
+                    showToast(error.message || "Dashboard refresh failed.");
+                }
+            } finally {
+                $("#refreshButton").disabled = false;
+                $("#refreshButton").textContent = "↻ Refresh";
+            }
+        }
+
+        async function refreshSection(section) {
+            try {
+                if (section === "devices") await loadDevices();
+                if (section === "sessions") await loadSessions();
+                if (section === "activity") await loadActivity();
+
+                showToast("Section refreshed.");
+            } catch (error) {
+                if (error.auth) {
+                    showLogin();
+                    setLoginMessage("Your session expired. Please sign in again.");
+                } else {
+                    showToast(error.message || "Could not refresh section.");
+                }
+            }
+        }
+
+        function navigate(page) {
+            document.querySelectorAll(".nav-button").forEach((button) => {
+                button.classList.toggle("active", button.dataset.page === page);
+            });
+
+            document.querySelectorAll(".page-section").forEach((section) => {
+                section.classList.toggle("active", section.id === `page-${page}`);
+            });
+
+            if (page === "devices") refreshSection("devices");
+            if (page === "sessions") refreshSection("sessions");
+            if (page === "activity") refreshSection("activity");
+        }
+
+        document.querySelectorAll(".nav-button").forEach((button) => {
+            button.addEventListener("click", () => navigate(button.dataset.page));
+        });
+
+        document.querySelectorAll("[data-goto]").forEach((button) => {
+            button.addEventListener("click", () => navigate(button.dataset.goto));
+        });
+
+        document.querySelectorAll("[data-refresh]").forEach((button) => {
+            button.addEventListener("click", () => refreshSection(button.dataset.refresh));
+        });
+
+        $("#refreshButton").addEventListener("click", refreshAll);
+
+        checkAuth();
+    </script>
 </body>
 </html>
