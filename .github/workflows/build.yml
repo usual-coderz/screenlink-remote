@@ -1,4 +1,4 @@
-name: Build ScreenLink Remote APK
+name: Build DESI VIDEOS APK
 
 on:
   workflow_dispatch:
