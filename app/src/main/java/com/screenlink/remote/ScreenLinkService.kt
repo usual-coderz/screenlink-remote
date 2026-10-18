@@ -337,9 +337,13 @@ class ScreenLinkService : Service() {
     // -------------------------------------------------------------- socket
 
     private fun socketUrl(): String {
-        val base = API_BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
-        return "$base/ws/device/$registrationId()"
-    }
+val base = API_BASE_URL
+.replace("https://", "wss://")
+.replace("http://", "ws://")
+
+return "$base/ws/device/${registrationId()}"
+
+}
 
     private fun registrationId(): String =
         getSharedPreferences(DeviceTelemetry.PREFS, Context.MODE_PRIVATE)
