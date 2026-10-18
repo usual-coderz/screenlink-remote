@@ -3,6 +3,7 @@ import time
 import secrets
 import hashlib
 from pathlib import Path
+from pwdlib import PasswordHash
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -41,6 +42,11 @@ SESSION_TTL = 300
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 COOKIE_NAME = "screenlink_admin_session"
+
+#password_hasher = PasswordHash.recommended()
+
+ADMIN_USERNAME = "ivan"
+ADMIN_PASSWORD = "Ahad@198612"
 
 password_hasher = PasswordHash.recommended()
 
@@ -229,51 +235,36 @@ async def admin_auth_status(request: Request):
 
 
 @app.post("/admin/login")
-async def admin_login(
-    request: Request,
-    payload: AdminLoginRequest,
-):
-    admin = admins.find_one({
-        "username": payload.username.strip(),
-        "is_active": True,
-    })
+async def admin_login(payload: LoginRequest, request: Request):
+    username = payload.username.strip()
 
-    if not admin:
+    if not secrets.compare_digest(username, ADMIN_USERNAME):
         raise HTTPException(
             status_code=401,
-            detail="Invalid username or password",
+            detail="Invalid username or password"
         )
 
-    stored_hash = admin.get("password_hash", "")
-
-    try:
-        valid = password_hasher.verify(
-            payload.password,
-            stored_hash,
-        )
-    except Exception:
-        valid = False
-
-    if not valid:
+    if not secrets.compare_digest(
+        payload.password,
+        ADMIN_PASSWORD
+    ):
         raise HTTPException(
             status_code=401,
-            detail="Invalid username or password",
+            detail="Invalid username or password"
         )
 
-    request.session.clear()
-    request.session["admin_id"] = str(admin["_id"])
-    request.session["username"] = admin["username"]
+    request.session["admin_id"] = ADMIN_USERNAME
 
     log_event(
-        "admin_login",
-        {"username": admin["username"]},
-        admin_id=str(admin["_id"]),
+        event_type="admin_login",
+        details={"username": ADMIN_USERNAME},
+        admin_id=ADMIN_USERNAME
     )
 
     return {
         "status": "ok",
         "message": "Login successful",
-        "username": admin["username"],
+        "username": ADMIN_USERNAME
     }
 
 
