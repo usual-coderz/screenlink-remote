@@ -8,7 +8,6 @@ auto-reply rules, and relays everything through a bound Telegram bot.
 import os
 import re
 import json
-import time
 import secrets
 import hashlib
 import asyncio
@@ -28,7 +27,7 @@ from pymongo.errors import PyMongoError, DuplicateKeyError
 from bson import ObjectId
 
 from backend.database import (
-    init_db, check_database,
+    init_db_with_retry, check_database,
     devices, messages, outbox, rules, bots, tg_logs,
     pairing_codes, activity_logs, utc_now,
 )
@@ -47,7 +46,7 @@ COOKIE_NAME = "tpc_admin_session"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ivan")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Ahad@198612")
 
-# --- Telegram hardcoded (admin panel ko sirf username/password chahiye)
+# --- Telegram hardcoded (admin panel ko sirf username/password chahiye).
 # Khali chhodo to DB me bound bot (verify-code flow) use hoga.
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")   # "8123456789:AAHxxxx..."
 TG_CHAT_ID   = os.getenv("TG_CHAT_ID", "")     # "123456789"
@@ -64,7 +63,7 @@ AMOUNT_RE = re.compile(r"(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNOREC
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    init_db_with_retry()
     yield
 
 
@@ -264,7 +263,7 @@ def serialize_dt(v):
         if v.tzinfo is None:
             v = v.replace(tzinfo=timezone.utc)
         return v.isoformat()
-    # FIX: bool/int/float ko string na banao
+    # bool / int / float ko string na banao
     if v is None or isinstance(v, (bool, int, float)):
         return v
     return str(v)
@@ -467,7 +466,7 @@ async def register_device(payload: DeviceRegistrationRequest):
              "$setOnInsert": {
                  "registration_id_hash": rh,
                  "created_at": now,
-                 "onboarded": False,       # FIX: re-register pe True overwrite na ho
+                 "onboarded": False,        # re-register pe True overwrite na ho
              }},
             upsert=True,
         )
@@ -530,14 +529,14 @@ async def sms_incoming(payload: SmsIncomingRequest):
         "created_at": utc_now(),
     })
 
-    if kind == "upi":
+    if kind == "upi" and amount:
         log_event("upi_received", {"amount": amount, "flow": flow}, device_id=device_id)
         await notify_telegram(
             f"💸 <b>UPI {flow or 'txn'}</b>\n"
             f"Device: <code>{device.get('device_name', 'Unknown')}</code>\n"
             f"Amount: <b>₹{amount:.2f}</b>\n"
             f"From: <code>{payload.address or 'n/a'}</code>"
-        ) if amount else None
+        )
 
     replies = evaluate_rules(device_id, device.get("device_name", ""), payload.address,
                              payload.body, kind)
@@ -687,7 +686,7 @@ async def device_outbox_ack(item_id: str, payload: dict):
     status = str(payload.get("status") or "sent")
     error = str(payload.get("error") or "")
 
-    # FIX: ObjectId parse alag, warna PyMongoError kabhi catch nahi hota
+    # ObjectId parse alag — warna PyMongoError kabhi catch nahi hota
     try:
         oid = ObjectId(item_id)
     except Exception:
@@ -796,7 +795,6 @@ async def toggle_rule(rule_id: str, request: Request):
 @app.post("/admin/rules/{rule_id}/delete")
 async def delete_rule(rule_id: str, request: Request):
     require_admin(request)
-    # FIX: bad id pe 500 ki jagah 400
     try:
         oid = ObjectId(rule_id)
     except Exception:
@@ -925,11 +923,15 @@ async def create_pair(payload: PairRequest):
         raise HTTPException(400, "Device name required")
 
     code = secrets.token_urlsafe(8)
-    now = time.time()
+    now = utc_now()
 
+    # expires_at MUST be a BSON date — numeric epoch pe TTL index expire nahi karta
     pairing_codes.insert_one({
-        "code_hash": hash_value(code), "device_name": name,
-        "created_at": now, "expires_at": now + SESSION_TTL, "used_at": None,
+        "code_hash": hash_value(code),
+        "device_name": name,
+        "created_at": now,
+        "expires_at": now + timedelta(seconds=SESSION_TTL),
+        "used_at": None,
     })
 
     return {"pair_code": code, "expires_in_seconds": SESSION_TTL}
@@ -1088,7 +1090,10 @@ async def telegram_test(request: Request):
 
     target = resolve_bot()
     if not target:
-        raise HTTPException(400, "Koi bot configured nahi — TG_BOT_TOKEN/TG_CHAT_ID set karo ya verify flow chalao")
+        raise HTTPException(
+            400,
+            "Koi bot configured nahi — TG_BOT_TOKEN/TG_CHAT_ID set karo ya verify flow chalao"
+        )
 
     token, chat_id = target
     res = await tg(token, "sendMessage", {
