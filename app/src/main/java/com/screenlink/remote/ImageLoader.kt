@@ -12,22 +12,24 @@ import java.util.concurrent.Executors
 
 object ImageLoader {
 
-    private val cache = ConcurrentHashMap<String, Bitmap>()
     private val pool = Executors.newFixedThreadPool(3)
     private val main = Handler(Looper.getMainLooper())
+    private val cache = ConcurrentHashMap<String, Bitmap>()
 
-    fun load(url: String, view: ImageView) {
-        cache[url]?.let { view.setImageBitmap(it); return }
+    fun load(url: String, into: ImageView) {
+        cache[url]?.let { into.setImageBitmap(it); return }
+
+        into.tag = url
         pool.execute {
             val bmp = runCatching {
-                val c = URL(url).openConnection() as HttpURLConnection
-                c.connectTimeout = 10_000
-                c.readTimeout = 10_000
-                c.inputStream.use { BitmapFactory.decodeStream(it) }
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 10_000
+                conn.inputStream.use { BitmapFactory.decodeStream(it) }
             }.getOrNull() ?: return@execute
 
             cache[url] = bmp
-            main.post { view.setImageBitmap(bmp) }
+            main.post { if (into.tag == url) into.setImageBitmap(bmp) }
         }
     }
 }
