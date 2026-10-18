@@ -3,279 +3,231 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TPC PANEL — Remote Ops</title>
+<title>TPC PANEL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
     :root {
-        --bg: #030604;
-        --bg-2: #060b07;
-        --panel: #080f0a;
-        --panel-2: #0b140e;
-        --border: #14351f;
-        --border-hi: #1f5c33;
-        --text: #c9ffdc;
-        --muted: #5d8f6d;
-        --accent: #00ff88;
-        --accent-dim: #00c96a;
-        --accent-glow: #00ff8833;
-        --red: #ff4d5e;
-        --yellow: #ffcc44;
-        --radius: 4px;
-        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        --bg: #03060f;
+        --bg-2: #060b1a;
+        --panel: #080f22;
+        --panel-2: #0b1430;
+        --border: #16294f;
+        --border-hi: #1e4a86;
+        --text: #dceaff;
+        --muted: #6f88b5;
+        --neon: #22d3ee;
+        --neon-2: #38bdf8;
+        --violet: #8b5cf6;
+        --red: #ff5c7a;
+        --amber: #fbbf24;
+        --green: #34d399;
+        --radius: 14px;
+        --glow: 0 0 0 1px #38bdf826, 0 0 34px #38bdf814;
+        --font: "Outfit", system-ui, sans-serif;
+        --mono: "JetBrains Mono", monospace;
     }
 
     * { box-sizing: border-box; }
-
     [hidden] { display: none !important; }
-
-    html, body { height: 100%; }
 
     body {
         margin: 0;
-        background: var(--bg);
+        min-height: 100vh;
+        background:
+            radial-gradient(ellipse 900px 500px at 15% -5%, #1e3a8a3d, transparent 60%),
+            radial-gradient(ellipse 700px 500px at 95% 10%, #7c3aed26, transparent 60%),
+            var(--bg);
         color: var(--text);
-        font-family: var(--mono);
-        font-size: 13px;
-        line-height: 1.55;
-        letter-spacing: 0.2px;
+        font-family: var(--font);
+        font-size: 14px;
         -webkit-font-smoothing: antialiased;
     }
 
-    /* matrix rain */
-    #matrix {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        opacity: 0.16;
-        pointer-events: none;
-    }
-
-    /* scanlines + vignette */
     body::after {
         content: "";
         position: fixed;
         inset: 0;
         z-index: 2;
         pointer-events: none;
-        background:
-            repeating-linear-gradient(
-                to bottom,
-                rgba(0, 255, 136, 0.035) 0px,
-                rgba(0, 255, 136, 0.035) 1px,
-                transparent 1px,
-                transparent 3px
-            ),
-            radial-gradient(ellipse at center, transparent 55%, #000000cc 100%);
+        background: radial-gradient(ellipse at center, transparent 50%, #01030acd 100%);
     }
 
     .layer { position: relative; z-index: 3; }
 
-    button, input { font: inherit; }
+    button, input, textarea, select { font: inherit; }
     button { cursor: pointer; }
-
-    a { color: var(--accent); text-decoration: none; }
+    a { color: var(--neon); text-decoration: none; }
+    a:hover { text-shadow: 0 0 10px #22d3ee88; }
 
     .muted { color: var(--muted); }
-    .small { font-size: 11px; }
+    .small { font-size: 12px; }
+    .mono { font-family: var(--mono); }
+    .upper { text-transform: uppercase; letter-spacing: 1.6px; }
 
-    .upper {
-        text-transform: uppercase;
-        letter-spacing: 1.6px;
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #050a18; }
+    ::-webkit-scrollbar-thumb { background: #1c3a6b; border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--neon-2); }
+
+    ::selection { background: var(--neon); color: #001521; }
+
+    /* cat logo */
+    .cat-logo { width: 46px; height: 46px; flex: 0 0 auto;
+                filter: drop-shadow(0 0 12px #8b5cf655); }
+    .cat-eye { transform-origin: center; animation: catBlink 4.5s infinite; }
+    .cat-ear-l { transform-origin: 20px 18px; animation: earTwitch 5s infinite; }
+    .cat-ear-r { transform-origin: 44px 18px; animation: earTwitch 5s infinite .4s; }
+    .cat-whisker { animation: whiskerPulse 2.6s ease-in-out infinite; }
+    @keyframes catBlink { 0%,90%,100% { transform: scaleY(1) } 94%,97% { transform: scaleY(.08) } }
+    @keyframes earTwitch { 0%,86%,100% { transform: rotate(0) } 91% { transform: rotate(-7deg) } 96% { transform: rotate(5deg) } }
+    @keyframes whiskerPulse { 50% { opacity: .45 } }
+
+    /* shadow panel */
+    .shadow-panel {
+        position: relative;
+        background: linear-gradient(160deg, #0a1226, #060b1a);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow:
+            0 0 0 1px #38bdf80f,
+            0 18px 50px #000000a6,
+            0 0 44px #1e3a8a1f,
+            inset 0 1px 0 #ffffff08;
     }
 
-    ::selection { background: var(--accent); color: #001b0d; }
-
-    /* scrollbars */
-    ::-webkit-scrollbar { width: 9px; height: 9px; }
-    ::-webkit-scrollbar-track { background: #050a06; }
-    ::-webkit-scrollbar-thumb {
-        background: #1b4a2c;
-        border-radius: 0;
-    }
-    ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
-
-    /* corner brackets */
-    .bracket { position: relative; }
-    .bracket::before,
-    .bracket::after {
+    .shadow-panel::before {
         content: "";
         position: absolute;
-        width: 9px;
-        height: 9px;
-        border: 1px solid var(--accent);
-        opacity: 0.55;
+        inset: -1px;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(135deg, #22d3ee44, transparent 40%, #8b5cf644);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
         pointer-events: none;
-    }
-    .bracket::before {
-        top: -1px; left: -1px;
-        border-right: 0; border-bottom: 0;
-    }
-    .bracket::after {
-        bottom: -1px; right: -1px;
-        border-left: 0; border-top: 0;
     }
 
     /* ------------------------------------------------------------ login */
 
-    .login-screen {
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-    }
+    .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 
     .login-card {
         width: 100%;
-        max-width: 430px;
-        padding: 30px;
-        background: linear-gradient(160deg, #071009, #050a07);
+        max-width: 420px;
+        padding: 32px;
+        background: linear-gradient(160deg, #0a1226, #050a18);
         border: 1px solid var(--border);
-        border-radius: var(--radius);
+        border-radius: 22px;
         box-shadow:
-            0 0 0 1px #00ff8810,
-            0 0 60px #00ff880d,
-            inset 0 0 90px #00ff8805;
+            0 0 0 1px #38bdf81a,
+            0 30px 90px #000000b3,
+            0 0 80px #1e3a8a2e;
     }
 
-    .brand {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-    }
-
-    .logo-mark {
-        width: 46px;
-        height: 46px;
-        color: var(--accent);
-        filter: drop-shadow(0 0 8px var(--accent-glow));
-        flex: 0 0 auto;
-    }
+    .brand { display: flex; align-items: center; gap: 13px; }
 
     .brand-text h1 {
         margin: 0;
-        font-size: 20px;
+        font-size: 21px;
         font-weight: 800;
-        letter-spacing: 3px;
-        color: var(--accent);
-        text-shadow: 0 0 14px var(--accent-glow);
+        letter-spacing: 2.4px;
+        background: linear-gradient(100deg, #22d3ee, #8b5cf6 60%, #38bdf8);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        filter: drop-shadow(0 0 14px #22d3ee44);
     }
 
     .brand-text p {
         margin: 3px 0 0;
-        font-size: 10px;
-        color: var(--muted);
-        letter-spacing: 2px;
-        text-transform: uppercase;
-    }
-
-    .boot-line {
-        margin: 22px 0 4px;
         font-size: 11px;
         color: var(--muted);
-        min-height: 17px;
-    }
-
-    .cursor {
-        display: inline-block;
-        width: 7px;
-        height: 13px;
-        margin-left: 3px;
-        background: var(--accent);
-        vertical-align: -2px;
-        animation: blink 1s steps(1) infinite;
-    }
-
-    @keyframes blink { 50% { opacity: 0; } }
-
-    .login-card h2 {
-        font-size: 17px;
-        margin: 16px 0 6px;
-        letter-spacing: 2px;
+        letter-spacing: 1.6px;
         text-transform: uppercase;
     }
 
-    .login-card > p {
-        color: var(--muted);
-        font-size: 12px;
-        margin: 0 0 22px;
-    }
+    .login-card h2 { font-size: 19px; margin: 26px 0 6px; letter-spacing: .6px; }
+    .login-card > p { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
 
     label {
         display: block;
-        color: var(--muted);
-        font-size: 10px;
-        letter-spacing: 1.6px;
+        color: #a8c2ea;
+        font-size: 11px;
+        letter-spacing: 1.3px;
         text-transform: uppercase;
-        margin: 16px 0 7px;
+        margin: 15px 0 7px;
     }
 
-    input {
+    input, textarea, select {
         width: 100%;
         padding: 12px 13px;
         color: var(--text);
-        background: #020604;
+        background: #04091a;
         border: 1px solid var(--border);
-        border-radius: var(--radius);
+        border-radius: 10px;
         outline: none;
-        font-family: var(--mono);
+        font-family: var(--font);
+        transition: .15s;
     }
 
-    input::placeholder { color: #33543f; }
+    textarea { resize: vertical; min-height: 84px; font-size: 13px; }
+    input::placeholder, textarea::placeholder { color: #35507e; }
 
-    input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px #00ff8818, inset 0 0 20px #00ff8808;
+    input:focus, textarea:focus, select:focus {
+        border-color: var(--neon);
+        box-shadow: 0 0 0 3px #22d3ee1f, 0 0 22px #22d3ee26;
     }
 
-    .primary-button,
-    .secondary-button,
-    .logout-button {
+    .primary-button, .secondary-button, .logout-button, .ghost-button {
         border: 1px solid transparent;
-        border-radius: var(--radius);
-        padding: 11px 15px;
-        font-family: var(--mono);
+        border-radius: 10px;
+        padding: 11px 16px;
         font-weight: 700;
-        font-size: 12px;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-        transition: 0.14s ease;
+        font-size: 13px;
+        letter-spacing: .7px;
+        transition: .15s;
     }
 
     .primary-button {
-        color: #001b0d;
-        background: var(--accent);
-        box-shadow: 0 0 18px var(--accent-glow);
+        color: #001521;
+        background: linear-gradient(100deg, #22d3ee, #38bdf8);
+        box-shadow: 0 0 24px #22d3ee4d;
     }
-    .primary-button:hover {
-        background: #4dffab;
-        box-shadow: 0 0 26px #00ff8855;
+    .primary-button:hover { box-shadow: 0 0 34px #22d3ee80; transform: translateY(-1px); }
+
+    .secondary-button {
+        color: var(--neon);
+        background: #22d3ee0f;
+        border-color: #22d3ee33;
     }
+    .secondary-button:hover { background: #22d3ee1f; border-color: var(--neon); box-shadow: 0 0 20px #22d3ee40; }
+
+    .ghost-button { color: var(--muted); background: transparent; border-color: var(--border); }
+    .ghost-button:hover { color: var(--text); border-color: var(--border-hi); }
+
+    .logout-button { color: #ffc9d4; background: #ff5c7a14; border-color: #ff5c7a35; }
+    .logout-button:hover { background: #ff5c7a26; }
 
     .login-submit { width: 100%; margin-top: 20px; padding: 13px; }
 
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
 
-    .message {
-        margin-top: 14px;
-        font-size: 11px;
-        line-height: 1.6;
-    }
+    .message { margin-top: 13px; font-size: 12.5px; }
     .message.error { color: var(--red); }
-    .message.success { color: var(--accent); }
+    .message.success { color: var(--green); }
 
     .login-foot {
-        margin-top: 22px;
-        padding-top: 16px;
-        border-top: 1px dashed var(--border);
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        font-size: 10px;
+        font-size: 11px;
         color: var(--muted);
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 
     /* ----------------------------------------------------------- layout */
@@ -283,776 +235,383 @@
     .app { min-height: 100vh; }
 
     .topbar {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        padding: 12px 22px;
-        background: #030604f2;
-        backdrop-filter: blur(12px);
+        position: sticky; top: 0; z-index: 10;
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 16px; padding: 12px 22px;
+        background: #03060fe6;
+        backdrop-filter: blur(14px);
         border-bottom: 1px solid var(--border);
     }
-
-    .topbar .brand-text h1 { font-size: 16px; letter-spacing: 3px; }
 
     .topbar-right { display: flex; align-items: center; gap: 10px; }
 
     .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        padding: 6px 11px;
-        font-size: 10px;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: var(--muted);
+        display: inline-flex; align-items: center; gap: 7px;
+        border: 1px solid var(--border); border-radius: 999px;
+        padding: 7px 12px; font-size: 11px;
+        color: var(--muted); letter-spacing: .8px;
     }
 
     .status-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 8px var(--accent);
-        animation: pulse 2s ease-in-out infinite;
+        width: 7px; height: 7px; border-radius: 50%;
+        background: var(--neon); box-shadow: 0 0 10px var(--neon);
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 50% { opacity: .3 } }
+
+    .tg-button {
+        display: inline-grid; place-items: center;
+        width: 38px; height: 38px; border-radius: 50%;
+        color: #7fd8ff; background: #229ed917;
+        border: 1px solid #229ed940; transition: .15s;
+    }
+    .tg-button:hover {
+        color: #fff; background: #229ed9; border-color: #229ed9;
+        box-shadow: 0 0 24px #229ed966; transform: translateY(-1px);
     }
 
-    @keyframes pulse { 50% { opacity: 0.35; } }
-
-    .logout-button {
-        color: #ffc9cf;
-        background: #ff4d5e14;
-        border-color: #ff4d5e35;
-    }
-    .logout-button:hover { background: #ff4d5e26; }
-
-    .telegram-button {
-        display: inline-grid;
-        place-items: center;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        color: #7fd8ff;
-        background: #229ed914;
-        border: 1px solid #229ed940;
-        transition: 0.15s ease;
-    }
-
-    .telegram-button:hover {
-        color: #ffffff;
-        background: #229ed9;
-        border-color: #229ed9;
-        box-shadow: 0 0 20px #229ed955;
-        transform: translateY(-1px);
-    }
-
-    .layout {
-        display: grid;
-        grid-template-columns: 216px minmax(0, 1fr);
-        min-height: calc(100vh - 61px);
-    }
+    .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 63px); }
 
     .sidebar {
         padding: 20px 12px;
         border-right: 1px solid var(--border);
-        background: linear-gradient(180deg, #050a07, #030604);
+        background: linear-gradient(180deg, #060b1a, #03060f);
     }
 
     .sidebar-label {
-        padding: 0 10px;
-        margin: 0 0 10px;
-        color: #33543f;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 2px;
-        text-transform: uppercase;
+        padding: 0 10px; margin: 0 0 10px;
+        color: #35507e; font-size: 10px; font-weight: 800;
+        letter-spacing: 1.8px; text-transform: uppercase;
     }
 
     .nav-button {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 3px;
-        text-align: left;
-        color: var(--muted);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: var(--radius);
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        transition: 0.13s ease;
+        display: flex; align-items: center; gap: 10px;
+        width: 100%; padding: 11px; margin-bottom: 4px;
+        text-align: left; color: var(--muted);
+        background: transparent; border: 1px solid transparent;
+        border-radius: 10px; font-size: 13px; font-weight: 500;
+        transition: .14s;
     }
 
-    .nav-button:hover {
-        color: var(--text);
-        background: #00ff8808;
-        border-color: #00ff8818;
-    }
+    .nav-button:hover { color: var(--text); background: #22d3ee0a; }
 
     .nav-button.active {
-        color: var(--accent);
-        background: #00ff880f;
-        border-color: #00ff8833;
-        box-shadow: inset 2px 0 0 var(--accent);
+        color: var(--neon);
+        background: linear-gradient(90deg, #22d3ee1f, #22d3ee08);
+        border-color: #22d3ee35;
+        box-shadow: inset 3px 0 0 var(--neon), 0 0 22px #22d3ee1f;
     }
 
-    .nav-icon { width: 18px; text-align: center; font-size: 11px; }
+    .nav-icon { width: 18px; text-align: center; font-size: 13px; }
 
     .sidebar-footer {
-        margin: 26px 8px 0;
-        padding-top: 16px;
-        border-top: 1px dashed var(--border);
-        color: #33543f;
-        font-size: 10px;
-        line-height: 1.9;
-        letter-spacing: 1px;
+        margin: 26px 8px 0; padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: #35507e; font-size: 11px; line-height: 1.9;
     }
 
-    .sidebar-footer a { color: var(--muted); }
-    .sidebar-footer a:hover { color: #7fd8ff; }
-
-    main {
-        width: 100%;
-        max-width: 1600px;
-        padding: 26px;
-        margin: 0 auto;
-        min-width: 0;
-    }
+    main { width: 100%; max-width: 1600px; padding: 26px; margin: 0 auto; min-width: 0; }
 
     .page-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 18px;
-        margin-bottom: 22px;
+        display: flex; justify-content: space-between; align-items: flex-start;
+        gap: 18px; margin-bottom: 22px;
     }
 
     .page-header h2 {
-        margin: 0 0 6px;
-        font-size: clamp(19px, 2.6vw, 25px);
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        color: var(--accent);
-        text-shadow: 0 0 16px var(--accent-glow);
+        margin: 0 0 6px; font-size: clamp(21px, 2.6vw, 27px);
+        font-weight: 800; letter-spacing: -.4px;
+        background: linear-gradient(100deg, #e8f4ff, #7dd3fc);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
     }
 
-    .page-header h2::before {
-        content: "> ";
-        color: var(--muted);
-        text-shadow: none;
-    }
+    .page-header p { margin: 0; color: var(--muted); font-size: 13px; }
 
-    .page-header p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 0.6px;
-    }
-
-    .secondary-button {
-        color: var(--accent);
-        background: #00ff880a;
-        border-color: #00ff8828;
-    }
-    .secondary-button:hover {
-        background: #00ff8818;
-        border-color: #00ff8855;
-        box-shadow: 0 0 16px var(--accent-glow);
-    }
-
-    /* ---------------------------------------------------------- content */
+    /* ---------------------------------------------------------- stats */
 
     .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-        margin-bottom: 20px;
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px; margin-bottom: 22px;
     }
 
-    .stat-card,
-    .panel {
-        background: linear-gradient(160deg, #071009, #050a07);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-    }
+    .stat-card { padding: 19px; min-width: 0; }
 
-    .stat-card { padding: 17px; min-width: 0; }
-
-    .stat-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-    }
+    .stat-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
     .stat-label {
-        color: var(--muted);
-        font-size: 9px;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
+        color: var(--muted); font-size: 11px;
+        letter-spacing: 1.4px; text-transform: uppercase; font-weight: 600;
     }
 
     .stat-icon {
-        display: grid;
-        place-items: center;
-        width: 28px;
-        height: 28px;
-        border: 1px solid #00ff8828;
-        border-radius: var(--radius);
-        color: var(--accent);
-        font-size: 12px;
+        display: grid; place-items: center;
+        width: 32px; height: 32px; border-radius: 9px;
+        background: #22d3ee14; border: 1px solid #22d3ee2e;
+        color: var(--neon); font-size: 14px;
     }
 
     .stat-value {
-        margin-top: 14px;
-        font-size: 28px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        color: var(--accent);
-        text-shadow: 0 0 18px var(--accent-glow);
+        margin-top: 15px; font-size: 32px; font-weight: 800;
+        letter-spacing: -1px;
+        color: #eaf6ff;
+        text-shadow: 0 0 26px #22d3ee4d;
         overflow-wrap: anywhere;
     }
 
-    .stat-foot {
-        margin-top: 5px;
-        color: #33543f;
-        font-size: 10px;
-        letter-spacing: 0.5px;
-    }
+    .stat-value.neon { color: var(--neon); text-shadow: 0 0 30px #22d3ee66; }
+    .stat-value.green { color: var(--green); text-shadow: 0 0 30px #34d3994d; }
+    .stat-value.red { color: var(--red); text-shadow: 0 0 30px #ff5c7a4d; }
+    .stat-value.violet { color: #c4b5fd; text-shadow: 0 0 30px #8b5cf666; }
+
+    .stat-foot { margin-top: 6px; color: #35507e; font-size: 11.5px; }
+
+    /* --------------------------------------------------------- panels */
 
     .content-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
-        gap: 16px;
+        display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr);
+        gap: 18px;
     }
 
-    .panel { min-width: 0; overflow: hidden; margin-bottom: 16px; }
+    .panel { min-width: 0; overflow: hidden; margin-bottom: 18px; }
 
     .panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 16px;
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 12px; padding: 16px 18px;
         border-bottom: 1px solid var(--border);
-        background: #00ff8805;
+        background: #0d1730a6;
     }
 
-    .panel-header h3 {
-        margin: 0;
-        font-size: 11px;
-        letter-spacing: 1.8px;
-        text-transform: uppercase;
-        color: var(--text);
-    }
+    .panel-header h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .3px; }
 
-    .panel-header h3::before {
-        content: "// ";
-        color: var(--accent-dim);
-    }
-
-    .panel-body { padding: 16px; }
+    .panel-body { padding: 18px; }
 
     .connection-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        padding: 11px 0;
-        border-bottom: 1px dashed #0f2a1a;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 14px; padding: 12px 0; border-bottom: 1px solid #0f1e3d;
     }
-
     .connection-row:last-child { border-bottom: 0; }
 
-    .connection-name {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        overflow-wrap: anywhere;
-    }
-
-    .connection-desc {
-        margin-top: 3px;
-        font-size: 10px;
-        color: var(--muted);
-        overflow-wrap: anywhere;
-    }
+    .connection-name { font-size: 13px; font-weight: 600; }
+    .connection-desc { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 
     .badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 8px;
-        border-radius: 3px;
-        background: #ffffff08;
-        border: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        white-space: nowrap;
+        display: inline-flex; align-items: center; padding: 5px 10px;
+        border-radius: 999px; background: #ffffff0a; border: 1px solid var(--border);
+        color: var(--muted); font-size: 11px; font-weight: 600;
+        letter-spacing: .5px; white-space: nowrap;
     }
 
-    .badge.online,
-    .badge.active,
-    .badge.approved,
-    .badge.success,
-    .badge.charging {
-        color: var(--accent);
-        border-color: #00ff8835;
-        background: #00ff880d;
-        box-shadow: 0 0 12px #00ff8818;
+    .badge.online, .badge.active, .badge.sent, .badge.success, .badge.bound, .badge.upi {
+        color: var(--neon); border-color: #22d3ee35; background: #22d3ee12;
+        box-shadow: 0 0 14px #22d3ee1f;
     }
-
-    .badge.pending,
-    .badge.waiting {
-        color: var(--yellow);
-        border-color: #ffcc4435;
-        background: #ffcc440d;
-    }
-
-    .badge.error,
-    .badge.rejected,
-    .badge.failed {
-        color: var(--red);
-        border-color: #ff4d5e35;
-        background: #ff4d5e0d;
-    }
-
-    .badge.discharging { color: var(--muted); }
+    .badge.pending, .badge.queued { color: var(--amber); border-color: #fbbf2435; background: #fbbf2412; }
+    .badge.error, .badge.failed, .badge.offline { color: var(--red); border-color: #ff5c7a35; background: #ff5c7a12; }
+    .badge.in { color: var(--violet); border-color: #8b5cf635; background: #8b5cf612; }
+    .badge.out { color: var(--neon-2); border-color: #38bdf835; background: #38bdf812; }
 
     .table-wrap { width: 100%; overflow-x: auto; }
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        text-align: left;
-        font-size: 11px;
-    }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
 
-    th, td {
-        padding: 11px 14px;
-        border-bottom: 1px dashed #0f2a1a;
-        white-space: nowrap;
-    }
+    th, td { padding: 12px 16px; border-bottom: 1px solid #0f1e3d; white-space: nowrap; }
 
     th {
-        color: #33543f;
-        font-size: 9px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 1.6px;
-        background: #00ff8804;
+        color: var(--muted); font-size: 10.5px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.2px;
+        background: #0a1striking;
+        background: #0a1226;
     }
 
-    td { color: #a9e6c1; }
-
-    tbody tr:hover td { background: #00ff8806; }
+    td { color: #bcd4f5; }
+    tbody tr:hover td { background: #22d3ee08; }
     tbody tr:last-child td { border-bottom: 0; }
 
-    .cell-sub {
-        display: block;
-        margin-top: 3px;
-        color: #33543f;
-        font-size: 9px;
-        letter-spacing: 0.4px;
+    .cell-sub { display: block; margin-top: 4px; color: #35507e; font-size: 11px; }
+
+    .cell-body {
+        max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; display: block; font-family: var(--mono); font-size: 12px;
     }
 
     .row-button {
-        padding: 6px 10px;
-        font-family: var(--mono);
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: var(--accent);
-        background: #00ff880a;
-        border: 1px solid #00ff8828;
-        border-radius: 3px;
+        padding: 7px 12px; font-size: 11.5px; font-weight: 700;
+        color: var(--neon); background: #22d3ee12;
+        border: 1px solid #22d3ee30; border-radius: 8px;
     }
+    .row-button:hover { background: #22d3ee22; border-color: var(--neon); box-shadow: 0 0 16px #22d3ee40; }
+    .row-button.danger { color: #c4b5fd; background: #8b5cf612; border-color: #8b5cf630; }
+    .row-button.danger:hover { background: #8b5cf622; border-color: var(--violet); }
 
-    .row-button:hover {
-        background: #00ff881a;
-        border-color: var(--accent);
-        box-shadow: 0 0 12px var(--accent-glow);
-    }
+    .inline-input { padding: 8px 10px; font-size: 12px; border-radius: 8px; }
 
-    .row-button.danger {
-        color: #7fd8ff;
-        background: #229ed90f;
-        border-color: #229ed938;
-    }
-
-    .row-button.danger:hover {
-        background: #229ed922;
-        border-color: #229ed9;
-        box-shadow: 0 0 12px #229ed944;
-    }
-
-    .empty-state {
-        padding: 32px 16px;
-        text-align: center;
-        color: #33543f;
-        font-size: 11px;
-        letter-spacing: 1px;
-    }
-
-    .empty-state::before {
-        content: "[ ";
-        color: var(--accent-dim);
-    }
-    .empty-state::after {
-        content: " ]";
-        color: var(--accent-dim);
-    }
+    .empty-state { padding: 34px 16px; text-align: center; color: #35507e; font-size: 13px; }
 
     .notice {
-        margin-bottom: 18px;
-        padding: 11px 14px;
-        border-radius: var(--radius);
-        background: #00ff8809;
-        border: 1px solid #00ff8830;
-        border-left: 3px solid var(--accent);
-        color: #a9e6c1;
-        font-size: 11px;
+        margin-bottom: 18px; padding: 12px 15px; border-radius: 10px;
+        background: #22d3ee0f; border: 1px solid #22d3ee30;
+        border-left: 3px solid var(--neon); color: #b6d9f5; font-size: 13px;
     }
 
     .page-section { display: none; }
     .page-section.active { display: block; }
 
-    .settings-row {
-        padding: 13px 0;
-        border-bottom: 1px dashed #0f2a1a;
-    }
+    .settings-row { padding: 14px 0; border-bottom: 1px solid #0f1e3d; }
     .settings-row:last-child { border-bottom: 0; }
+    .settings-row strong { display: block; margin-bottom: 5px; font-size: 12.5px; color: var(--neon-2); }
+    .settings-row p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; overflow-wrap: anywhere; }
 
-    .settings-row strong {
-        display: block;
-        margin-bottom: 5px;
-        font-size: 10px;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
-        color: var(--accent);
-    }
-
-    .settings-row p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 11px;
-        line-height: 1.7;
-        overflow-wrap: anywhere;
-    }
-
-    .footer {
-        padding: 18px 0 4px;
-        text-align: center;
-        color: #33543f;
-        font-size: 10px;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
-    }
+    .footer { padding: 18px 0 4px; text-align: center; color: #35507e; font-size: 11.5px; }
 
     .toast {
-        position: fixed;
-        right: 18px;
-        bottom: 18px;
-        z-index: 30;
-        max-width: calc(100vw - 36px);
-        padding: 11px 15px;
-        border: 1px solid #00ff8835;
-        border-left: 3px solid var(--accent);
-        border-radius: var(--radius);
-        background: #061009;
-        color: var(--accent);
-        box-shadow: 0 12px 40px #000a, 0 0 24px #00ff8818;
-        font-size: 11px;
-        letter-spacing: 0.6px;
+        position: fixed; right: 20px; bottom: 20px; z-index: 40;
+        max-width: calc(100vw - 40px); padding: 13px 17px;
+        border: 1px solid #22d3ee35; border-left: 3px solid var(--neon);
+        border-radius: 11px; background: #071026; color: #d5ecff;
+        box-shadow: 0 14px 44px #000a, 0 0 26px #22d3ee26; font-size: 13px;
     }
 
-    .toast::before { content: "[SYS] "; color: var(--muted); }
+    /* ------------------------------------------------------- bulk bar */
 
-    /* ------------------------------------------------------- live view */
-
-    .live-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-    .live-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        flex-wrap: wrap;
-        padding: 10px 12px;
-        margin-bottom: 12px;
-        background: #061009;
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
+    .bulk-bar {
+        display: grid; grid-template-columns: minmax(0, 1fr) 190px auto;
+        gap: 12px; align-items: start; padding: 16px;
     }
 
-    .toolbar-spacer { flex: 1 1 auto; }
+    .bulk-bar .bulk-actions { display: flex; flex-direction: column; gap: 8px; }
 
-    .tool-button {
-        padding: 7px 10px;
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: var(--muted);
-        background: #030604;
-        border: 1px solid var(--border);
-        border-radius: 3px;
-    }
-
-    .tool-button:hover {
-        color: var(--accent);
-        border-color: #00ff8835;
-        background: #00ff880a;
-    }
-
-    .toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        font-size: 10px;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 0;
-        cursor: pointer;
-    }
-
-    .toggle input {
-        width: auto;
-        accent-color: var(--accent);
-        cursor: pointer;
-    }
-
-    .screen-wrap {
-        position: relative;
-        display: grid;
-        place-items: center;
-        padding: 16px;
-        background: #020503;
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        min-height: 320px;
-        box-shadow: inset 0 0 80px #00ff8805;
-    }
-
-    #screenCanvas {
-        max-width: 100%;
-        max-height: 72vh;
-        background: #000;
-        border-radius: 2px;
-        cursor: crosshair;
-        touch-action: none;
-        box-shadow: 0 0 30px #00ff8815;
-    }
-
-    .screen-overlay {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        color: var(--muted);
-        font-size: 11px;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-        background: #020503cc;
-        border-radius: var(--radius);
-        pointer-events: none;
-    }
-
-    .live-meta {
-        display: flex;
-        gap: 18px;
-        flex-wrap: wrap;
-        margin-top: 12px;
-        font-size: 10px;
-        color: #33543f;
-        letter-spacing: 0.8px;
-    }
-
-    /* ----------------------------------------------------------- modal */
+    /* ---------------------------------------------------------- modal */
 
     .modal-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 40;
-        display: grid;
-        place-items: center;
-        padding: 22px;
-        background: #020503e0;
-        backdrop-filter: blur(3px);
+        position: fixed; inset: 0; z-index: 50;
+        display: grid; place-items: center; padding: 22px;
+        background: #01030ae6; backdrop-filter: blur(4px);
     }
 
     .modal-card {
-        width: 100%;
-        max-width: 620px;
-        max-height: 85vh;
-        display: flex;
-        flex-direction: column;
-        background: #061009;
-        border: 1px solid #00ff8830;
-        border-radius: var(--radius);
-        box-shadow: 0 0 60px #00ff8815, 0 30px 90px #000c;
+        width: 100%; max-width: 640px; max-height: 86vh;
+        display: flex; flex-direction: column;
+        background: #070e20; border: 1px solid #22d3ee30;
+        border-radius: 16px;
+        box-shadow: 0 0 70px #22d3ee1f, 0 34px 100px #000c;
     }
 
     .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 14px 16px;
-        border-bottom: 1px solid var(--border);
-        background: #00ff8805;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--border);
     }
 
-    .modal-header h3 {
-        margin: 0;
-        font-size: 12px;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        color: var(--accent);
-        overflow-wrap: anywhere;
-    }
+    .modal-header h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 
-    .modal-body { padding: 6px 16px 16px; overflow-y: auto; }
+    .modal-body { padding: 8px 18px 18px; overflow-y: auto; }
 
     .detail-group { margin-top: 16px; }
-
     .detail-group h4 {
-        margin: 0 0 7px;
-        font-size: 9px;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        color: #33543f;
+        margin: 0 0 8px; font-size: 11px; letter-spacing: 1.4px;
+        text-transform: uppercase; color: #35507e;
     }
-
-    .detail-group h4::before { content: "// "; color: var(--accent-dim); }
 
     .detail-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 8px 0;
-        border-bottom: 1px dashed #0f2a1a;
-        font-size: 11px;
+        display: flex; justify-content: space-between; gap: 16px;
+        padding: 9px 0; border-bottom: 1px solid #0f1e3d; font-size: 13px;
     }
-
     .detail-row span:first-child { color: var(--muted); flex: 0 0 auto; }
+    .detail-row span:last-child { text-align: right; overflow-wrap: anywhere; }
 
-    .detail-row span:last-child {
-        text-align: right;
-        overflow-wrap: anywhere;
-        color: var(--text);
+    /* -------------------------------------------------------- helpers */
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .code-chip {
+        display: inline-block; padding: 9px 15px; border-radius: 9px;
+        font-family: var(--mono); font-size: 19px; font-weight: 700;
+        letter-spacing: 4px; color: var(--neon);
+        background: #22d3ee12; border: 1px dashed #22d3ee45;
+        text-shadow: 0 0 18px #22d3ee66;
     }
 
-    /* ------------------------------------------------------ responsive */
+    .step-list { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 2; }
+    .step-list code { font-family: var(--mono); color: var(--neon-2); background: #22d3ee10; padding: 1px 6px; border-radius: 5px; }
 
     @media (max-width: 1100px) {
         .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .content-grid { grid-template-columns: 1fr; }
+        .bulk-bar { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 760px) {
         .topbar { padding: 11px 14px; }
         .topbar .brand-text p { display: none; }
-        .topbar-right { gap: 7px; }
         .status-pill { display: none; }
-
         .layout { grid-template-columns: 1fr; }
-
         .sidebar {
-            display: flex;
-            gap: 5px;
-            padding: 9px;
-            overflow-x: auto;
-            border-right: 0;
-            border-bottom: 1px solid var(--border);
+            display: flex; gap: 6px; padding: 9px;
+            overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border);
         }
-
         .sidebar-label, .sidebar-footer { display: none; }
-
-        .nav-button {
-            width: auto;
-            flex: 0 0 auto;
-            margin: 0;
-            padding: 9px 11px;
-            font-size: 10px;
-        }
-
+        .nav-button { width: auto; flex: 0 0 auto; margin: 0; padding: 9px 12px; font-size: 12px; }
         .nav-icon { display: none; }
-
         main { padding: 18px 13px; }
-        .page-header { align-items: center; }
-        .stats-grid { gap: 9px; }
-        .stat-card { padding: 13px; }
-        .stat-value { font-size: 23px; }
-        .panel-header, .panel-body { padding: 13px; }
-        .login-card { padding: 22px; }
+        .stats-grid { gap: 10px; }
+        .stat-card { padding: 14px; }
+        .stat-value { font-size: 24px; }
+        .panel-header, .panel-body { padding: 14px; }
+        .login-card { padding: 24px; }
+        .field-row { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 380px) {
         .stats-grid { grid-template-columns: 1fr; }
-        .brand-text h1 { font-size: 14px; letter-spacing: 2px; }
-        .logout-button { padding: 8px; font-size: 10px; }
+        .brand-text h1 { font-size: 16px; }
     }
 </style>
 </head>
 <body>
 
-<canvas id="matrix"></canvas>
+<div class="layer">
 
 <!-- ============================================================== LOGIN -->
 
-<div class="layer">
 <section class="login-screen" id="loginScreen">
-    <div class="login-card bracket">
+    <div class="login-card">
         <div class="brand">
-            <svg class="logo-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                <polygon points="24,2.5 43.5,13.5 43.5,34.5 24,45.5 4.5,34.5 4.5,13.5"
-                         stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
-                <path d="M18 17.5 L11.5 24 L18 30.5"
-                      stroke="currentColor" stroke-width="2.4"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M30 17.5 L36.5 24 L30 30.5"
-                      stroke="currentColor" stroke-width="2.4"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M26.5 15 L21.5 33"
-                      stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <svg class="cat-logo" viewBox="0 0 64 64" aria-hidden="true">
+                <defs>
+                    <linearGradient id="catGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#a855f7"/>
+                        <stop offset="55%" stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#1e3a8a"/>
+                    </linearGradient>
+                </defs>
+                <path class="cat-ear-l" d="M13 24 L9 5 L26 15 Z" fill="url(#catGrad)"/>
+                <path class="cat-ear-r" d="M51 24 L55 5 L38 15 Z" fill="url(#catGrad)"/>
+                <ellipse cx="32" cy="37" rx="22" ry="19" fill="url(#catGrad)"/>
+                <ellipse class="cat-eye" cx="24" cy="34" rx="4.6" ry="6" fill="#000"/>
+                <ellipse class="cat-eye" cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
+                <path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
+                <path class="cat-whisker" d="M6 40 L20 43 M6 47 L20 47"
+                      stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
+                <path class="cat-whisker" d="M58 40 L44 43 M58 47 L44 47"
+                      stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
             </svg>
             <div class="brand-text">
                 <h1>TPC PANEL</h1>
-                <p>Remote Ops Console</p>
+                <p>SMS &amp; UPI Control</p>
             </div>
         </div>
 
-        <div class="boot-line" id="bootLine"></div>
-
-        <h2>Authenticate</h2>
-        <p>Enter operator credentials to access the device fleet.</p>
+        <h2>Operator login</h2>
+        <p>Sign in to manage devices, messages and the Telegram bot.</p>
 
         <form id="loginForm">
-            <label for="username">Operator</label>
-            <input id="username" name="username" autocomplete="username"
-                   placeholder="username" required>
+            <label for="username">Username</label>
+            <input id="username" autocomplete="username" placeholder="username" required>
 
-            <label for="password">Passkey</label>
-            <input id="password" name="password" type="password"
-                   autocomplete="current-password" placeholder="••••••••" required>
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password"
+                   placeholder="••••••••" required>
 
             <button class="primary-button login-submit" id="loginButton" type="submit">
-                ▸ Connect
+                Sign in
             </button>
 
             <div class="message" id="loginMessage" role="status" aria-live="polite"></div>
@@ -1070,21 +629,24 @@
 <div class="app" id="dashboardApp" hidden>
     <header class="topbar">
         <div class="brand">
-            <svg class="logo-mark" style="width:34px;height:34px" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                <polygon points="24,2.5 43.5,13.5 43.5,34.5 24,45.5 4.5,34.5 4.5,13.5"
-                         stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
-                <path d="M18 17.5 L11.5 24 L18 30.5"
-                      stroke="currentColor" stroke-width="2.6"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M30 17.5 L36.5 24 L30 30.5"
-                      stroke="currentColor" stroke-width="2.6"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M26.5 15 L21.5 33"
-                      stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            <svg class="cat-logo" style="width:34px;height:34px" viewBox="0 0 64 64" aria-hidden="true">
+                <defs>
+                    <linearGradient id="catGrad2" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#a855f7"/>
+                        <stop offset="55%" stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#1e3a8a"/>
+                    </linearGradient>
+                </defs>
+                <path d="M13 24 L9 5 L26 15 Z" fill="url(#catGrad2)"/>
+                <path d="M51 24 L55 5 L38 15 Z" fill="url(#catGrad2)"/>
+                <ellipse cx="32" cy="37" rx="22" ry="19" fill="url(#catGrad2)"/>
+                <ellipse cx="24" cy="34" rx="4.6" ry="6" fill="#000"/>
+                <ellipse cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
+                <path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
             </svg>
             <div class="brand-text">
                 <h1>TPC PANEL</h1>
-                <p>Remote Ops Console</p>
+                <p>SMS &amp; UPI Control</p>
             </div>
         </div>
 
@@ -1094,136 +656,127 @@
                 <span id="connectionLabel">Checking</span>
             </span>
 
-            <a class="telegram-button" href="https://t.me/icivan"
-               target="_blank" rel="noopener" title="Contact owner on Telegram">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <a class="tg-button" href="https://t.me/icivan" target="_blank"
+               rel="noopener" title="Contact owner">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
                 </svg>
             </a>
 
-            <button class="logout-button" id="logoutButton" type="button">
-                Disconnect
-            </button>
+            <button class="logout-button" id="logoutButton" type="button">Logout</button>
         </div>
     </header>
 
     <div class="layout">
         <aside class="sidebar">
             <div>
-                <p class="sidebar-label">Workspace</p>
+                <p class="sidebar-label">Main</p>
 
                 <button class="nav-button active" data-page="overview" type="button">
                     <span class="nav-icon">▦</span> Overview
                 </button>
+                <button class="nav-button" data-page="live" type="button">
+                    <span class="nav-icon">⚡</span> Live dashboard
+                </button>
+                <button class="nav-button" data-page="messages" type="button">
+                    <span class="nav-icon">✉</span> Messages
+                </button>
+
+                <p class="sidebar-label" style="margin-top:22px">Automation</p>
+
+                <button class="nav-button" data-page="autosender" type="button">
+                    <span class="nav-icon">⟳</span> Auto sender
+                </button>
+                <button class="nav-button" data-page="telegram" type="button">
+                    <span class="nav-icon">✈</span> Telegram bot
+                </button>
+
+                <p class="sidebar-label" style="margin-top:22px">System</p>
+
                 <button class="nav-button" data-page="devices" type="button">
                     <span class="nav-icon">▣</span> Devices
                 </button>
-                <button class="nav-button" data-page="live" type="button">
-                    <span class="nav-icon">▶</span> Live view
-                </button>
-                <button class="nav-button" data-page="sessions" type="button">
-                    <span class="nav-icon">◉</span> Sessions
-                </button>
-                <button class="nav-button" data-page="activity" type="button">
-                    <span class="nav-icon">≡</span> Logs
-                </button>
-
-                <p class="sidebar-label" style="margin-top:24px">System</p>
-
                 <button class="nav-button" data-page="settings" type="button">
                     <span class="nav-icon">⚙</span> Settings
                 </button>
             </div>
 
             <div class="sidebar-footer">
-                <div>TPC PANEL · v3.0</div>
-                <div>
-                    owner:
-                    <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a>
-                </div>
+                <div>TPC PANEL · v4.0</div>
+                <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
             </div>
         </aside>
 
         <main>
             <div class="notice" id="globalNotice" hidden></div>
 
-            <!-- ---------------------------------------------- OVERVIEW -->
+            <!-- --------------------------------------------- OVERVIEW -->
 
             <section class="page-section active" id="page-overview">
                 <div class="page-header">
                     <div>
                         <h2>Overview</h2>
-                        <p>Fleet status and live support activity</p>
+                        <p>Fleet health at a glance</p>
                     </div>
-                    <button class="secondary-button" id="refreshButton" type="button">
-                        ↻ Refresh
-                    </button>
+                    <button class="secondary-button" id="refreshButton" type="button">↻ Refresh</button>
                 </div>
 
                 <div class="stats-grid">
-                    <article class="stat-card bracket">
+                    <article class="stat-card shadow-panel">
                         <div class="stat-top">
                             <span class="stat-label">Total devices</span>
                             <span class="stat-icon">▣</span>
                         </div>
-                        <div class="stat-value" id="totalDevices">—</div>
+                        <div class="stat-value neon" id="statTotal">—</div>
                         <div class="stat-foot">registered</div>
                     </article>
 
-                    <article class="stat-card bracket">
+                    <article class="stat-card shadow-panel">
                         <div class="stat-top">
                             <span class="stat-label">Active</span>
                             <span class="stat-icon">◉</span>
                         </div>
-                        <div class="stat-value" id="activeDevices">—</div>
-                        <div class="stat-foot" id="chargingDevicesFoot">last 90s</div>
+                        <div class="stat-value green" id="statActive">—</div>
+                        <div class="stat-foot">last 90 seconds</div>
                     </article>
 
-                    <article class="stat-card bracket">
+                    <article class="stat-card shadow-panel">
                         <div class="stat-top">
-                            <span class="stat-label">Sessions</span>
-                            <span class="stat-icon">⇄</span>
+                            <span class="stat-label">Offline</span>
+                            <span class="stat-icon">○</span>
                         </div>
-                        <div class="stat-value" id="activeSessions">—</div>
-                        <div class="stat-foot" id="streamingDevicesFoot">open workflow</div>
+                        <div class="stat-value red" id="statOffline">—</div>
+                        <div class="stat-foot">no heartbeat</div>
                     </article>
 
-                    <article class="stat-card bracket">
+                    <article class="stat-card shadow-panel">
                         <div class="stat-top">
-                            <span class="stat-label">Database</span>
-                            <span class="stat-icon">⌘</span>
+                            <span class="stat-label">Total SIMs</span>
+                            <span class="stat-icon">▤</span>
                         </div>
-                        <div class="stat-value" id="databaseStatus" style="font-size:20px">Checking</div>
-                        <div class="stat-foot" id="lastUpdated">waiting</div>
+                        <div class="stat-value violet" id="statSims">—</div>
+                        <div class="stat-foot">SIM slots reported</div>
                     </article>
                 </div>
 
                 <div class="content-grid">
-                    <section class="panel bracket">
+                    <section class="panel shadow-panel">
                         <div class="panel-header">
                             <h3>Recent registrations</h3>
-                            <button class="secondary-button" data-goto="devices" type="button">
-                                View all
-                            </button>
+                            <button class="secondary-button" data-goto="devices" type="button">View all</button>
                         </div>
                         <div class="table-wrap">
                             <table>
                                 <thead>
-                                    <tr>
-                                        <th>Device</th>
-                                        <th>Status</th>
-                                        <th>Registered</th>
-                                    </tr>
+                                    <tr><th>Device</th><th>SIM</th><th>Status</th><th>Registered</th></tr>
                                 </thead>
                                 <tbody id="recentDevicesBody"></tbody>
                             </table>
                         </div>
                     </section>
 
-                    <section class="panel bracket">
-                        <div class="panel-header">
-                            <h3>System status</h3>
-                        </div>
+                    <section class="panel shadow-panel">
+                        <div class="panel-header"><h3>System status</h3></div>
                         <div class="panel-body">
                             <div class="connection-row">
                                 <div>
@@ -1232,7 +785,6 @@
                                 </div>
                                 <span class="badge" id="apiBadge">Checking</span>
                             </div>
-
                             <div class="connection-row">
                                 <div>
                                     <div class="connection-name">MongoDB</div>
@@ -1240,17 +792,302 @@
                                 </div>
                                 <span class="badge" id="dbBadge">Checking</span>
                             </div>
-
                             <div class="connection-row">
                                 <div>
-                                    <div class="connection-name">Operator session</div>
-                                    <div class="connection-desc">authenticated</div>
+                                    <div class="connection-name">Telegram bot</div>
+                                    <div class="connection-desc">binding status</div>
                                 </div>
-                                <span class="badge online" id="adminBadge">Active</span>
+                                <span class="badge" id="tgBadge">Not bound</span>
                             </div>
                         </div>
                     </section>
                 </div>
+            </section>
+
+            <!-- ------------------------------------------ LIVE DASHBOARD -->
+
+            <section class="page-section" id="page-live">
+                <div class="page-header">
+                    <div>
+                        <h2>Live dashboard</h2>
+                        <p>Real-time fleet, messages and bulk sending</p>
+                    </div>
+                    <button class="secondary-button" data-refresh="live" type="button">↻ Refresh</button>
+                </div>
+
+                <div class="stats-grid">
+                    <article class="stat-card shadow-panel">
+                        <div class="stat-top">
+                            <span class="stat-label">Total</span>
+                            <span class="stat-icon">▣</span>
+                        </div>
+                        <div class="stat-value neon" id="liveTotal">—</div>
+                        <div class="stat-foot">devices</div>
+                    </article>
+
+                    <article class="stat-card shadow-panel">
+                        <div class="stat-top">
+                            <span class="stat-label">Online</span>
+                            <span class="stat-icon">◉</span>
+                        </div>
+                        <div class="stat-value green" id="liveOnline">—</div>
+                        <div class="stat-foot">streaming socket</div>
+                    </article>
+
+                    <article class="stat-card shadow-panel">
+                        <div class="stat-top">
+                            <span class="stat-label">Offline</span>
+                            <span class="stat-icon">○</span>
+                        </div>
+                        <div class="stat-value red" id="liveOffline">—</div>
+                        <div class="stat-foot">socket down</div>
+                    </article>
+
+                    <article class="stat-card shadow-panel">
+                        <div class="stat-top">
+                            <span class="stat-label">UPI</span>
+                            <span class="stat-icon">₹</span>
+                        </div>
+                        <div class="stat-value violet" id="liveUpi">—</div>
+                        <div class="stat-foot" id="liveUpiFoot">transactions today</div>
+                    </article>
+                </div>
+
+                <section class="panel shadow-panel" style="margin-bottom:18px">
+                    <div class="panel-header">
+                        <h3>Bulk send</h3>
+                        <span class="badge" id="bulkTargetBadge">all devices</span>
+                    </div>
+                    <div class="bulk-bar">
+                        <div>
+                            <label for="bulkBody">Message</label>
+                            <textarea id="bulkBody" placeholder="Type message to broadcast…"></textarea>
+                        </div>
+                        <div>
+                            <label for="bulkTarget">Target</label>
+                            <select id="bulkTarget">
+                                <option value="all">All devices</option>
+                                <option value="online">Online only</option>
+                            </select>
+                            <label for="bulkTo" style="margin-top:12px">Send to number (optional)</label>
+                            <input id="bulkTo" placeholder="blank = device SIM number">
+                        </div>
+                        <div class="bulk-actions">
+                            <button class="primary-button" id="bulkSend" type="button">⚡ Broadcast</button>
+                            <button class="ghost-button" id="bulkClear" type="button">Clear</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>Devices</h3>
+                        <span class="badge" id="liveDeviceCount">0</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Last message</th>
+                                    <th>Send message</th>
+                                    <th>All messages</th>
+                                </tr>
+                            </thead>
+                            <tbody id="liveBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ---------------------------------------------- MESSAGES -->
+
+            <section class="page-section" id="page-messages">
+                <div class="page-header">
+                    <div>
+                        <h2>Messages</h2>
+                        <p>All inbound and outbound SMS</p>
+                    </div>
+                    <div style="display:flex;gap:9px">
+                        <select id="msgFilter" class="inline-input" style="width:auto">
+                            <option value="">All</option>
+                            <option value="in">Inbound</option>
+                            <option value="out">Outbound</option>
+                            <option value="upi">UPI only</option>
+                        </select>
+                        <button class="secondary-button" data-refresh="messages" type="button">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>Message log</h3>
+                        <span class="badge" id="messageCount">0</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Device</th>
+                                    <th>Dir</th>
+                                    <th>From / To</th>
+                                    <th>Body</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="messagesBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ------------------------------------------- AUTO SENDER -->
+
+            <section class="page-section" id="page-autosender">
+                <div class="page-header">
+                    <div>
+                        <h2>Auto sender</h2>
+                        <p>Auto-reply rules for inbound SMS</p>
+                    </div>
+                    <button class="secondary-button" data-refresh="rules" type="button">↻ Refresh</button>
+                </div>
+
+                <section class="panel shadow-panel" style="margin-bottom:18px">
+                    <div class="panel-header"><h3>New rule</h3></div>
+                    <div class="panel-body">
+                        <div class="field-row">
+                            <div>
+                                <label for="ruleName">Rule name</label>
+                                <input id="ruleName" placeholder="e.g. UPI thanks">
+                            </div>
+                            <div>
+                                <label for="ruleMatch">Match text (contains)</label>
+                                <input id="ruleMatch" placeholder="e.g. UPI">
+                            </div>
+                        </div>
+                        <label for="ruleReply">Auto reply</label>
+                        <textarea id="ruleReply" placeholder="Thanks! Payment received."></textarea>
+                        <p class="small muted" style="margin:6px 0 0">
+                            Placeholders: <code>{amount}</code> <code>{sender}</code> <code>{device}</code> <code>{time}</code>
+                        </p>
+                        <div style="display:flex;gap:10px;margin-top:14px">
+                            <button class="primary-button" id="ruleAdd" type="button">Add rule</button>
+                            <label class="badge" style="gap:7px;cursor:pointer">
+                                <input type="checkbox" id="ruleUpiOnly" style="width:auto">
+                                UPI only
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>Active rules</h3>
+                        <span class="badge" id="ruleCount">0</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody id="rulesBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+
+            <!-- -------------------------------------------- TELEGRAM -->
+
+            <section class="page-section" id="page-telegram">
+                <div class="page-header">
+                    <div>
+                        <h2>Telegram bot</h2>
+                        <p>Bind a bot to a channel, verify, then relay messages</p>
+                    </div>
+                    <button class="secondary-button" data-refresh="telegram" type="button">↻ Refresh</button>
+                </div>
+
+                <div class="content-grid">
+                    <section class="panel shadow-panel">
+                        <div class="panel-header"><h3>Bot configuration</h3></div>
+                        <div class="panel-body">
+                            <label for="botToken">Bot token (from @BotFather)</label>
+                            <input id="botToken" placeholder="123456:ABC-DEF…" class="mono">
+
+                            <label for="botChannel">Channel / group username</label>
+                            <input id="botChannel" placeholder="@my_channel" class="mono">
+
+                            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+                                <button class="primary-button" id="botSave" type="button">Save &amp; generate code</button>
+                                <button class="secondary-button" id="botTest" type="button">Send test message</button>
+                            </div>
+
+                            <div style="margin-top:20px" id="botVerifyBox" hidden>
+                                <div class="muted small upper" style="margin-bottom:8px">Verification code</div>
+                                <div class="code-chip" id="botCode">------</div>
+                                <p class="small muted" style="margin-top:12px">
+                                    Bot ko channel me <strong>admin</strong> banao, phir channel me likho:
+                                    <code class="mono">/verify <span id="botCodeInline">------</span></code>
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="panel shadow-panel">
+                        <div class="panel-header"><h3>Binding status</h3></div>
+                        <div class="panel-body">
+                            <div class="connection-row">
+                                <div>
+                                    <div class="connection-name">Bot</div>
+                                    <div class="connection-desc" id="botUsername">—</div>
+                                </div>
+                                <span class="badge" id="botStateBadge">Not configured</span>
+                            </div>
+                            <div class="connection-row">
+                                <div>
+                                    <div class="connection-name">Channel</div>
+                                    <div class="connection-desc" id="botChannelLabel">—</div>
+                                </div>
+                                <span class="badge" id="botChannelBadge">—</span>
+                            </div>
+                            <div class="connection-row">
+                                <div>
+                                    <div class="connection-name">Webhook</div>
+                                    <div class="connection-desc" id="botWebhookLabel">—</div>
+                                </div>
+                                <span class="badge" id="botWebhookBadge">—</span>
+                            </div>
+                        </div>
+
+                        <div class="panel-body" style="padding-top:0">
+                            <div class="muted small upper" style="margin-bottom:8px">Setup steps</div>
+                            <ol class="step-list">
+                                <li>@BotFather se bot banao → token copy karo</li>
+                                <li>Bot ko apne channel me add karo aur <strong>admin</strong> banao</li>
+                                <li>Token + channel yahan save karo → code milega</li>
+                                <li>Channel me <code>/verify CODE</code> bhejo</li>
+                                <li>Test message bhej ke confirm karo</li>
+                            </ol>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header">
+                        <h3>Relay log</h3>
+                        <span class="badge" id="tgLogCount">0</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr>
+                            </thead>
+                            <tbody id="tgLogBody"></tbody>
+                        </table>
+                    </div>
+                </section>
             </section>
 
             <!-- ----------------------------------------------- DEVICES -->
@@ -1259,17 +1096,15 @@
                 <div class="page-header">
                     <div>
                         <h2>Devices</h2>
-                        <p>Registered fleet with live SIM, power and network telemetry</p>
+                        <p>Registered fleet with SIM, power and network telemetry</p>
                     </div>
-                    <button class="secondary-button" data-refresh="devices" type="button">
-                        ↻ Refresh
-                    </button>
+                    <button class="secondary-button" data-refresh="devices" type="button">↻ Refresh</button>
                 </div>
 
-                <section class="panel bracket">
+                <section class="panel shadow-panel">
                     <div class="panel-header">
                         <h3>Fleet</h3>
-                        <span class="badge" id="deviceCount">0 devices</span>
+                        <span class="badge" id="deviceCount">0</span>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -1290,180 +1125,56 @@
                 </section>
             </section>
 
-            <!-- --------------------------------------------- LIVE VIEW -->
-
-            <section class="page-section" id="page-live">
-                <div class="page-header">
-                    <div>
-                        <h2 id="liveTitle">Live view</h2>
-                        <p id="liveSubtitle">No target selected</p>
-                    </div>
-                    <div class="live-actions">
-                        <button class="secondary-button" id="liveReconnect" type="button">
-                            ↻ Reconnect
-                        </button>
-                        <button class="secondary-button" id="liveDisconnect" type="button">
-                            ✕ Disconnect
-                        </button>
-                    </div>
-                </div>
-
-                <div class="live-toolbar">
-                    <button class="tool-button" data-global="back" type="button">◀ Back</button>
-                    <button class="tool-button" data-global="home" type="button">⌂ Home</button>
-                    <button class="tool-button" data-global="recents" type="button">▢ Recents</button>
-                    <button class="tool-button" data-global="notifications" type="button">≡ Notifs</button>
-                    <span class="toolbar-spacer"></span>
-                    <label class="toggle">
-                        <input type="checkbox" id="liveControlToggle" checked>
-                        <span>Control</span>
-                    </label>
-                    <span class="badge" id="liveStatus">Offline</span>
-                    <span class="badge" id="liveFps">0 fps</span>
-                    <span class="badge" id="liveLatency">— ms</span>
-                </div>
-
-                <div class="screen-wrap bracket">
-                    <canvas id="screenCanvas" width="720" height="1280"></canvas>
-                    <div class="screen-overlay" id="screenOverlay">Select a device to start</div>
-                </div>
-
-                <div class="live-meta">
-                    <span id="liveDeviceMeta">—</span>
-                    <span id="liveResolution">—</span>
-                </div>
-            </section>
-
-            <!-- ---------------------------------------------- SESSIONS -->
-
-            <section class="page-section" id="page-sessions">
-                <div class="page-header">
-                    <div>
-                        <h2>Sessions</h2>
-                        <p>Support session history</p>
-                    </div>
-                    <button class="secondary-button" data-refresh="sessions" type="button">
-                        ↻ Refresh
-                    </button>
-                </div>
-
-                <section class="panel bracket">
-                    <div class="panel-header">
-                        <h3>Session log</h3>
-                        <span class="badge" id="sessionCount">0 sessions</span>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Session ID</th>
-                                    <th>Status</th>
-                                    <th>Created</th>
-                                    <th>Updated</th>
-                                </tr>
-                            </thead>
-                            <tbody id="sessionsBody"></tbody>
-                        </table>
-                    </div>
-                </section>
-            </section>
-
-            <!-- -------------------------------------------------- LOGS -->
-
-            <section class="page-section" id="page-activity">
-                <div class="page-header">
-                    <div>
-                        <h2>Logs</h2>
-                        <p>Recent operator and system events</p>
-                    </div>
-                    <button class="secondary-button" data-refresh="activity" type="button">
-                        ↻ Refresh
-                    </button>
-                </div>
-
-                <section class="panel bracket">
-                    <div class="panel-header">
-                        <h3>Event stream</h3>
-                        <span class="badge" id="activityCount">0 events</span>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Event</th>
-                                    <th>Details</th>
-                                    <th>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody id="activityBody"></tbody>
-                        </table>
-                    </div>
-                </section>
-            </section>
-
             <!-- ---------------------------------------------- SETTINGS -->
 
             <section class="page-section" id="page-settings">
                 <div class="page-header">
                     <div>
                         <h2>Settings</h2>
-                        <p>Build info, endpoints and operator notes</p>
+                        <p>Endpoints and operator notes</p>
                     </div>
                 </div>
 
-                <section class="panel bracket">
-                    <div class="panel-header">
-                        <h3>Application</h3>
-                    </div>
+                <section class="panel shadow-panel">
+                    <div class="panel-header"><h3>Application</h3></div>
                     <div class="panel-body">
                         <div class="settings-row">
                             <strong>Panel</strong>
-                            <p>TPC PANEL · Remote Ops Console v3.0</p>
+                            <p>TPC PANEL · SMS &amp; UPI Control · v4.0</p>
                         </div>
                         <div class="settings-row">
                             <strong>Owner</strong>
-                            <p>
-                                <a href="https://t.me/icivan" target="_blank" rel="noopener">
-                                    https://t.me/icivan
-                                </a>
-                            </p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Backend health</strong>
-                            <p>/health</p>
-                        </div>
-                        <div class="settings-row">
-                            <strong>Database health</strong>
-                            <p>/health/database</p>
+                            <p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p>
                         </div>
                         <div class="settings-row">
                             <strong>Device socket</strong>
                             <p>/ws/device/{registration_id}</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Viewer socket</strong>
-                            <p>/ws/view/{device_id}</p>
+                            <strong>SMS ingest</strong>
+                            <p>/devices/sms/incoming</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Telemetry</strong>
-                            <p>
-                                Devices report model, Android version, SIM carrier and number,
-                                battery level, charging state, network type and system
-                                resources. Refreshes with every heartbeat (~30s).
-                            </p>
+                            <strong>Outbox poll</strong>
+                            <p>/devices/outbox</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Remote control</strong>
+                            <strong>Telegram webhook</strong>
+                            <p>/telegram/webhook/{bot_id}</p>
+                        </div>
+                        <div class="settings-row">
+                            <strong>UPI detection</strong>
                             <p>
-                                Requires the accessibility service enabled on the target
-                                device. Click = tap, drag = swipe, press-and-hold = long press.
+                                Inbound SMS jinme UPI/credited/debited keywords aur amount
+                                pattern milta hai, unhe UPI transaction maan kar
+                                alag se tag kiya jaata hai.
                             </p>
                         </div>
                         <div class="settings-row">
                             <strong>Secrets</strong>
                             <p>
-                                Keep SESSION_SECRET, ADMIN_API_KEY and database credentials
-                                server-side. Never inline them in this file.
+                                SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur bot token
+                                server-side rakho.
                             </p>
                         </div>
                     </div>
@@ -1478,7 +1189,7 @@
 <!-- ============================================================= MODAL -->
 
 <div class="modal-backdrop" id="deviceModal" hidden>
-    <div class="modal-card bracket" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card shadow-panel" role="dialog" aria-modal="true">
         <div class="modal-header">
             <h3 id="modalTitle">Device details</h3>
             <button class="secondary-button" id="modalClose" type="button">Close</button>
@@ -1492,968 +1203,805 @@
 <!-- ============================================================ SCRIPT -->
 
 <script>
-    "use strict";
-
-    const $ = (selector) => document.querySelector(selector);
-
-    const state = {
-        authenticated: false,
-        devices: [],
-        sessions: [],
-        activity: [],
-        toastTimer: null
-    };
-
-    /* ----------------------------------------------------- matrix rain */
-
-    (function matrixRain() {
-        const canvas = $("#matrix");
-        const ctx = canvas.getContext("2d");
-        const glyphs = "01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ<>{}[]/\\|=$#*+";
-        let columns = 0;
-        let drops = [];
-
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            columns = Math.floor(canvas.width / 14);
-            drops = new Array(columns).fill(0).map(() => Math.random() * -60);
-        }
-
-        function draw() {
-            ctx.fillStyle = "rgba(3, 6, 4, 0.09)";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = "#00ff88";
-            ctx.font = "13px 'JetBrains Mono', monospace";
-
-            for (let i = 0; i < columns; i++) {
-                const char = glyphs[Math.floor(Math.random() * glyphs.length)];
-                ctx.fillText(char, i * 14, drops[i] * 16);
-
-                if (drops[i] * 16 > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-        }
-
-        window.addEventListener("resize", resize);
-        resize();
-        setInterval(draw, 70);
-    })();
-
-    /* --------------------------------------------------- boot typing */
-
-    (function bootSequence() {
-        const line = $("#bootLine");
-        if (!line) return;
-
-        const text = "> initializing tpc panel... ok";
-        let index = 0;
-
-        const tick = setInterval(() => {
-            line.textContent = text.slice(0, ++index);
-            if (index >= text.length) {
-                clearInterval(tick);
-                const cursor = document.createElement("span");
-                cursor.className = "cursor";
-                line.appendChild(cursor);
-            }
-        }, 42);
-    })();
-
-    /* ---------------------------------------------------------- utils */
-
-    function showToast(message) {
-        const toast = $("#toast");
-        toast.textContent = message;
-        toast.hidden = false;
-
-        clearTimeout(state.toastTimer);
-        state.toastTimer = setTimeout(() => { toast.hidden = true; }, 3500);
-    }
-
-    function setLoginMessage(message, type = "error") {
-        const el = $("#loginMessage");
-        el.textContent = message;
-        el.className = `message ${type}`;
-    }
-
-    function setBadge(element, text, type = "") {
-        element.textContent = text;
-        element.className = `badge ${type}`.trim();
-    }
-
-    function formatDate(value) {
-        if (!value) return "—";
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleString();
-    }
-
-    function safeValue(value, fallback = "—") {
-        if (value === null || value === undefined || value === "") return fallback;
-        if (typeof value === "boolean") return value ? "Yes" : "No";
-        if (typeof value === "object") {
-            try { return JSON.stringify(value); } catch { return fallback; }
-        }
-        return String(value);
-    }
-
-    function appendCell(row, value) {
-        const cell = document.createElement("td");
-        cell.textContent = safeValue(value);
-        row.appendChild(cell);
-        return cell;
-    }
-
-    function createBadgeCell(row, value) {
-        const cell = document.createElement("td");
-        const badge = document.createElement("span");
-        const status = safeValue(value, "unknown").toLowerCase();
-
-        badge.className = "badge";
-
-        if (["active", "online", "approved", "success", "connected"].includes(status)) {
-            badge.classList.add("online");
-        } else if (["pending", "waiting", "requested"].includes(status)) {
-            badge.classList.add("pending");
-        } else if (["failed", "rejected", "error", "blocked"].includes(status)) {
-            badge.classList.add("error");
-        }
-
-        badge.textContent = safeValue(value, "Unknown");
-        cell.appendChild(badge);
-        row.appendChild(cell);
-    }
-
-    function renderEmpty(tbody, columns, message) {
-        tbody.replaceChildren();
-
-        const row = document.createElement("tr");
-        const cell = document.createElement("td");
-
-        cell.colSpan = columns;
-        cell.className = "empty-state";
-        cell.textContent = message;
-
-        row.appendChild(cell);
-        tbody.appendChild(row);
-    }
-
-    /* ------------------------------------------------- device helpers */
-
-    function getDeviceName(device) {
-        return device.device_name || device.name || device.model ||
-            device.device_id || device._id || "Unnamed device";
-    }
-
-    function getDeviceStatus(device) {
-        if (device.status) return device.status;
-        return device.is_active ? "Active" : "Inactive";
-    }
-
-    function getTelemetry(device) {
-        return device.telemetry && typeof device.telemetry === "object"
-            ? device.telemetry
-            : {};
-    }
-
-    function batteryLabel(device) {
-        const telemetry = getTelemetry(device);
-        const level = telemetry.battery_level ?? device.battery_level;
-
-        if (level === null || level === undefined || level < 0) return "—";
-
-        const charging = telemetry.battery_charging ?? device.battery_charging;
-        return charging ? `${level}% ⚡` : `${level}%`;
-    }
-
-    function getDeviceModelLine(device) {
-        const telemetry = getTelemetry(device);
-        const parts = [];
-
-        if (telemetry.android_version) parts.push(`Android ${telemetry.android_version}`);
-        if (telemetry.model && telemetry.model !== getDeviceName(device)) {
-            parts.push(telemetry.model);
-        }
-
-        return parts.join(" · ") || "—";
-    }
-
-    /* -------------------------------------------------------- renderers */
-
-    function renderDevices() {
-        const body = $("#devicesBody");
-        const recentBody = $("#recentDevicesBody");
-
-        $("#deviceCount").textContent = `${state.devices.length} devices`;
-
-        if (!state.devices.length) {
-            renderEmpty(body, 7, "No registered devices found");
-            renderEmpty(recentBody, 3, "No devices registered yet");
-            return;
-        }
-
-        body.replaceChildren();
-        recentBody.replaceChildren();
-
-        state.devices.forEach((device) => {
-            const telemetry = getTelemetry(device);
-            const row = document.createElement("tr");
-
-            const nameCell = document.createElement("td");
-            nameCell.textContent = getDeviceName(device);
-
-            const sub = document.createElement("span");
-            sub.className = "cell-sub";
-            sub.textContent = getDeviceModelLine(device);
-            nameCell.appendChild(sub);
-            row.appendChild(nameCell);
-
-            const carrierCell = document.createElement("td");
-            const carrier = telemetry.sim_carrier || device.sim_carrier || "—";
-            const simNumber = telemetry.sim_number || device.sim_number || "";
-
-            carrierCell.textContent = carrier;
-
-            const simSub = document.createElement("span");
-            simSub.className = "cell-sub";
-            simSub.textContent = simNumber ? `SIM ${simNumber}` : "number not exposed";
-            carrierCell.appendChild(simSub);
-            row.appendChild(carrierCell);
-
-            const batteryCell = document.createElement("td");
-            const batteryBadge = document.createElement("span");
-            const charging = telemetry.battery_charging ?? device.battery_charging;
-
-            batteryBadge.className = `badge ${charging ? "charging" : "discharging"}`;
-            batteryBadge.textContent = batteryLabel(device);
-            batteryCell.appendChild(batteryBadge);
-            row.appendChild(batteryCell);
-
-            appendCell(row, telemetry.network_type || device.network_type || "—");
-            createBadgeCell(row, getDeviceStatus(device));
-            appendCell(row, formatDate(
-                device.created_at || device.registered_at || device.updated_at
-            ));
-
-            const actionCell = document.createElement("td");
-
-            const detailsButton = document.createElement("button");
-            detailsButton.type = "button";
-            detailsButton.className = "row-button";
-            detailsButton.textContent = "Info";
-            detailsButton.addEventListener("click", () => openDeviceDetails(device));
-            actionCell.appendChild(detailsButton);
-
-            const liveButton = document.createElement("button");
-            liveButton.type = "button";
-            liveButton.className = "row-button danger";
-            liveButton.style.marginLeft = "5px";
-            liveButton.textContent = "Live";
-            liveButton.addEventListener("click", () => openLive(device));
-            actionCell.appendChild(liveButton);
-
-            row.appendChild(actionCell);
-            body.appendChild(row);
-        });
-
-        state.devices.slice(0, 5).forEach((device) => {
-            const row = document.createElement("tr");
-            appendCell(row, getDeviceName(device));
-            createBadgeCell(row, getDeviceStatus(device));
-            appendCell(row, formatDate(
-                device.created_at || device.registered_at || device.updated_at
-            ));
-            recentBody.appendChild(row);
-        });
-    }
-
-    function renderSessions() {
-        const body = $("#sessionsBody");
-        $("#sessionCount").textContent = `${state.sessions.length} sessions`;
-
-        if (!state.sessions.length) {
-            renderEmpty(body, 4, "No support sessions found");
-            return;
-        }
-
-        body.replaceChildren();
-
-        state.sessions.forEach((session) => {
-            const row = document.createElement("tr");
-            appendCell(row, session.session_id || session._id || session.id);
-            createBadgeCell(row, session.status);
-            appendCell(row, formatDate(session.created_at));
-            appendCell(row, formatDate(session.updated_at || session.ended_at));
-            body.appendChild(row);
-        });
-    }
-
-    function renderActivity() {
-        const body = $("#activityBody");
-        $("#activityCount").textContent = `${state.activity.length} events`;
-
-        if (!state.activity.length) {
-            renderEmpty(body, 3, "No activity logs found");
-            return;
-        }
-
-        body.replaceChildren();
-
-        state.activity.forEach((event) => {
-            const row = document.createElement("tr");
-
-            appendCell(row, event.event || event.action ||
-                event.event_type || event.type || "Event");
-
-            appendCell(row, event.message || event.details ||
-                event.description || event.admin_username || "—");
-
-            appendCell(row, formatDate(event.created_at || event.timestamp));
-            body.appendChild(row);
-        });
-    }
-
-    /* ------------------------------------------------------------ modal */
-
-    function detailGroup(title, rows) {
-        const group = document.createElement("div");
-        group.className = "detail-group";
-
-        const heading = document.createElement("h4");
-        heading.textContent = title;
-        group.appendChild(heading);
-
-        rows.forEach(([label, value]) => {
-            const row = document.createElement("div");
-            row.className = "detail-row";
-
-            const labelEl = document.createElement("span");
-            labelEl.textContent = label;
-
-            const valueEl = document.createElement("span");
-            valueEl.textContent = safeValue(value, "—");
-
-            row.appendChild(labelEl);
-            row.appendChild(valueEl);
-            group.appendChild(row);
-        });
-
-        return group;
-    }
-
-    function openDeviceDetails(device) {
-        const telemetry = getTelemetry(device);
-        const sims = Array.isArray(telemetry.sims) ? telemetry.sims : [];
-
-        $("#modalTitle").textContent = getDeviceName(device);
-
-        const modalBody = $("#modalBody");
-        modalBody.replaceChildren();
-
-        modalBody.appendChild(detailGroup("Identity", [
-            ["Device", getDeviceName(device)],
-            ["Manufacturer", telemetry.manufacturer],
-            ["Brand", telemetry.brand],
-            ["Model", telemetry.model],
-            ["Product", telemetry.product],
-            ["Hardware", telemetry.hardware],
-            ["Android ID", telemetry.android_id],
-            ["Platform", device.platform]
-        ]));
-
-        modalBody.appendChild(detailGroup("Status", [
-            ["State", getDeviceStatus(device)],
-            ["Last seen", formatDate(device.last_seen)],
-            ["Telemetry", formatDate(
-                telemetry.telemetry_updated_at || device.telemetry_updated_at
-            )],
-            ["Registered", formatDate(device.created_at || device.registered_at)]
-        ]));
-
-        modalBody.appendChild(detailGroup("SIM & network", [
-            ["Carrier", telemetry.sim_carrier || device.sim_carrier],
-            ["SIM operator", telemetry.sim_operator],
-            ["SIM number", telemetry.sim_number || device.sim_number],
-            ["Number source", telemetry.sim_number_source],
-            ["SIM serial", telemetry.sim_serial],
-            ["SIM country", telemetry.sim_country],
-            ["Slots", sims.length || 0],
-            ["Network type", telemetry.network_type],
-            ["Local IP", telemetry.local_ip],
-            ["Wi-Fi", telemetry.wifi_connected],
-            ["Mobile data", telemetry.mobile_connected]
-        ]));
-
-        sims.forEach((sim, index) => {
-            modalBody.appendChild(detailGroup(`SIM slot ${(sim.slot ?? index) + 1}`, [
-                ["Carrier", sim.carrier],
-                ["Number", sim.number],
-                ["Source", sim.number_source],
-                ["Country", sim.country]
-            ]));
-        });
-
-        modalBody.appendChild(detailGroup("Power", [
-            ["Level", telemetry.battery_level != null
-                ? `${telemetry.battery_level}%` : null],
-            ["Charging", telemetry.battery_charging],
-            ["Source", telemetry.battery_plugged],
-            ["Temp (°C)", telemetry.battery_temperature_c]
-        ]));
-
-        modalBody.appendChild(detailGroup("System", [
-            ["Android", telemetry.android_version],
-            ["SDK", telemetry.sdk_int],
-            ["Screen", telemetry.screen_resolution],
-            ["Density", telemetry.screen_density],
-            ["RAM total (MB)", telemetry.ram_total_mb],
-            ["RAM free (MB)", telemetry.ram_available_mb],
-            ["Storage total (GB)", telemetry.storage_total_gb],
-            ["Storage free (GB)", telemetry.storage_free_gb]
-        ]));
-
-        $("#deviceModal").hidden = false;
-    }
-
-    function closeDeviceModal() { $("#deviceModal").hidden = true; }
-
-    /* -------------------------------------------------------------- api */
-
-    async function api(path, options = {}) {
-        const response = await fetch(path, {
-            credentials: "same-origin",
-            ...options,
-            headers: {
-                "Accept": "application/json",
-                ...(options.body ? { "Content-Type": "application/json" } : {}),
-                ...(options.headers || {})
-            }
-        });
-
-        const contentType = response.headers.get("content-type") || "";
-        let data = null;
-
-        if (contentType.includes("application/json")) {
-            data = await response.json();
-        } else {
-            const text = await response.text();
-            data = text ? { detail: text } : {};
-        }
-
-        if (response.status === 401 || response.status === 403) {
-            const error = new Error(data.detail || "Authentication required.");
-            error.auth = true;
-            throw error;
-        }
-
-        if (!response.ok) {
-            throw new Error(data.detail || data.message ||
-                `Request failed (${response.status})`);
-        }
-
-        return data;
-    }
-
-    /* ------------------------------------------------------------- auth */
-
-    function showLogin() {
-        state.authenticated = false;
-        disconnectLive();
-        closeDeviceModal();
-        $("#dashboardApp").hidden = true;
-        $("#loginScreen").hidden = false;
-    }
-
-    function showDashboard() {
-        state.authenticated = true;
-        $("#loginScreen").hidden = true;
-        $("#dashboardApp").hidden = false;
-    }
-
-    async function checkAuth() {
-        try {
-            const result = await api("/admin/auth/status");
-            if (result.authenticated) {
-                showDashboard();
-                await refreshAll();
-            } else {
-                showLogin();
-            }
-        } catch (error) {
-            showLogin();
-            if (!error.auth) {
-                setLoginMessage("Could not verify session. Check backend link.");
-            }
-        }
-    }
-
-    /* ------------------------------------------------------- data loaders */
-
-    async function loadHealth() {
-        try {
-            const health = await api("/health");
-            $("#connectionLabel").textContent =
-                health.status === "ok" ? "Link up" : "Degraded";
-            setBadge($("#apiBadge"),
-                health.status === "ok" ? "Online" : "Check",
-                health.status === "ok" ? "online" : "pending");
-        } catch {
-            $("#connectionLabel").textContent = "Link down";
-            setBadge($("#apiBadge"), "Down", "error");
-        }
-
-        try {
-            const db = await api("/health/database");
-            const connected = db.status === "ok";
-
-            $("#databaseStatus").textContent = connected ? "Linked" : "Issue";
-            $("#databaseStatus").style.fontSize = connected ? "20px" : "17px";
-
-            setBadge($("#dbBadge"),
-                connected ? "Connected" : "Down",
-                connected ? "online" : "error");
-        } catch {
-            $("#databaseStatus").textContent = "Down";
-            $("#databaseStatus").style.fontSize = "17px";
-            setBadge($("#dbBadge"), "Down", "error");
-        }
-
-        $("#lastUpdated").textContent = new Date().toLocaleTimeString();
-    }
-
-    async function loadOverview() {
-        try {
-            const data = await api("/admin/overview");
-
-            $("#totalDevices").textContent = safeValue(
-                data.registered_devices ?? data.total_devices, "0");
-
-            $("#activeDevices").textContent = safeValue(
-                data.active_devices ?? data.devices_active, "0");
-
-            $("#activeSessions").textContent = safeValue(
-                data.active_sessions ?? data.sessions_active, "0");
-
-            const charging = data.charging_devices;
-            $("#chargingDevicesFoot").textContent =
-                charging === null || charging === undefined
-                    ? "last 90s"
-                    : `${charging} charging`;
-
-            const streaming = data.streaming_devices;
-            $("#streamingDevicesFoot").textContent =
-                streaming === null || streaming === undefined
-                    ? "open workflow"
-                    : `${streaming} streaming`;
-        } catch (error) {
-            if (error.auth) throw error;
-            $("#totalDevices").textContent = "—";
-            $("#activeDevices").textContent = "—";
-            $("#activeSessions").textContent = "—";
-            showToast("overview failed: " + error.message);
-        }
-    }
-
-    async function loadDevices() {
-        const data = await api("/admin/devices");
-        state.devices = Array.isArray(data) ? data : data.devices || data.items || [];
-        renderDevices();
-    }
-
-    async function loadSessions() {
-        const data = await api("/admin/sessions");
-        state.sessions = Array.isArray(data) ? data : data.sessions || data.items || [];
-        renderSessions();
-    }
-
-    async function loadActivity() {
-        const data = await api("/admin/activity");
-        state.activity = Array.isArray(data) ? data : data.activity || data.logs || [];
-        renderActivity();
-    }
-
-    /* ---------------------------------------------------------- refresh */
-
-    async function refreshAll() {
-        if (!state.authenticated) return;
-
-        $("#refreshButton").disabled = true;
-        $("#refreshButton").textContent = "Syncing…";
-
-        try {
-            await loadHealth();
-            await loadOverview();
-
-            const results = await Promise.allSettled([
-                loadDevices(), loadSessions(), loadActivity()
-            ]);
-
-            const authFailure = results.find(
-                (r) => r.status === "rejected" && r.reason && r.reason.auth
-            );
-
-            if (authFailure) {
-                showLogin();
-                setLoginMessage("Session expired. Reconnect.");
-                return;
-            }
-
-            if (results.some((r) => r.status === "rejected")) {
-                showToast("some sections failed to sync");
-            }
-
-            $("#lastUpdated").textContent = new Date().toLocaleTimeString();
-        } catch (error) {
-            if (error.auth) {
-                showLogin();
-                setLoginMessage("Session expired. Reconnect.");
-            } else {
-                showToast(error.message || "refresh failed");
-            }
-        } finally {
-            $("#refreshButton").disabled = false;
-            $("#refreshButton").textContent = "↻ Refresh";
-        }
-    }
-
-    async function refreshSection(section) {
-        try {
-            if (section === "devices") await loadDevices();
-            if (section === "sessions") await loadSessions();
-            if (section === "activity") await loadActivity();
-            showToast("section synced");
-        } catch (error) {
-            if (error.auth) {
-                showLogin();
-                setLoginMessage("Session expired. Reconnect.");
-            } else {
-                showToast(error.message || "sync failed");
-            }
-        }
-    }
-
-    /* --------------------------------------------------------- navigate */
-
-    function navigate(page) {
-        document.querySelectorAll(".nav-button").forEach((button) => {
-            button.classList.toggle("active", button.dataset.page === page);
-        });
-
-        document.querySelectorAll(".page-section").forEach((section) => {
-            section.classList.toggle("active", section.id === `page-${page}`);
-        });
-
-        if (page === "live") startFpsTimer();
-        else stopFpsTimer();
-
-        if (page === "devices") refreshSection("devices");
-        if (page === "sessions") refreshSection("sessions");
-        if (page === "activity") refreshSection("activity");
-    }
-
-    /* -------------------------------------------------------- live view */
-
-    const live = {
-        socket: null,
-        device: null,
-        frames: 0,
-        fpsTimer: null,
-        decoding: false
-    };
-
-    function liveBadge(text, type = "") { setBadge($("#liveStatus"), text, type); }
-
-    function openLive(device) {
-        live.device = device;
-        navigate("live");
-
-        $("#liveTitle").textContent = getDeviceName(device);
-        $("#liveSubtitle").textContent = "Streaming from registered device";
-        $("#liveDeviceMeta").textContent = getDeviceModelLine(device);
-        $("#liveResolution").textContent = "—";
-        $("#screenOverlay").hidden = false;
-        $("#screenOverlay").textContent = "Connecting…";
-
-        connectLive();
-    }
-
-    function connectLive() {
-        if (!live.device) return;
-
-        disconnectLive();
-
-        const proto = location.protocol === "https:" ? "wss:" : "ws:";
-        const socket = new WebSocket(`${proto}//${location.host}/ws/view/${live.device.id}`);
-        live.socket = socket;
-
-        liveBadge("Connecting", "pending");
-
-        socket.onopen = () => liveBadge("Connected", "online");
-
-        socket.onclose = () => {
-            liveBadge("Disconnected", "error");
-            $("#screenOverlay").hidden = false;
-            $("#screenOverlay").textContent = "Disconnected — press Reconnect";
-        };
-
-        socket.onerror = () => liveBadge("Socket error", "error");
-
-        socket.onmessage = (event) => {
-            let message;
-            try { message = JSON.parse(event.data); } catch { return; }
-
-            if (message.type === "snapshot") {
-                live.device = { ...live.device, ...message.device };
-                $("#liveTitle").textContent = getDeviceName(live.device);
-
-                if (!message.device_online) {
-                    liveBadge("Device offline", "error");
-                    $("#screenOverlay").hidden = false;
-                    $("#screenOverlay").textContent = "Device not connected";
-                }
-                return;
-            }
-
-            if (message.type === "device_status") {
-                if (message.online) {
-                    liveBadge("Streaming", "online");
-                    $("#screenOverlay").hidden = true;
-                } else {
-                    liveBadge("Device offline", "error");
-                    $("#screenOverlay").hidden = false;
-                    $("#screenOverlay").textContent = "Device went offline";
-                }
-                return;
-            }
-
-            if (message.type === "frame") { drawFrame(message); return; }
-
-            if (message.type === "control_ack" && message.delivered === false) {
-                showToast("control event not delivered");
-            }
-        };
-    }
-
-    function disconnectLive() {
-        if (live.socket) {
-            try { live.socket.close(); } catch (e) { /* ignore */ }
-            live.socket = null;
-        }
-        stopFpsTimer();
-    }
-
-    function base64ToBytes(base64) {
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes;
-    }
-
-    function drawFrame(message) {
-        live.frames++;
-
-        if (live.decoding) return;
-        live.decoding = true;
-
-        const blob = new Blob([base64ToBytes(message.data)], { type: "image/jpeg" });
-
-        createImageBitmap(blob)
-            .then((bitmap) => {
-                const canvas = $("#screenCanvas");
-                const ctx = canvas.getContext("2d");
-
-                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-                    canvas.width = bitmap.width;
-                    canvas.height = bitmap.height;
-                    $("#liveResolution").textContent =
-                        `${bitmap.width} × ${bitmap.height}`;
-                }
-
-                ctx.drawImage(bitmap, 0, 0);
-                bitmap.close();
-
-                if (typeof message.ts === "number") {
-                    $("#liveLatency").textContent = `${Date.now() - message.ts} ms`;
-                }
-            })
-            .catch(() => {})
-            .finally(() => { live.decoding = false; });
-    }
-
-    function startFpsTimer() {
-        stopFpsTimer();
-        live.fpsTimer = setInterval(() => {
-            $("#liveFps").textContent = `${live.frames} fps`;
-            live.frames = 0;
-        }, 1000);
-    }
-
-    function stopFpsTimer() {
-        if (live.fpsTimer) clearInterval(live.fpsTimer);
-        live.fpsTimer = null;
-        $("#liveFps").textContent = "0 fps";
-    }
-
-    function sendControl(payload) {
-        if (!live.socket || live.socket.readyState !== WebSocket.OPEN) return;
-        if (!$("#liveControlToggle").checked) return;
-        live.socket.send(JSON.stringify({ type: "control", ...payload }));
-    }
-
-    const canvasPointer = { active: false, startX: 0, startY: 0, startAt: 0 };
-
-    function normalizedPoint(event) {
-        const rect = $("#screenCanvas").getBoundingClientRect();
-        return {
-            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
-        };
-    }
-
-    $("#screenCanvas").addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        const point = normalizedPoint(event);
-        canvasPointer.active = true;
-        canvasPointer.startX = point.x;
-        canvasPointer.startY = point.y;
-        canvasPointer.startAt = Date.now();
-    });
-
-    $("#screenCanvas").addEventListener("pointerup", (event) => {
-        event.preventDefault();
-        if (!canvasPointer.active) return;
-        canvasPointer.active = false;
-
-        const point = normalizedPoint(event);
-        const distance = Math.hypot(
-            point.x - canvasPointer.startX,
-            point.y - canvasPointer.startY
-        );
-        const elapsed = Date.now() - canvasPointer.startAt;
-
-        if (distance < 0.015) {
-            if (elapsed > 600) {
-                sendControl({
-                    action: "long_press",
-                    x: canvasPointer.startX,
-                    y: canvasPointer.startY,
-                    duration: Math.min(elapsed, 1500)
-                });
-            } else {
-                sendControl({ action: "tap", x: point.x, y: point.y });
-            }
-            return;
-        }
-
-        sendControl({
-            action: "swipe",
-            x1: canvasPointer.startX,
-            y1: canvasPointer.startY,
-            x2: point.x,
-            y2: point.y,
-            duration: Math.min(Math.max(elapsed, 120), 1200)
-        });
-    });
-
-    document.querySelectorAll("[data-global]").forEach((button) => {
-        button.addEventListener("click", () => {
-            sendControl({ action: "global", name: button.dataset.global });
-        });
-    });
-
-    $("#liveReconnect").addEventListener("click", () => {
-        $("#screenOverlay").hidden = false;
-        $("#screenOverlay").textContent = "Connecting…";
-        connectLive();
-    });
-
-    $("#liveDisconnect").addEventListener("click", () => {
-        disconnectLive();
-        liveBadge("Disconnected");
-        $("#screenOverlay").hidden = false;
-        $("#screenOverlay").textContent = "Disconnected";
-    });
-
-    /* -------------------------------------------------------- listeners */
-
-    $("#loginForm").addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const button = $("#loginButton");
-        button.disabled = true;
-        button.textContent = "▸ Connecting…";
-        setLoginMessage("");
-
-        try {
-            const result = await api("/admin/login", {
-                method: "POST",
-                body: JSON.stringify({
-                    username: $("#username").value.trim(),
-                    password: $("#password").value
-                })
-            });
-
-            if (!result.status && !result.authenticated) {
-                throw new Error(result.detail || "Sign-in failed");
-            }
-
-            $("#password").value = "";
-            setLoginMessage("access granted", "success");
-            showDashboard();
-            await refreshAll();
-            showToast("welcome, operator");
-        } catch (error) {
-            setLoginMessage(error.message || "access denied");
-        } finally {
-            button.disabled = false;
-            button.textContent = "▸ Connect";
+"use strict";
+
+const $ = (s) => document.querySelector(s);
+
+const state = {
+    authenticated: false,
+    devices: [],
+    messages: [],
+    rules: [],
+    bots: [],
+    tgLogs: [],
+    toastTimer: null
+};
+
+/* ------------------------------------------------------------ utils */
+
+function showToast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(state.toastTimer);
+    state.toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+
+function setLoginMessage(msg, type = "error") {
+    const el = $("#loginMessage");
+    el.textContent = msg;
+    el.className = `message ${type}`;
+}
+
+function setBadge(el, text, type = "") {
+    if (!el) return;
+    el.textContent = text;
+    el.className = `badge ${type}`.trim();
+}
+
+function formatDate(v) {
+    if (!v) return "—";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString();
+}
+
+function safeValue(v, fb = "—") {
+    if (v === null || v === undefined || v === "") return fb;
+    if (typeof v === "boolean") return v ? "Yes" : "No";
+    if (typeof v === "object") { try { return JSON.stringify(v); } catch { return fb; } }
+    return String(v);
+}
+
+function appendCell(row, v) {
+    const td = document.createElement("td");
+    td.textContent = safeValue(v);
+    row.appendChild(td);
+    return td;
+}
+
+function createBadgeCell(row, v, forceType) {
+    const td = document.createElement("td");
+    const b = document.createElement("span");
+    const s = String(safeValue(v, "unknown")).toLowerCase();
+    b.className = "badge";
+    if (forceType) b.classList.add(forceType);
+    else if (["online","active","sent","success","bound","upi"].includes(s)) b.classList.add("online");
+    else if (["pending","queued"].includes(s)) b.classList.add("pending");
+    else if (["failed","error","offline"].includes(s)) b.classList.add("error");
+    b.textContent = safeValue(v, "—");
+    td.appendChild(b);
+    row.appendChild(td);
+}
+
+function renderEmpty(tbody, cols, msg) {
+    tbody.replaceChildren();
+    const row = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = cols;
+    td.className = "empty-state";
+    td.textContent = msg;
+    row.appendChild(td);
+    tbody.appendChild(row);
+}
+
+/* --------------------------------------------------- device helpers */
+
+function getDeviceName(d) {
+    return d.device_name || d.name || d.model || d._id || "Unnamed device";
+}
+
+function getDeviceStatus(d) {
+    if (d.ws_connected) return "Online";
+    return d.status || (d.is_active ? "Active" : "Offline");
+}
+
+function getTelemetry(d) {
+    return d.telemetry && typeof d.telemetry === "object" ? d.telemetry : {};
+}
+
+function batteryLabel(d) {
+    const t = getTelemetry(d);
+    const lvl = t.battery_level ?? d.battery_level;
+    if (lvl === null || lvl === undefined || lvl < 0) return "—";
+    return (t.battery_charging ?? d.battery_charging) ? `${lvl}% ⚡` : `${lvl}%`;
+}
+
+function isOnline(d) { return Boolean(d.ws_connected); }
+
+/* ------------------------------------------------------- api client */
+
+async function api(path, options = {}) {
+    const res = await fetch(path, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+            "Accept": "application/json",
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+            ...(options.headers || {})
         }
     });
 
-    $("#logoutButton").addEventListener("click", async () => {
-        try {
-            await api("/admin/logout", { method: "POST" });
-        } catch (error) {
-            console.warn("logout failed:", error);
-        }
+    const ct = res.headers.get("content-type") || "";
+    let data = null;
 
-        state.devices = [];
-        state.sessions = [];
-        state.activity = [];
+    if (ct.includes("application/json")) data = await res.json();
+    else { const txt = await res.text(); data = txt ? { detail: txt } : {}; }
+
+    if (res.status === 401 || res.status === 403) {
+        const e = new Error(data.detail || "Authentication required.");
+        e.auth = true;
+        throw e;
+    }
+    if (!res.ok) throw new Error(data.detail || data.message || `Failed (${res.status})`);
+    return data;
+}
+
+/* ------------------------------------------------------------ auth */
+
+function showLogin() {
+    state.authenticated = false;
+    $("#dashboardApp").hidden = true;
+    $("#loginScreen").hidden = false;
+}
+
+function showDashboard() {
+    state.authenticated = true;
+    $("#loginScreen").hidden = true;
+    $("#dashboardApp").hidden = false;
+}
+
+async function checkAuth() {
+    try {
+        const r = await api("/admin/auth/status");
+        if (r.authenticated) { showDashboard(); await refreshAll(); }
+        else showLogin();
+    } catch (e) {
         showLogin();
-        showToast("session terminated");
+        if (!e.auth) setLoginMessage("Could not verify session.");
+    }
+}
+
+/* ------------------------------------------------------- renderers */
+
+function renderOverview() {
+    const total = state.devices.length;
+    const online = state.devices.filter(isOnline).length;
+
+    $("#statTotal").textContent = total;
+    $("#statActive").textContent = online;
+    $("#statOffline").textContent = total - online;
+
+    const sims = state.devices.reduce(
+        (sum, d) => sum + (getTelemetry(d).sims?.length || d.sim_count || 0), 0
+    );
+    $("#statSims").textContent = sims;
+
+    const body = $("#recentDevicesBody");
+    if (!state.devices.length) { renderEmpty(body, 4, "No devices registered"); return; }
+
+    body.replaceChildren();
+    state.devices.slice(0, 6).forEach((d) => {
+        const t = getTelemetry(d);
+        const row = document.createElement("tr");
+
+        appendCell(row, getDeviceName(d));
+        appendCell(row, t.sim_number || d.sim_number || t.sim_carrier || "—");
+        createBadgeCell(row, getDeviceStatus(d));
+        appendCell(row, formatDate(d.created_at));
+
+        body.appendChild(row);
+    });
+}
+
+function renderLive() {
+    const total = state.devices.length;
+    const online = state.devices.filter(isOnline).length;
+
+    $("#liveTotal").textContent = total;
+    $("#liveOnline").textContent = online;
+    $("#liveOffline").textContent = total - online;
+    $("#liveDeviceCount").textContent = total;
+
+    const upiToday = state.messages.filter((m) => m.kind === "upi").length;
+    $("#liveUpi").textContent = upiToday;
+
+    const body = $("#liveBody");
+    if (!state.devices.length) { renderEmpty(body, 4, "No devices"); return; }
+
+    body.replaceChildren();
+
+    state.devices.forEach((d) => {
+        const t = getTelemetry(d);
+        const row = document.createElement("tr");
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = getDeviceName(d);
+        const sub = document.createElement("span");
+        sub.className = "cell-sub";
+        sub.textContent = `${isOnline(d) ? "● online" : "○ offline"} · ${t.sim_number || "no number"}`;
+        nameCell.appendChild(sub);
+        row.appendChild(nameCell);
+
+        const lastMsg = state.messages.find((m) => m.device_id === d.id);
+        const msgCell = document.createElement("td");
+        if (lastMsg) {
+            const span = document.createElement("span");
+            span.className = "cell-body";
+            span.textContent = lastMsg.body || "—";
+            msgCell.appendChild(span);
+            const meta = document.createElement("span");
+            meta.className = "cell-sub";
+            meta.textContent = `${lastMsg.direction === "in" ? "←" : "→"} ${formatDate(lastMsg.created_at)}`;
+            msgCell.appendChild(meta);
+        } else {
+            msgCell.textContent = "—";
+        }
+        row.appendChild(msgCell);
+
+        const sendCell = document.createElement("td");
+        const wrap = document.createElement("div");
+        wrap.style.display = "flex";
+        wrap.style.gap = "6px";
+
+        const input = document.createElement("input");
+        input.className = "inline-input";
+        input.placeholder = "message…";
+        input.style.minWidth = "150px";
+
+        const btn = document.createElement("button");
+        btn.className = "row-button";
+        btn.type = "button";
+        btn.textContent = "Send";
+        btn.addEventListener("click", async () => {
+            const text = input.value.trim();
+            if (!text) { showToast("message khali hai"); return; }
+            btn.disabled = true;
+            try {
+                await api("/admin/send", {
+                    method: "POST",
+                    body: JSON.stringify({ target: "device", device_id: d.id, body: text })
+                });
+                input.value = "";
+                showToast(`queued → ${getDeviceName(d)}`);
+            } catch (e) { showToast(e.message); }
+            finally { btn.disabled = false; }
+        });
+
+        wrap.appendChild(input);
+        wrap.appendChild(btn);
+        sendCell.appendChild(wrap);
+        row.appendChild(sendCell);
+
+        const allCell = document.createElement("td");
+        const allBtn = document.createElement("button");
+        allBtn.className = "row-button danger";
+        allBtn.type = "button";
+        allBtn.textContent = "View";
+        allBtn.addEventListener("click", () => {
+            $("#msgFilter").value = "";
+            navigate("messages");
+            state.messages = state.messages;
+        });
+        allCell.appendChild(allBtn);
+        row.appendChild(allCell);
+
+        body.appendChild(row);
+    });
+}
+
+function renderMessages() {
+    const filter = $("#msgFilter").value;
+    let list = state.messages;
+
+    if (filter === "in" || filter === "out") list = list.filter((m) => m.direction === filter);
+    if (filter === "upi") list = list.filter((m) => m.kind === "upi");
+
+    $("#messageCount").textContent = `${list.length} messages`;
+
+    const body = $("#messagesBody");
+    if (!list.length) { renderEmpty(body, 7, "No messages"); return; }
+
+    body.replaceChildren();
+    list.slice(0, 200).forEach((m) => {
+        const row = document.createElement("tr");
+        appendCell(row, formatDate(m.created_at));
+        appendCell(row, m.device_name || "—");
+        createBadgeCell(row, m.direction === "in" ? "in" : "out", m.direction === "in" ? "in" : "out");
+
+        const addr = document.createElement("td");
+        addr.textContent = m.address || "—";
+        addr.className = "mono";
+        row.appendChild(addr);
+
+        const bodyCell = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "cell-body";
+        span.textContent = m.body || "—";
+        span.title = m.body || "";
+        bodyCell.appendChild(span);
+        row.appendChild(bodyCell);
+
+        appendCell(row, m.amount ? `₹${m.amount}` : "—");
+        createBadgeCell(row, m.status || (m.direction === "in" ? "received" : "sent"));
+
+        body.appendChild(row);
+    });
+}
+
+function renderRules() {
+    $("#ruleCount").textContent = `${state.rules.length} rules`;
+
+    const body = $("#rulesBody");
+    if (!state.rules.length) { renderEmpty(body, 6, "No rules configured"); return; }
+
+    body.replaceChildren();
+    state.rules.forEach((r) => {
+        const row = document.createElement("tr");
+        appendCell(row, r.name || "—");
+        appendCell(row, r.match || "—");
+
+        const replyCell = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "cell-body";
+        span.textContent = r.reply || "—";
+        replyCell.appendChild(span);
+        row.appendChild(replyCell);
+
+        appendCell(row, r.upi_only ? "UPI only" : "All SMS");
+        createBadgeCell(row, r.enabled ? "active" : "disabled");
+
+        const actionCell = document.createElement("td");
+        const del = document.createElement("button");
+        del.className = "row-button";
+        del.type = "button";
+        del.textContent = r.enabled ? "Disable" : "Enable";
+        del.addEventListener("click", async () => {
+            await api(`/admin/rules/${r.id}/toggle`, { method: "POST" });
+            await loadRules();
+        });
+        actionCell.appendChild(del);
+        row.appendChild(actionCell);
+
+        body.appendChild(row);
+    });
+}
+
+function renderTelegram() {
+    const bot = state.bots[0];
+
+    if (!bot) {
+        setBadge($("#botStateBadge"), "Not configured");
+        setBadge($("#botChannelBadge"), "—");
+        setBadge($("#botWebhookBadge"), "—");
+        $("#botUsername").textContent = "—";
+        $("#botChannelLabel").textContent = "—";
+        $("#botWebhookLabel").textContent = "—";
+        $("#botVerifyBox").hidden = true;
+        setBadge($("#tgBadge"), "Not bound");
+    } else {
+        setBadge($("#botStateBadge"), bot.bound ? "Bound" : "Awaiting verify",
+            bot.bound ? "bound" : "pending");
+        setBadge($("#botChannelBadge"), bot.chat_title || bot.channel || "—",
+            bot.bound ? "bound" : "pending");
+        setBadge($("#botWebhookBadge"), bot.webhook_ok ? "Active" : "Not set",
+            bot.webhook_ok ? "online" : "error");
+
+        $("#botUsername").textContent = bot.username ? `@${bot.username}` : "—";
+        $("#botChannelLabel").textContent = bot.channel || "—";
+        $("#botWebhookLabel").textContent = bot.webhook_url || "—";
+
+        if (!bot.bound && bot.verify_code) {
+            $("#botVerifyBox").hidden = false;
+            $("#botCode").textContent = bot.verify_code;
+            $("#botCodeInline").textContent = bot.verify_code;
+        } else {
+            $("#botVerifyBox").hidden = true;
+        }
+
+        setBadge($("#tgBadge"), bot.bound ? "Bound" : "Pending",
+            bot.bound ? "bound" : "pending");
+
+        $("#botToken").value = bot.token_masked || "";
+        $("#botChannel").value = bot.channel || "";
+    }
+
+    $("#tgLogCount").textContent = `${state.tgLogs.length} events`;
+    const body = $("#tgLogBody");
+    if (!state.tgLogs.length) { renderEmpty(body, 4, "No relay events"); return; }
+
+    body.replaceChildren();
+    state.tgLogs.forEach((l) => {
+        const row = document.createElement("tr");
+        appendCell(row, formatDate(l.created_at));
+        createBadgeCell(row, l.direction === "in" ? "in" : "out",
+            l.direction === "in" ? "in" : "out");
+
+        const txtCell = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "cell-body";
+        span.textContent = l.text || "—";
+        txtCell.appendChild(span);
+        row.appendChild(txtCell);
+
+        appendCell(row, l.result || "—");
+        body.appendChild(row);
+    });
+}
+
+function renderDevices() {
+    $("#deviceCount").textContent = `${state.devices.length} devices`;
+
+    const body = $("#devicesBody");
+    if (!state.devices.length) { renderEmpty(body, 7, "No devices registered"); return; }
+
+    body.replaceChildren();
+    state.devices.forEach((d) => {
+        const t = getTelemetry(d);
+        const row = document.createElement("tr");
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = getDeviceName(d);
+        const sub = document.createElement("span");
+        sub.className = "cell-sub";
+        sub.textContent = `${t.android_version ? "Android " + t.android_version : "—"} · ${t.model || ""}`;
+        nameCell.appendChild(sub);
+        row.appendChild(nameCell);
+
+        const carrierCell = document.createElement("td");
+        carrierCell.textContent = t.sim_carrier || d.sim_carrier || "—";
+        const simSub = document.createElement("span");
+        simSub.className = "cell-sub";
+        simSub.textContent = t.sim_number || d.sim_number || "number not exposed";
+        carrierCell.appendChild(simSub);
+        row.appendChild(carrierCell);
+
+        const battCell = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = `badge ${(t.battery_charging ?? d.battery_charging) ? "online" : ""}`;
+        badge.textContent = batteryLabel(d);
+        battCell.appendChild(badge);
+        row.appendChild(battCell);
+
+        appendCell(row, t.network_type || "—");
+        createBadgeCell(row, getDeviceStatus(d));
+        appendCell(row, formatDate(d.created_at));
+
+        const actionCell = document.createElement("td");
+        const info = document.createElement("button");
+        info.className = "row-button";
+        info.type = "button";
+        info.textContent = "Info";
+        info.addEventListener("click", () => openDeviceDetails(d));
+        actionCell.appendChild(info);
+        row.appendChild(actionCell);
+
+        body.appendChild(row);
+    });
+}
+
+/* ---------------------------------------------------------- modal */
+
+function detailGroup(title, rows) {
+    const g = document.createElement("div");
+    g.className = "detail-group";
+    const h = document.createElement("h4");
+    h.textContent = title;
+    g.appendChild(h);
+
+    rows.forEach(([label, value]) => {
+        const r = document.createElement("div");
+        r.className = "detail-row";
+        const l = document.createElement("span");
+        l.textContent = label;
+        const v = document.createElement("span");
+        v.textContent = safeValue(value, "—");
+        r.appendChild(l);
+        r.appendChild(v);
+        g.appendChild(r);
     });
 
-    document.querySelectorAll(".nav-button").forEach((button) => {
-        button.addEventListener("click", () => navigate(button.dataset.page));
+    return g;
+}
+
+function openDeviceDetails(d) {
+    const t = getTelemetry(d);
+    const sims = Array.isArray(t.sims) ? t.sims : [];
+
+    $("#modalTitle").textContent = getDeviceName(d);
+    const body = $("#modalBody");
+    body.replaceChildren();
+
+    body.appendChild(detailGroup("Identity", [
+        ["Device", getDeviceName(d)],
+        ["Manufacturer", t.manufacturer],
+        ["Model", t.model],
+        ["Android", t.android_version],
+        ["SDK", t.sdk_int],
+        ["Android ID", t.android_id]
+    ]));
+
+    body.appendChild(detailGroup("Status", [
+        ["Socket", d.ws_connected ? "connected" : "disconnected"],
+        ["Last seen", formatDate(d.last_seen)],
+        ["Registered", formatDate(d.created_at)]
+    ]));
+
+    body.appendChild(detailGroup("SIM & network", [
+        ["Carrier", t.sim_carrier || d.sim_carrier],
+        ["SIM number", t.sim_number || d.sim_number],
+        ["Number source", t.sim_number_source],
+        ["SIM serial", t.sim_serial],
+        ["Slots", sims.length || t.sim_count || 0],
+        ["Network", t.network_type],
+        ["Local IP", t.local_ip]
+    ]));
+
+    sims.forEach((s, i) => {
+        body.appendChild(detailGroup(`SIM ${(s.slot ?? i) + 1}`, [
+            ["Carrier", s.carrier],
+            ["Number", s.number],
+            ["Source", s.number_source]
+        ]));
     });
 
-    document.querySelectorAll("[data-goto]").forEach((button) => {
-        button.addEventListener("click", () => navigate(button.dataset.goto));
+    body.appendChild(detailGroup("Power", [
+        ["Level", t.battery_level != null ? `${t.battery_level}%` : null],
+        ["Charging", t.battery_charging],
+        ["Source", t.battery_plugged],
+        ["Temp", t.battery_temperature_c]
+    ]));
+
+    body.appendChild(detailGroup("SMS", [
+        ["Inbox synced", t.sms_inbox_count],
+        ["Sent count", t.sms_sent_count],
+        ["Received count", t.sms_received_count]
+    ]));
+
+    $("#deviceModal").hidden = false;
+}
+
+function closeModal() { $("#deviceModal").hidden = true; }
+
+/* -------------------------------------------------------- loaders */
+
+async function loadHealth() {
+    try {
+        const h = await api("/health");
+        $("#connectionLabel").textContent = h.status === "ok" ? "Link up" : "Degraded";
+        setBadge($("#apiBadge"), h.status === "ok" ? "Online" : "Check",
+            h.status === "ok" ? "online" : "pending");
+    } catch {
+        $("#connectionLabel").textContent = "Link down";
+        setBadge($("#apiBadge"), "Down", "error");
+    }
+
+    try {
+        const db = await api("/health/database");
+        setBadge($("#dbBadge"), db.status === "ok" ? "Connected" : "Issue",
+            db.status === "ok" ? "online" : "error");
+    } catch {
+        setBadge($("#dbBadge"), "Down", "error");
+    }
+}
+
+async function loadDevices() {
+    const d = await api("/admin/devices");
+    state.devices = Array.isArray(d) ? d : d.devices || [];
+    renderOverview();
+    renderLive();
+    renderDevices();
+}
+
+async function loadMessages() {
+    const d = await api("/admin/messages?limit=200");
+    state.messages = Array.isArray(d) ? d : d.messages || [];
+    renderMessages();
+    renderLive();
+}
+
+async function loadRules() {
+    const d = await api("/admin/rules");
+    state.rules = Array.isArray(d) ? d : d.rules || [];
+    renderRules();
+}
+
+async function loadTelegram() {
+    const d = await api("/admin/telegram/status");
+    state.bots = d.bot ? [d.bot] : [];
+    state.tgLogs = d.logs || [];
+    renderTelegram();
+}
+
+async function refreshAll() {
+    if (!state.authenticated) return;
+
+    $("#refreshButton").disabled = true;
+    try {
+        await loadHealth();
+        const results = await Promise.allSettled([
+            loadDevices(), loadMessages(), loadRules(), loadTelegram()
+        ]);
+        if (results.some((r) => r.status === "rejected")) {
+            showToast("some sections failed to sync");
+        }
+    } finally {
+        $("#refreshButton").disabled = false;
+    }
+}
+
+async function refreshSection(section) {
+    try {
+        if (section === "devices") await loadDevices();
+        if (section === "messages") await loadMessages();
+        if (section === "rules") await loadRules();
+        if (section === "telegram") await loadTelegram();
+        if (section === "live") { await loadDevices(); await loadMessages(); }
+        showToast("synced");
+    } catch (e) { showToast(e.message); }
+}
+
+/* ------------------------------------------------------- navigate */
+
+function navigate(page) {
+    document.querySelectorAll(".nav-button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.page === page);
+    });
+    document.querySelectorAll(".page-section").forEach((s) => {
+        s.classList.toggle("active", s.id === `page-${page}`);
     });
 
-    document.querySelectorAll("[data-refresh]").forEach((button) => {
-        button.addEventListener("click", () => refreshSection(button.dataset.refresh));
-    });
+    if (page === "devices") refreshSection("devices");
+    if (page === "messages") refreshSection("messages");
+    if (page === "rules" || page === "autosender") refreshSection("rules");
+    if (page === "telegram") refreshSection("telegram");
+}
 
-    $("#refreshButton").addEventListener("click", refreshAll);
-    $("#modalClose").addEventListener("click", closeDeviceModal);
+/* --------------------------------------------------------- actions */
 
-    $("#deviceModal").addEventListener("click", (event) => {
-        if (event.target === $("#deviceModal")) closeDeviceModal();
-    });
+$("#bulkSend").addEventListener("click", async () => {
+    const body = $("#bulkBody").value.trim();
+    if (!body) { showToast("message khali hai"); return; }
 
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeDeviceModal();
-    });
+    const target = $("#bulkTarget").value;
+    const to = $("#bulkTo").value.trim();
 
-    /* ------------------------------------------------------------- start */
+    $("#bulkSend").disabled = true;
+    try {
+        const r = await api("/admin/send", {
+            method: "POST",
+            body: JSON.stringify({ target, body, to: to || null })
+        });
+        showToast(`queued to ${r.queued} device(s)`);
+        $("#bulkBody").value = "";
+        await loadMessages();
+    } catch (e) { showToast(e.message); }
+    finally { $("#bulkSend").disabled = false; }
+});
 
-    checkAuth();
+$("#bulkClear").addEventListener("click", () => {
+    $("#bulkBody").value = "";
+    $("#bulkTo").value = "";
+});
+
+$("#ruleAdd").addEventListener("click", async () => {
+    const name = $("#ruleName").value.trim();
+    const match = $("#ruleMatch").value.trim();
+    const reply = $("#ruleReply").value.trim();
+
+    if (!name || !match || !reply) { showToast("sab fields bharo"); return; }
+
+    try {
+        await api("/admin/rules", {
+            method: "POST",
+            body: JSON.stringify({
+                name, match, reply,
+                upi_only: $("#ruleUpiOnly").checked
+            })
+        });
+        $("#ruleName").value = "";
+        $("#ruleMatch").value = "";
+        $("#ruleReply").value = "";
+        $("#ruleUpiOnly").checked = false;
+        showToast("rule added");
+        await loadRules();
+    } catch (e) { showToast(e.message); }
+});
+
+$("#botSave").addEventListener("click", async () => {
+    const token = $("#botToken").value.trim();
+    const channel = $("#botChannel").value.trim();
+
+    if (!token || !channel) { showToast("token aur channel dono chahiye"); return; }
+
+    $("#botSave").disabled = true;
+    try {
+        await api("/admin/telegram/bots", {
+            method: "POST",
+            body: JSON.stringify({ token, channel })
+        });
+        showToast("bot saved — verification code ready");
+        await loadTelegram();
+    } catch (e) { showToast(e.message); }
+    finally { $("#botSave").disabled = false; }
+});
+
+$("#botTest").addEventListener("click", async () => {
+    try {
+        await api("/admin/telegram/test", { method: "POST" });
+        showToast("test message bheja");
+    } catch (e) { showToast(e.message); }
+});
+
+$("#msgFilter").addEventListener("change", renderMessages);
+
+/* ------------------------------------------------------- listeners */
+
+$("#loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#loginButton");
+    btn.disabled = true;
+    btn.textContent = "Signing in…";
+    setLoginMessage("");
+
+    try {
+        const r = await api("/admin/login", {
+            method: "POST",
+            body: JSON.stringify({
+                username: $("#username").value.trim(),
+                password: $("#password").value
+            })
+        });
+        if (!r.status && !r.authenticated) throw new Error("Sign-in failed");
+
+        $("#password").value = "";
+        setLoginMessage("Signed in", "success");
+        showDashboard();
+        await refreshAll();
+        showToast("welcome, operator");
+    } catch (err) {
+        setLoginMessage(err.message || "Access denied");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Sign in";
+    }
+});
+
+$("#logoutButton").addEventListener("click", async () => {
+    try { await api("/admin/logout", { method: "POST" }); } catch {}
+    state.devices = [];
+    state.messages = [];
+    showLogin();
+    showToast("logged out");
+});
+
+document.querySelectorAll(".nav-button").forEach((b) => {
+    b.addEventListener("click", () => navigate(b.dataset.page));
+});
+
+document.querySelectorAll("[data-goto]").forEach((b) => {
+    b.addEventListener("click", () => navigate(b.dataset.goto));
+});
+
+document.querySelectorAll("[data-refresh]").forEach((b) => {
+    b.addEventListener("click", () => refreshSection(b.dataset.refresh));
+});
+
+$("#refreshButton").addEventListener("click", refreshAll);
+$("#modalClose").addEventListener("click", closeModal);
+$("#deviceModal").addEventListener("click", (e) => {
+    if (e.target === $("#deviceModal")) closeModal();
+});
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeModal();
+});
+
+/* --------------------------------------------------- live polling */
+
+setInterval(() => {
+    if (state.authenticated) { loadDevices(); loadMessages(); }
+}, 15000);
+
+checkAuth();
 </script>
 </div>
 </body>
