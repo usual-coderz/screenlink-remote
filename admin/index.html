@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0c1120">
+    <title>ScreenLink Remote — Admin</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0c1120;
+            --panel: #151d30;
+            --border: #27334b;
+            --green: #46dc96;
+            --text: #f4f7ff;
+            --muted: #9aa9c2;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        button, input {
+            font: inherit;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 240px;
+            padding: 28px 18px;
+            background: #101729;
+            border-right: 1px solid var(--border);
+        }
+
+        .brand {
+            font-size: 23px;
+            font-weight: 800;
+            color: var(--green);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 2px;
+            margin-bottom: 36px;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 14px;
+            margin: 7px 0;
+            border-radius: 10px;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .nav-item.active,
+        .nav-item:hover {
+            background: #1d2b40;
+            color: var(--green);
+        }
+
+        .main {
+            flex: 1;
+            min-width: 0;
+            padding: 28px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 28px;
+        }
+
+        h1 {
+            font-size: 27px;
+            margin-bottom: 8px;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .badge {
+            padding: 9px 12px;
+            border-radius: 20px;
+            background: #15372e;
+            color: var(--green);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 22px;
+            border-radius: 16px;
+        }
+
+        .card-label {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .number {
+            font-size: 30px;
+            font-weight: 800;
+        }
+
+        .green {
+            color: var(--green);
+        }
+
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .btn {
+            padding: 11px 15px;
+            border: 0;
+            border-radius: 9px;
+            background: var(--green);
+            color: #0c1120;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn.secondary {
+            background: #243149;
+            color: var(--text);
+        }
+
+        .device {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .device-name {
+            font-weight: 700;
+            margin-bottom: 7px;
+            overflow-wrap: anywhere;
+        }
+
+        .status {
+            color: var(--green);
+            font-size: 12px;
+        }
+
+        .empty {
+            padding: 25px 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .notice {
+            margin-top: 20px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            background: #111a2b;
+            border-radius: 12px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @media (max-width: 800px) {
+            .layout {
+                display: block;
+            }
+
+            .sidebar {
+                width: 100%;
+                padding: 18px;
+                border-right: 0;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .subtitle {
+                margin-bottom: 16px;
+            }
+
+            .nav {
+                display: flex;
+                gap: 7px;
+                overflow-x: auto;
+            }
+
+            .nav-item {
+                white-space: nowrap;
+                padding: 11px;
+            }
+
+            .main {
+                padding: 20px 15px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 23px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="layout">
+
+    <aside class="sidebar">
+        <div class="brand">ScreenLink</div>
+        <div class="subtitle">REMOTE SUPPORT</div>
+
+        <nav class="nav">
+            <div class="nav-item active" data-page="dashboard">
+                Dashboard
+            </div>
+
+            <div class="nav-item" data-page="devices">
+                Devices
+            </div>
+
+            <div class="nav-item" data-page="sessions">
+                Sessions
+            </div>
+
+            <div class="nav-item" data-page="settings">
+                Settings
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <div>
+                <h1 id="pageTitle">Dashboard</h1>
+                <p class="muted">ScreenLink device management</p>
+            </div>
+
+            <div class="badge" id="serverBadge">
+                Checking server...
+            </div>
+        </header>
+
+        <section class="page active" id="dashboard">
+
+            <div class="grid">
+                <div class="card">
+                    <div class="card-label">Registered Devices</div>
+                    <div class="number" id="deviceCount">—</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Online Devices</div>
+                    <div class="number green" id="onlineCount">—</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-label">Active Sessions</div>
+                    <div class="number" id="sessionCount">0</div>
+                </div>
+            </div>
+
+            <div class="card section">
+                <div class="section-header">
+                    <div>
+                        <h2 class="section-title">Connected Devices</h2>
+                        <p class="muted">Device status from the server</p>
+                    </div>
+
+                    <button class="btn secondary" id="refreshButton">
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="dashboardDevices" class="empty">
+                    Loading device information...
+                </div>
+            </div>
+
+            <div class="notice">
+                <strong>Prototype status</strong><br>
+                This dashboard checks the backend health endpoint.
+                Device registration, authenticated administration and
+                live screen-sharing sessions require additional backend
+                implementation. No devices are controlled by this page.
+            </div>
+        </section>
+
+        <section class="page" id="devices">
+            <div class="card">
+                <h2 class="section-title">Device Management</h2>
+                <p class="muted">
+                    Paired devices will appear here after secure
+                    registration is implemented.
+                </p>
+
+                <div class="empty" id="allDevices">
+                    No registered devices are available yet.
+                </div>
+            </div>
+        </section>
+
+        <section class="page" id="sessions">
+            <div class="card">
+                <h2 class="section-title">Support Sessions</h2>
+                <p class="muted">
+                    Sessions must be explicitly approved by the device owner.
+                </p>
+
+                <div class="empty">
+                    No active support sessions are available.
+                </div>
+            </div>
+        </section>
+
+        <section class="page" id="settings">
+            <div class="card">
+                <h2 class="section-title">Server Settings</h2>
+                <p class="muted">Backend endpoint</p>
+
+                <p style="margin-top: 12px; overflow-wrap: anywhere;">
+                    https://rat-panel-b91839a4be83.herokuapp.com
+                </p>
+
+                <button class="btn" id="testButton"
+                        style="margin-top: 18px;">
+                    Test Connection
+                </button>
+
+                <p class="muted" id="testResult"
+                   style="margin-top: 12px;"></p>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script>
+    const API = "https://rat-panel-b91839a4be83.herokuapp.com";
+
+    const badge = document.getElementById("serverBadge");
+    const deviceCount = document.getElementById("deviceCount");
+    const onlineCount = document.getElementById("onlineCount");
+    const dashboardDevices = document.getElementById("dashboardDevices");
+    const allDevices = document.getElementById("allDevices");
+
+    async function checkServer() {
+        badge.textContent = "Checking server...";
+
+        try {
+            const response = await fetch(`${API}/health`, {
+                method: "GET"
+            });
+
+            if (!response.ok) {
+                throw new Error("Server unavailable");
+            }
+
+            const data = await response.json();
+
+            if (data.status !== "ok") {
+                throw new Error("Unexpected server response");
+            }
+
+            badge.textContent = "● Server Online";
+            badge.style.background = "#15372e";
+            badge.style.color = "#46dc96";
+
+            document.getElementById("testResult").textContent =
+                "Connection successful.";
+
+        } catch (error) {
+            badge.textContent = "● Server Offline";
+            badge.style.background = "#40212a";
+            badge.style.color = "#ff7d8d";
+
+            document.getElementById("testResult").textContent =
+                "Could not connect. Check the backend and try again.";
+        }
+    }
+
+    function showEmptyDevices() {
+        deviceCount.textContent = "0";
+        onlineCount.textContent = "0";
+
+        dashboardDevices.textContent =
+            "No device registry API is configured yet.";
+
+        dashboardDevices.className = "empty";
+
+        allDevices.textContent =
+            "Device registration has not been implemented yet.";
+    }
+
+    document.querySelectorAll(".nav-item").forEach(item => {
+        item.addEventListener("click", () => {
+            document.querySelectorAll(".nav-item").forEach(nav => {
+                nav.classList.remove("active");
+            });
+
+            document.querySelectorAll(".page").forEach(page => {
+                page.classList.remove("active");
+            });
+
+            item.classList.add("active");
+
+            const pageId = item.dataset.page;
+            document.getElementById(pageId).classList.add("active");
+
+            document.getElementById("pageTitle").textContent =
+                item.textContent.trim();
+        });
+    });
+
+    document.getElementById("refreshButton").addEventListener(
+        "click",
+        async () => {
+            showEmptyDevices();
+            await checkServer();
+        }
+    );
+
+    document.getElementById("testButton").addEventListener(
+        "click",
+        checkServer
+    );
+
+    showEmptyDevices();
+    checkServer();
+</script>
+
+</body>
+</html>
