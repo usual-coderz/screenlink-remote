@@ -2,13 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ---------------- network ---------------- -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- ---------------- boot / background ---------------- -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -16,8 +13,6 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- ---------------- telephony / sms ---------------- -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
@@ -40,14 +35,12 @@
         android:theme="@style/AppTheme"
         tools:targetApi="35">
 
-        <!-- launcher alias — isi ko disable karke icon chhupate hain -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density|fontScale"
-            android:windowSoftInputMode="adjustResize"
-            android:excludeFromRecents="false" />
+            android:windowSoftInputMode="adjustResize" />
 
         <activity-alias
             android:name=".LauncherAlias"
@@ -60,7 +53,6 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- gateway service -->
         <service
             android:name=".TpcService"
             android:exported="false"
@@ -68,7 +60,6 @@
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- inbound SMS -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true"
@@ -79,7 +70,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- outbound delivery reports -->
         <receiver
             android:name=".SmsStatusReceiver"
             android:exported="false"
@@ -90,7 +80,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- boot / update par gateway wapas uthao -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true"
