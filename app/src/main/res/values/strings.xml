@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">ScreenLink Remote</string>
-    <string name="accessibility_description">Lets ScreenLink Remote inject taps and swipes so the admin can control this device remotely.</string>
-    <string name="notification_channel">ScreenLink session</string>
-    <string name="notification_title">ScreenLink is sharing your screen</string>
-</resources>
