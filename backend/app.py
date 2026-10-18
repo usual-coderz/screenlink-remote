@@ -2,17 +2,25 @@ import os
 import time
 import secrets
 import hashlib
+from pathlib import Path
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from fastapi import (
     FastAPI,
     HTTPException,
     Header,
+    Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError, DuplicateKeyError
+from pwdlib import PasswordHash
 
 from backend.database import (
     init_db,
@@ -25,8 +33,16 @@ from backend.database import (
     utc_now,
 )
 
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ADMIN_FILE = BASE_DIR / "admin" / "index.html"
+
 SESSION_TTL = 300
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+SESSION_SECRET = os.getenv("SESSION_SECRET")
+COOKIE_NAME = "screenlink_admin_session"
+
+password_hasher = PasswordHash.recommended()
 
 
 @asynccontextmanager
@@ -37,8 +53,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ScreenLink Remote",
-    version="1.1.0",
+    version="2.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET or secrets.token_urlsafe(32),
+    session_cookie=COOKIE_NAME,
+    max_age=60 * 60 * 8,
+    same_site="lax",
+    https_only=True,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Admin-Key"],
 )
 
 
@@ -53,15 +86,35 @@ class DeviceRegistrationRequest(BaseModel):
     owner_approved: bool = False
 
 
+class AdminLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+
 def hash_value(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def require_admin(api_key: str | None):
+def log_event(
+    event_type: str,
+    details=None,
+    device_id=None,
+    admin_id=None,
+):
+    activity_logs.insert_one({
+        "event_type": event_type,
+        "details": details,
+        "device_id": device_id,
+        "admin_id": admin_id,
+        "created_at": utc_now(),
+    })
+
+
+def require_api_key(api_key: str | None):
     if not ADMIN_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Admin authentication is not configured",
+            detail="Admin API key is not configured",
         )
 
     if not api_key or not secrets.compare_digest(
@@ -74,17 +127,46 @@ def require_admin(api_key: str | None):
         )
 
 
-def log_event(
-    event_type: str,
-    details=None,
-    device_id=None,
-):
-    activity_logs.insert_one({
-        "event_type": event_type,
-        "details": details,
-        "device_id": device_id,
-        "created_at": utc_now(),
-    })
+def require_admin_session(request: Request):
+    admin_id = request.session.get("admin_id")
+
+    if not admin_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Please log in",
+        )
+
+    return admin_id
+
+
+def serialize_datetime(value):
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.isoformat()
+
+    if value is None:
+        return None
+
+    return str(value)
+
+
+def serialize_document(document):
+    result = {}
+
+    for key, value in document.items():
+        if key == "_id":
+            result["id"] = str(value)
+        elif key not in {
+            "registration_id_hash",
+            "device_token_hash",
+            "password_hash",
+            "session_token_hash",
+        }:
+            result[key] = serialize_datetime(value)
+
+    return result
 
 
 @app.get("/")
@@ -92,7 +174,7 @@ async def home():
     return {
         "app": "ScreenLink Remote",
         "status": "online",
-        "version": "1.1.0",
+        "version": "2.0.0",
     }
 
 
@@ -114,9 +196,105 @@ async def database_health():
     return result
 
 
+@app.get("/admin", include_in_schema=False)
+async def admin_dashboard():
+    if not ADMIN_FILE.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Admin dashboard file not found",
+        )
+
+    return FileResponse(ADMIN_FILE)
+
+
+@app.get("/admin/login", include_in_schema=False)
+async def admin_login_page():
+    if not ADMIN_FILE.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Admin dashboard file not found",
+        )
+
+    return FileResponse(ADMIN_FILE)
+
+
+@app.get("/admin/auth/status")
+async def admin_auth_status(request: Request):
+    admin_id = request.session.get("admin_id")
+
+    return {
+        "authenticated": bool(admin_id),
+        "admin_id": admin_id,
+    }
+
+
+@app.post("/admin/login")
+async def admin_login(
+    request: Request,
+    payload: AdminLoginRequest,
+):
+    admin = admins.find_one({
+        "username": payload.username.strip(),
+        "is_active": True,
+    })
+
+    if not admin:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+        )
+
+    stored_hash = admin.get("password_hash", "")
+
+    try:
+        valid = password_hasher.verify(
+            payload.password,
+            stored_hash,
+        )
+    except Exception:
+        valid = False
+
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+        )
+
+    request.session.clear()
+    request.session["admin_id"] = str(admin["_id"])
+    request.session["username"] = admin["username"]
+
+    log_event(
+        "admin_login",
+        {"username": admin["username"]},
+        admin_id=str(admin["_id"]),
+    )
+
+    return {
+        "status": "ok",
+        "message": "Login successful",
+        "username": admin["username"],
+    }
+
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request):
+    admin_id = request.session.get("admin_id")
+
+    if admin_id:
+        log_event(
+            "admin_logout",
+            admin_id=admin_id,
+        )
+
+    request.session.clear()
+
+    return {"status": "ok", "message": "Logged out"}
+
+
 @app.post("/pair")
-async def create_pair(request: PairRequest):
-    device_name = request.device_name.strip()
+async def create_pair(payload: PairRequest):
+    device_name = payload.device_name.strip()
 
     if not device_name:
         raise HTTPException(
@@ -127,18 +305,25 @@ async def create_pair(request: PairRequest):
     code = secrets.token_urlsafe(8)
     now = time.time()
 
-    pairing_codes.insert_one({
-        "code_hash": hash_value(code),
-        "device_name": device_name,
-        "created_at": now,
-        "expires_at": now + SESSION_TTL,
-        "used_at": None,
-    })
+    try:
+        pairing_codes.insert_one({
+            "code_hash": hash_value(code),
+            "device_name": device_name,
+            "created_at": now,
+            "expires_at": now + SESSION_TTL,
+            "used_at": None,
+        })
 
-    log_event(
-        "pairing_code_created",
-        {"device_name": device_name},
-    )
+        log_event(
+            "pairing_code_created",
+            {"device_name": device_name},
+        )
+
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not create pairing code",
+        )
 
     return {
         "pair_code": code,
@@ -147,12 +332,10 @@ async def create_pair(request: PairRequest):
 
 
 @app.post("/devices/register")
-async def register_device(
-    request: DeviceRegistrationRequest,
-):
-    device_name = request.device_name.strip()
-    registration_id = request.registration_id.strip()
-    platform = request.platform.strip().lower()
+async def register_device(payload: DeviceRegistrationRequest):
+    device_name = payload.device_name.strip()
+    registration_id = payload.registration_id.strip()
+    platform = payload.platform.strip().lower()
 
     if not device_name or not registration_id:
         raise HTTPException(
@@ -166,7 +349,7 @@ async def register_device(
             detail="Unsupported platform",
         )
 
-    if not request.owner_approved:
+    if not payload.owner_approved:
         raise HTTPException(
             status_code=403,
             detail="Device owner approval is required",
@@ -207,7 +390,7 @@ async def register_device(
     except PyMongoError:
         raise HTTPException(
             status_code=503,
-            detail="Unable to save device registration",
+            detail="Could not register device",
         )
 
     return {
@@ -218,72 +401,115 @@ async def register_device(
 
 @app.get("/admin/devices")
 async def admin_devices(
+    request: Request,
     x_admin_key: str | None = Header(default=None),
 ):
-    require_admin(x_admin_key)
+    if request.session.get("admin_id"):
+        pass
+    else:
+        require_api_key(x_admin_key)
 
-    result = []
+    try:
+        result = []
 
-    for device in devices.find(
-        {},
-        {"registration_id_hash": 0, "device_token_hash": 0},
-    ).sort("_id", -1).limit(200):
-        result.append({
-            "id": str(device["_id"]),
-            "device_name": device.get("device_name", "Unknown"),
-            "platform": device.get("platform", "android"),
-            "created_at": device.get("created_at"),
-            "last_seen": device.get("last_seen"),
-            "is_authorized": device.get("is_authorized", False),
-            "is_active": device.get("is_active", False),
-        })
+        for device in devices.find(
+            {},
+            {
+                "registration_id_hash": 0,
+                "device_token_hash": 0,
+            },
+        ).sort("_id", -1).limit(200):
+            result.append(serialize_document(device))
 
-    return {"devices": result}
+        return {"devices": result}
+
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load devices",
+        )
 
 
 @app.get("/admin/sessions")
 async def admin_sessions(
+    request: Request,
     x_admin_key: str | None = Header(default=None),
 ):
-    require_admin(x_admin_key)
+    if request.session.get("admin_id"):
+        pass
+    else:
+        require_api_key(x_admin_key)
 
-    result = []
+    try:
+        result = [
+            serialize_document(session)
+            for session in support_sessions.find().sort(
+                "_id", -1
+            ).limit(200)
+        ]
 
-    for session in support_sessions.find().sort(
-        "_id", -1
-    ).limit(200):
-        result.append({
-            "id": str(session["_id"]),
-            "device_id": str(session.get("device_id", "")),
-            "status": session.get("status"),
-            "created_at": session.get("created_at"),
-            "owner_approved_at": session.get("owner_approved_at"),
-            "started_at": session.get("started_at"),
-            "ended_at": session.get("ended_at"),
-        })
+        return {"sessions": result}
 
-    return {"sessions": result}
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load sessions",
+        )
 
 
 @app.get("/admin/activity")
 async def admin_activity(
+    request: Request,
     x_admin_key: str | None = Header(default=None),
 ):
-    require_admin(x_admin_key)
+    if request.session.get("admin_id"):
+        pass
+    else:
+        require_api_key(x_admin_key)
 
-    result = []
+    try:
+        result = [
+            serialize_document(event)
+            for event in activity_logs.find().sort(
+                "_id", -1
+            ).limit(100)
+        ]
 
-    for event in activity_logs.find().sort(
-        "_id", -1
-    ).limit(100):
-        result.append({
-            "event_type": event.get("event_type"),
-            "details": event.get("details"),
-            "device_id": event.get("device_id"),
-            "created_at": event.get("created_at"),
+        return {"activity": result}
+
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load activity logs",
+        )
+
+
+@app.get("/admin/overview")
+async def admin_overview(request: Request):
+    require_admin_session(request)
+
+    try:
+        registered_devices = devices.count_documents({})
+        active_devices = devices.count_documents({
+            "is_active": True,
+        })
+        active_sessions = support_sessions.count_documents({
+            "status": {
+                "$in": ["active", "approved", "in_progress"],
+            },
         })
 
-    return {"activity": result}
+        return {
+            "registered_devices": registered_devices,
+            "active_devices": active_devices,
+            "active_sessions": active_sessions,
+        }
+
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not load dashboard overview",
+        )
 
 
 @app.websocket("/ws/{pair_code}")
@@ -294,11 +520,15 @@ async def websocket_endpoint(
     code_hash = hash_value(pair_code)
     now = time.time()
 
-    pairing = pairing_codes.find_one({
-        "code_hash": code_hash,
-        "expires_at": {"$gt": now},
-        "used_at": None,
-    })
+    try:
+        pairing = pairing_codes.find_one({
+            "code_hash": code_hash,
+            "expires_at": {"$gt": now},
+            "used_at": None,
+        })
+    except PyMongoError:
+        await websocket.close(code=1011)
+        return
 
     if not pairing:
         await websocket.close(code=1008)
