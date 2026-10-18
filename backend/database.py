@@ -5,7 +5,7 @@ from pymongo import MongoClient, DESCENDING
 from pymongo.errors import PyMongoError
 
 MONGODB_URI = os.getenv("MONGODB_URI")
-DB_NAME = os.getenv("DB_NAME", "screenlink")
+DB_NAME = os.getenv("DB_NAME", "tpcpanel")
 
 if not MONGODB_URI:
     raise RuntimeError("MONGODB_URI environment variable is missing")
@@ -19,66 +19,40 @@ client = MongoClient(
 
 db = client[DB_NAME]
 
-admins = db["admins"]
 devices = db["devices"]
+messages = db["messages"]
+outbox = db["outbox"]
+rules = db["rules"]
+bots = db["telegram_bots"]
+tg_logs = db["telegram_logs"]
 pairing_codes = db["pairing_codes"]
-support_sessions = db["support_sessions"]
 activity_logs = db["activity_logs"]
 
 
 def init_db():
     client.admin.command("ping")
 
-    admins.create_index("username", unique=True)
-
     devices.create_index("registration_id_hash", unique=True)
     devices.create_index("last_seen")
-    devices.create_index("device_token_hash", unique=True, sparse=True)
+
+    messages.create_index([("device_id", 1), ("created_at", DESCENDING)])
+    messages.create_index([("created_at", DESCENDING)])
+    messages.create_index("kind")
+
+    outbox.create_index([("status", 1), ("created_at", 1)])
+
+    rules.create_index("enabled")
+    bots.create_index("bound")
+    tg_logs.create_index([("created_at", DESCENDING)])
 
     pairing_codes.create_index("code_hash", unique=True)
     pairing_codes.create_index("expires_at", expireAfterSeconds=0)
 
-    support_sessions.create_index("status")
     activity_logs.create_index([("created_at", DESCENDING)])
 
 
 def utc_now():
     return datetime.now(timezone.utc)
-
-
-def list_devices():
-    return list(
-        devices.find({}, {"_id": 0, "device_token_hash": 0})
-        .sort("_id", DESCENDING)
-        .limit(200)
-    )
-
-
-def list_sessions():
-    return list(
-        support_sessions.find({}, {"_id": 0})
-        .sort("_id", DESCENDING)
-        .limit(200)
-    )
-
-
-def list_recent_activity(limit=50):
-    limit = max(1, min(int(limit), 200))
-    return list(
-        activity_logs.find({}, {"_id": 0}).sort("_id", DESCENDING).limit(limit)
-    )
-
-
-def log_activity(event_type, details=None, admin_id=None, device_id=None):
-    document = {
-        "event_type": event_type,
-        "details": details,
-        "admin_id": admin_id,
-        "device_id": device_id,
-        "created_at": utc_now(),
-    }
-    result = activity_logs.insert_one(document)
-    return str(result.inserted_id)
 
 
 def check_database():
