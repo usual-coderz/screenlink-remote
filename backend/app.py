@@ -92,6 +92,10 @@ class DeviceRegistrationRequest(BaseModel):
     owner_approved: bool = False
 
 
+class DeviceHeartbeatRequest(BaseModel):
+    registration_id: str = Field(min_length=16, max_length=128)
+
+
 class AdminLoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=200)
@@ -170,7 +174,22 @@ def serialize_document(document):
             "password_hash",
             "session_token_hash",
         }:
-            result[key] = serialize_datetime(value)
+            if isinstance(value, (dict, list)):
+                result[key] = value
+            else:
+                result[key] = serialize_datetime(value)
+
+    last_seen = document.get("last_seen")
+    if isinstance(last_seen, datetime):
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        result["status"] = (
+            "Online"
+            if datetime.now(timezone.utc) - last_seen < timedelta(seconds=90)
+            else "Offline"
+        )
+    else:
+        result["status"] = "Offline"
 
     return result
 
@@ -390,6 +409,23 @@ async def register_device(payload: DeviceRegistrationRequest):
     }
 
 
+@app.post("/devices/heartbeat")
+async def device_heartbeat(payload: DeviceHeartbeatRequest):
+    registration_hash = hash_value(payload.registration_id.strip())
+    now = utc_now()
+
+    try:
+        result = devices.update_one(
+            {"registration_id_hash": registration_hash},
+            {"$set": {"last_seen": now, "is_active": True}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Device is not registered")
+        return {"status": "ok", "online": True, "last_seen": now.isoformat()}
+    except PyMongoError:
+        raise HTTPException(status_code=503, detail="Could not update device status")
+
+
 @app.get("/admin/devices")
 async def admin_devices(
     request: Request,
@@ -481,8 +517,9 @@ async def admin_overview(request: Request):
 
     try:
         registered_devices = devices.count_documents({})
+        online_cutoff = utc_now() - timedelta(seconds=90)
         active_devices = devices.count_documents({
-            "is_active": True,
+            "last_seen": {"$gte": online_cutoff},
         })
         active_sessions = support_sessions.count_documents({
             "status": {
