@@ -1434,7 +1434,7 @@
                 const data = await api("/admin/overview");
 
                 $("#totalDevices").textContent =
-                    safeValue(data.total_devices ?? data.devices_total, "0");
+    safeValue(data.registered_devices ?? data.total_devices ?? data.devices_total, "0");
 
                 $("#activeDevices").textContent =
                     safeValue(data.active_devices ?? data.devices_active, "0");
