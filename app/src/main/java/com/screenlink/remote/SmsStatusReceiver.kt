@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.telephony.SmsManager
 
 class SmsStatusReceiver : BroadcastReceiver() {
 
@@ -15,29 +16,18 @@ class SmsStatusReceiver : BroadcastReceiver() {
         val itemId = intent.getStringExtra("item_id") ?: return
         val ok = resultCode == Activity.RESULT_OK
 
-        val svc = Intent(ctx, TpcService::class.java)
         val error = if (ok) "" else when (resultCode) {
-            android.telephony.SmsManager.RESULT_ERROR_NO_SERVICE -> "no service"
-            android.telephony.SmsManager.RESULT_ERROR_NULL_PDU -> "null pdu"
-            android.telephony.SmsManager.RESULT_ERROR_RADIO_OFF -> "radio off"
+            SmsManager.RESULT_ERROR_NO_SERVICE -> "no service"
+            SmsManager.RESULT_ERROR_NULL_PDU -> "null pdu"
+            SmsManager.RESULT_ERROR_RADIO_OFF -> "radio off"
             else -> "error $resultCode"
         }
 
-        // service ko ack karne do
-        ctx.startService(svc)
-        AckBus.ack(itemId, if (ok) "sent" else "failed", error)
+        TpcService.ack(ctx, itemId, if (ok) "sent" else "failed", error)
     }
 }
 
-/** Chhota bridge — receiver se service tak. */
-object AckBus {
-    @Volatile private var svc: TpcService? = null
-    fun attach(s: TpcService) { svc = s }
-    fun ack(id: String, status: String, error: String) {
-        svc?.ack(id, status, error) ?: PendingAcks.add(id, status, error)
-    }
-}
-
+/** Fallback queue — service band ho to ack yahan rukta hai. */
 object PendingAcks {
     private val queue = mutableListOf<Triple<String, String, String>>()
     @Synchronized fun add(id: String, s: String, e: String) { queue.add(Triple(id, s, e)) }
