@@ -3,60 +3,121 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ScreenLink Remote — Admin</title>
+<title>TPC PANEL — Remote Ops</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
     :root {
-        --bg: #080d18;
-        --panel: #101827;
-        --panel-light: #151f31;
-        --border: #243147;
-        --text: #eef3ff;
-        --muted: #91a0b8;
-        --accent: #6d8cff;
-        --accent-hover: #5475f0;
-        --green: #39d9a2;
-        --red: #ff6b78;
-        --yellow: #ffca70;
-        --radius: 16px;
+        --bg: #030604;
+        --bg-2: #060b07;
+        --panel: #080f0a;
+        --panel-2: #0b140e;
+        --border: #14351f;
+        --border-hi: #1f5c33;
+        --text: #c9ffdc;
+        --muted: #5d8f6d;
+        --accent: #00ff88;
+        --accent-dim: #00c96a;
+        --accent-glow: #00ff8833;
+        --red: #ff4d5e;
+        --yellow: #ffcc44;
+        --radius: 4px;
+        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
-    * {
-        box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
-    [hidden] {
-        display: none !important;
-    }
+    [hidden] { display: none !important; }
+
+    html, body { height: 100%; }
 
     body {
         margin: 0;
-        min-height: 100vh;
-        background:
-            radial-gradient(ellipse at top left, #172448 0, transparent 38%),
-            var(--bg);
+        background: var(--bg);
         color: var(--text);
-        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
-            "Segoe UI", sans-serif;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.55;
+        letter-spacing: 0.2px;
+        -webkit-font-smoothing: antialiased;
     }
 
-    button,
-    input {
-        font: inherit;
+    /* matrix rain */
+    #matrix {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.16;
+        pointer-events: none;
     }
 
-    button {
-        cursor: pointer;
+    /* scanlines + vignette */
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        background:
+            repeating-linear-gradient(
+                to bottom,
+                rgba(0, 255, 136, 0.035) 0px,
+                rgba(0, 255, 136, 0.035) 1px,
+                transparent 1px,
+                transparent 3px
+            ),
+            radial-gradient(ellipse at center, transparent 55%, #000000cc 100%);
     }
 
-    .muted {
-        color: var(--muted);
+    .layer { position: relative; z-index: 3; }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    a { color: var(--accent); text-decoration: none; }
+
+    .muted { color: var(--muted); }
+    .small { font-size: 11px; }
+
+    .upper {
+        text-transform: uppercase;
+        letter-spacing: 1.6px;
     }
 
-    .small {
-        font-size: 12px;
+    ::selection { background: var(--accent); color: #001b0d; }
+
+    /* scrollbars */
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: #050a06; }
+    ::-webkit-scrollbar-thumb {
+        background: #1b4a2c;
+        border-radius: 0;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+
+    /* corner brackets */
+    .bracket { position: relative; }
+    .bracket::before,
+    .bracket::after {
+        content: "";
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border: 1px solid var(--accent);
+        opacity: 0.55;
+        pointer-events: none;
+    }
+    .bracket::before {
+        top: -1px; left: -1px;
+        border-right: 0; border-bottom: 0;
+    }
+    .bracket::after {
+        bottom: -1px; right: -1px;
+        border-left: 0; border-top: 0;
     }
 
-    /* ---------------------------------------------------------- login */
+    /* ------------------------------------------------------------ login */
 
     .login-screen {
         min-height: 100vh;
@@ -67,126 +128,159 @@
 
     .login-card {
         width: 100%;
-        max-width: 410px;
-        padding: 32px;
-        background: rgba(16, 24, 39, 0.95);
+        max-width: 430px;
+        padding: 30px;
+        background: linear-gradient(160deg, #071009, #050a07);
         border: 1px solid var(--border);
-        border-radius: 22px;
-        box-shadow: 0 24px 90px #0006;
+        border-radius: var(--radius);
+        box-shadow:
+            0 0 0 1px #00ff8810,
+            0 0 60px #00ff880d,
+            inset 0 0 90px #00ff8805;
     }
 
     .brand {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
     }
 
-    .brand-icon {
-        display: grid;
-        place-items: center;
-        width: 44px;
-        height: 44px;
-        border-radius: 14px;
-        color: white;
-        background: linear-gradient(135deg, #7795ff, #5366df);
-        font-weight: 900;
-        font-size: 19px;
+    .logo-mark {
+        width: 46px;
+        height: 46px;
+        color: var(--accent);
+        filter: drop-shadow(0 0 8px var(--accent-glow));
+        flex: 0 0 auto;
     }
 
-    .brand h1 {
-        font-size: 19px;
+    .brand-text h1 {
         margin: 0;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 3px;
+        color: var(--accent);
+        text-shadow: 0 0 14px var(--accent-glow);
     }
 
-    .brand p {
+    .brand-text p {
+        margin: 3px 0 0;
+        font-size: 10px;
         color: var(--muted);
-        font-size: 12px;
-        margin: 4px 0 0;
+        letter-spacing: 2px;
+        text-transform: uppercase;
     }
+
+    .boot-line {
+        margin: 22px 0 4px;
+        font-size: 11px;
+        color: var(--muted);
+        min-height: 17px;
+    }
+
+    .cursor {
+        display: inline-block;
+        width: 7px;
+        height: 13px;
+        margin-left: 3px;
+        background: var(--accent);
+        vertical-align: -2px;
+        animation: blink 1s steps(1) infinite;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
 
     .login-card h2 {
-        font-size: 25px;
-        margin: 30px 0 8px;
+        font-size: 17px;
+        margin: 16px 0 6px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
     }
 
     .login-card > p {
         color: var(--muted);
-        font-size: 14px;
-        line-height: 1.6;
-        margin-bottom: 24px;
+        font-size: 12px;
+        margin: 0 0 22px;
     }
 
     label {
         display: block;
-        color: #cbd5e8;
-        font-size: 13px;
-        margin: 16px 0 8px;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+        margin: 16px 0 7px;
     }
 
     input {
         width: 100%;
-        padding: 13px 14px;
+        padding: 12px 13px;
         color: var(--text);
-        background: #0b1220;
+        background: #020604;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: var(--radius);
         outline: none;
+        font-family: var(--mono);
     }
+
+    input::placeholder { color: #33543f; }
 
     input:focus {
         border-color: var(--accent);
-        box-shadow: 0 0 0 3px #6d8cff1a;
+        box-shadow: 0 0 0 2px #00ff8818, inset 0 0 20px #00ff8808;
     }
 
     .primary-button,
     .secondary-button,
     .logout-button {
-        border: 0;
-        border-radius: 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
         padding: 11px 15px;
-        font-weight: 650;
-        transition: 0.15s ease;
+        font-family: var(--mono);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        transition: 0.14s ease;
     }
 
     .primary-button {
-        color: white;
+        color: #001b0d;
         background: var(--accent);
+        box-shadow: 0 0 18px var(--accent-glow);
     }
-
     .primary-button:hover {
-        background: var(--accent-hover);
+        background: #4dffab;
+        box-shadow: 0 0 26px #00ff8855;
     }
 
-    .login-submit {
-        width: 100%;
-        margin-top: 22px;
-        padding: 13px;
-    }
+    .login-submit { width: 100%; margin-top: 20px; padding: 13px; }
 
-    button:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .message {
         margin-top: 14px;
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: 11px;
+        line-height: 1.6;
+    }
+    .message.error { color: var(--red); }
+    .message.success { color: var(--accent); }
+
+    .login-foot {
+        margin-top: 22px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
     }
 
-    .message.error {
-        color: var(--red);
-    }
+    /* ----------------------------------------------------------- layout */
 
-    .message.success {
-        color: var(--green);
-    }
-
-    /* -------------------------------------------------------- layout */
-
-    .app {
-        min-height: 100vh;
-    }
+    .app { min-height: 100vh; }
 
     .topbar {
         position: sticky;
@@ -196,17 +290,15 @@
         justify-content: space-between;
         align-items: center;
         gap: 16px;
-        padding: 16px 26px;
-        background: #080d18ed;
-        backdrop-filter: blur(16px);
+        padding: 12px 22px;
+        background: #030604f2;
+        backdrop-filter: blur(12px);
         border-bottom: 1px solid var(--border);
     }
 
-    .topbar-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
+    .topbar .brand-text h1 { font-size: 16px; letter-spacing: 3px; }
+
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
 
     .status-pill {
         display: inline-flex;
@@ -214,88 +306,124 @@
         gap: 7px;
         border: 1px solid var(--border);
         border-radius: 999px;
-        padding: 7px 10px;
-        font-size: 12px;
+        padding: 6px 11px;
+        font-size: 10px;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
         color: var(--muted);
     }
 
     .status-dot {
-        width: 7px;
-        height: 7px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: var(--green);
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+        animation: pulse 2s ease-in-out infinite;
     }
 
+    @keyframes pulse { 50% { opacity: 0.35; } }
+
     .logout-button {
-        color: #ffd9dd;
-        background: #ff6b7817;
-        border: 1px solid #ff6b7830;
+        color: #ffc9cf;
+        background: #ff4d5e14;
+        border-color: #ff4d5e35;
+    }
+    .logout-button:hover { background: #ff4d5e26; }
+
+    .telegram-button {
+        display: inline-grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        color: #7fd8ff;
+        background: #229ed914;
+        border: 1px solid #229ed940;
+        transition: 0.15s ease;
+    }
+
+    .telegram-button:hover {
+        color: #ffffff;
+        background: #229ed9;
+        border-color: #229ed9;
+        box-shadow: 0 0 20px #229ed955;
+        transform: translateY(-1px);
     }
 
     .layout {
         display: grid;
-        grid-template-columns: 225px minmax(0, 1fr);
-        min-height: calc(100vh - 77px);
+        grid-template-columns: 216px minmax(0, 1fr);
+        min-height: calc(100vh - 61px);
     }
 
     .sidebar {
-        padding: 24px 14px;
+        padding: 20px 12px;
         border-right: 1px solid var(--border);
+        background: linear-gradient(180deg, #050a07, #030604);
     }
 
     .sidebar-label {
-        padding: 0 12px;
-        margin: 0 0 12px;
-        color: #71819b;
-        font-size: 10px;
+        padding: 0 10px;
+        margin: 0 0 10px;
+        color: #33543f;
+        font-size: 9px;
         font-weight: 800;
-        letter-spacing: 1.4px;
+        letter-spacing: 2px;
         text-transform: uppercase;
     }
 
     .nav-button {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         width: 100%;
-        padding: 12px;
-        margin-bottom: 5px;
+        padding: 10px;
+        margin-bottom: 3px;
         text-align: left;
         color: var(--muted);
         background: transparent;
         border: 1px solid transparent;
-        border-radius: 10px;
+        border-radius: var(--radius);
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        transition: 0.13s ease;
     }
 
     .nav-button:hover {
         color: var(--text);
-        background: #ffffff08;
+        background: #00ff8808;
+        border-color: #00ff8818;
     }
 
     .nav-button.active {
-        color: white;
-        background: #6d8cff1b;
-        border-color: #6d8cff38;
+        color: var(--accent);
+        background: #00ff880f;
+        border-color: #00ff8833;
+        box-shadow: inset 2px 0 0 var(--accent);
     }
 
-    .nav-icon {
-        width: 20px;
-        text-align: center;
-    }
+    .nav-icon { width: 18px; text-align: center; font-size: 11px; }
 
     .sidebar-footer {
-        margin: 30px 10px 0;
-        padding-top: 18px;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.7;
+        margin: 26px 8px 0;
+        padding-top: 16px;
+        border-top: 1px dashed var(--border);
+        color: #33543f;
+        font-size: 10px;
+        line-height: 1.9;
+        letter-spacing: 1px;
     }
+
+    .sidebar-footer a { color: var(--muted); }
+    .sidebar-footer a:hover { color: #7fd8ff; }
 
     main {
         width: 100%;
         max-width: 1600px;
-        padding: 30px;
+        padding: 26px;
         margin: 0 auto;
         min-width: 0;
     }
@@ -305,51 +433,59 @@
         justify-content: space-between;
         align-items: flex-start;
         gap: 18px;
-        margin-bottom: 26px;
+        margin-bottom: 22px;
     }
 
     .page-header h2 {
-        margin: 0 0 8px;
-        font-size: clamp(23px, 3vw, 30px);
-        letter-spacing: -0.7px;
+        margin: 0 0 6px;
+        font-size: clamp(19px, 2.6vw, 25px);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--accent);
+        text-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .page-header h2::before {
+        content: "> ";
+        color: var(--muted);
+        text-shadow: none;
     }
 
     .page-header p {
         margin: 0;
         color: var(--muted);
-        font-size: 14px;
+        font-size: 11px;
+        letter-spacing: 0.6px;
     }
 
     .secondary-button {
-        color: #dce5ff;
-        background: var(--panel-light);
-        border: 1px solid var(--border);
+        color: var(--accent);
+        background: #00ff880a;
+        border-color: #00ff8828;
     }
-
     .secondary-button:hover {
-        background: #202d43;
+        background: #00ff8818;
+        border-color: #00ff8855;
+        box-shadow: 0 0 16px var(--accent-glow);
     }
 
-    /* -------------------------------------------------------- content */
+    /* ---------------------------------------------------------- content */
 
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
+        gap: 14px;
+        margin-bottom: 20px;
     }
 
     .stat-card,
     .panel {
-        background: linear-gradient(145deg, #111b2c, #0e1625);
+        background: linear-gradient(160deg, #071009, #050a07);
         border: 1px solid var(--border);
         border-radius: var(--radius);
     }
 
-    .stat-card {
-        padding: 20px;
-        min-width: 0;
-    }
+    .stat-card { padding: 17px; min-width: 0; }
 
     .stat-top {
         display: flex;
@@ -360,85 +496,94 @@
 
     .stat-label {
         color: var(--muted);
-        font-size: 13px;
+        font-size: 9px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
     }
 
     .stat-icon {
         display: grid;
         place-items: center;
-        width: 35px;
-        height: 35px;
-        border-radius: 10px;
-        background: #6d8cff1a;
-        color: #9aafff;
+        width: 28px;
+        height: 28px;
+        border: 1px solid #00ff8828;
+        border-radius: var(--radius);
+        color: var(--accent);
+        font-size: 12px;
     }
 
     .stat-value {
-        margin-top: 17px;
-        font-size: 31px;
+        margin-top: 14px;
+        font-size: 28px;
         font-weight: 800;
-        letter-spacing: -1px;
+        letter-spacing: -0.5px;
+        color: var(--accent);
+        text-shadow: 0 0 18px var(--accent-glow);
         overflow-wrap: anywhere;
     }
 
     .stat-foot {
-        margin-top: 7px;
-        color: var(--muted);
-        font-size: 12px;
+        margin-top: 5px;
+        color: #33543f;
+        font-size: 10px;
+        letter-spacing: 0.5px;
     }
 
     .content-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
-        gap: 18px;
+        gap: 16px;
     }
 
-    .panel {
-        min-width: 0;
-        overflow: hidden;
-        margin-bottom: 18px;
-    }
+    .panel { min-width: 0; overflow: hidden; margin-bottom: 16px; }
 
     .panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 12px;
-        padding: 18px 20px;
+        padding: 14px 16px;
         border-bottom: 1px solid var(--border);
+        background: #00ff8805;
     }
 
     .panel-header h3 {
         margin: 0;
-        font-size: 15px;
+        font-size: 11px;
+        letter-spacing: 1.8px;
+        text-transform: uppercase;
+        color: var(--text);
     }
 
-    .panel-body {
-        padding: 18px 20px;
+    .panel-header h3::before {
+        content: "// ";
+        color: var(--accent-dim);
     }
+
+    .panel-body { padding: 16px; }
 
     .connection-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 14px;
-        padding: 13px 0;
-        border-bottom: 1px solid #ffffff0a;
+        padding: 11px 0;
+        border-bottom: 1px dashed #0f2a1a;
     }
 
-    .connection-row:last-child {
-        border-bottom: 0;
-    }
+    .connection-row:last-child { border-bottom: 0; }
 
     .connection-name {
-        font-size: 13px;
-        font-weight: 650;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
         overflow-wrap: anywhere;
     }
 
     .connection-desc {
-        margin-top: 5px;
-        font-size: 12px;
+        margin-top: 3px;
+        font-size: 10px;
         color: var(--muted);
         overflow-wrap: anywhere;
     }
@@ -446,12 +591,15 @@
     .badge {
         display: inline-flex;
         align-items: center;
-        padding: 5px 9px;
-        border-radius: 999px;
-        background: #ffffff0b;
+        padding: 4px 8px;
+        border-radius: 3px;
+        background: #ffffff08;
         border: 1px solid var(--border);
         color: var(--muted);
-        font-size: 11px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
         white-space: nowrap;
     }
 
@@ -460,156 +608,281 @@
     .badge.approved,
     .badge.success,
     .badge.charging {
-        color: var(--green);
-        border-color: #39d9a233;
-        background: #39d9a20d;
+        color: var(--accent);
+        border-color: #00ff8835;
+        background: #00ff880d;
+        box-shadow: 0 0 12px #00ff8818;
     }
 
     .badge.pending,
     .badge.waiting {
         color: var(--yellow);
-        border-color: #ffca7033;
-        background: #ffca700d;
+        border-color: #ffcc4435;
+        background: #ffcc440d;
     }
 
     .badge.error,
     .badge.rejected,
     .badge.failed {
         color: var(--red);
-        border-color: #ff6b7833;
-        background: #ff6b780d;
+        border-color: #ff4d5e35;
+        background: #ff4d5e0d;
     }
 
-    .badge.discharging {
-        color: var(--muted);
-    }
+    .badge.discharging { color: var(--muted); }
 
-    .table-wrap {
-        width: 100%;
-        overflow-x: auto;
-    }
+    .table-wrap { width: 100%; overflow-x: auto; }
 
     table {
         width: 100%;
         border-collapse: collapse;
         text-align: left;
-        font-size: 13px;
+        font-size: 11px;
     }
 
-    th,
-    td {
-        padding: 14px 18px;
-        border-bottom: 1px solid #ffffff0a;
+    th, td {
+        padding: 11px 14px;
+        border-bottom: 1px dashed #0f2a1a;
         white-space: nowrap;
     }
 
     th {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 700;
+        color: #33543f;
+        font-size: 9px;
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.6px;
+        letter-spacing: 1.6px;
+        background: #00ff8804;
     }
 
-    td {
-        color: #dce5f7;
-    }
+    td { color: #a9e6c1; }
 
-    tbody tr:last-child td {
-        border-bottom: 0;
-    }
+    tbody tr:hover td { background: #00ff8806; }
+    tbody tr:last-child td { border-bottom: 0; }
 
     .cell-sub {
         display: block;
-        margin-top: 4px;
-        color: var(--muted);
-        font-size: 11px;
+        margin-top: 3px;
+        color: #33543f;
+        font-size: 9px;
+        letter-spacing: 0.4px;
     }
 
     .row-button {
-        padding: 7px 11px;
-        font-size: 12px;
-        color: #dce5ff;
-        background: var(--panel-light);
-        border: 1px solid var(--border);
-        border-radius: 8px;
+        padding: 6px 10px;
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: #00ff880a;
+        border: 1px solid #00ff8828;
+        border-radius: 3px;
     }
 
     .row-button:hover {
-        background: #202d43;
+        background: #00ff881a;
+        border-color: var(--accent);
+        box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .row-button.danger {
+        color: #7fd8ff;
+        background: #229ed90f;
+        border-color: #229ed938;
+    }
+
+    .row-button.danger:hover {
+        background: #229ed922;
+        border-color: #229ed9;
+        box-shadow: 0 0 12px #229ed944;
     }
 
     .empty-state {
-        padding: 35px 18px;
+        padding: 32px 16px;
         text-align: center;
-        color: var(--muted);
-        font-size: 13px;
+        color: #33543f;
+        font-size: 11px;
+        letter-spacing: 1px;
+    }
+
+    .empty-state::before {
+        content: "[ ";
+        color: var(--accent-dim);
+    }
+    .empty-state::after {
+        content: " ]";
+        color: var(--accent-dim);
     }
 
     .notice {
-        margin-bottom: 20px;
-        padding: 12px 15px;
-        border-radius: 10px;
-        background: #6d8cff12;
-        border: 1px solid #6d8cff35;
-        color: #c9d5ff;
-        font-size: 13px;
-        line-height: 1.6;
+        margin-bottom: 18px;
+        padding: 11px 14px;
+        border-radius: var(--radius);
+        background: #00ff8809;
+        border: 1px solid #00ff8830;
+        border-left: 3px solid var(--accent);
+        color: #a9e6c1;
+        font-size: 11px;
     }
 
-    .page-section {
-        display: none;
-    }
-
-    .page-section.active {
-        display: block;
-    }
+    .page-section { display: none; }
+    .page-section.active { display: block; }
 
     .settings-row {
-        padding: 15px 0;
-        border-bottom: 1px solid #ffffff0c;
+        padding: 13px 0;
+        border-bottom: 1px dashed #0f2a1a;
     }
-
-    .settings-row:last-child {
-        border-bottom: 0;
-    }
+    .settings-row:last-child { border-bottom: 0; }
 
     .settings-row strong {
         display: block;
-        margin-bottom: 6px;
-        font-size: 13px;
+        margin-bottom: 5px;
+        font-size: 10px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
+        color: var(--accent);
     }
 
     .settings-row p {
         margin: 0;
         color: var(--muted);
-        font-size: 13px;
-        line-height: 1.6;
+        font-size: 11px;
+        line-height: 1.7;
         overflow-wrap: anywhere;
     }
 
     .footer {
-        padding: 20px 0 5px;
+        padding: 18px 0 4px;
         text-align: center;
-        color: #71819b;
-        font-size: 12px;
+        color: #33543f;
+        font-size: 10px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
     }
 
     .toast {
         position: fixed;
-        right: 20px;
-        bottom: 20px;
+        right: 18px;
+        bottom: 18px;
         z-index: 30;
-        max-width: calc(100vw - 40px);
-        padding: 13px 17px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: #18243a;
-        box-shadow: 0 15px 45px #0006;
-        font-size: 13px;
+        max-width: calc(100vw - 36px);
+        padding: 11px 15px;
+        border: 1px solid #00ff8835;
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius);
+        background: #061009;
+        color: var(--accent);
+        box-shadow: 0 12px 40px #000a, 0 0 24px #00ff8818;
+        font-size: 11px;
+        letter-spacing: 0.6px;
     }
 
-    /* --------------------------------------------------------- modal */
+    .toast::before { content: "[SYS] "; color: var(--muted); }
+
+    /* ------------------------------------------------------- live view */
+
+    .live-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .live-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        background: #061009;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+    }
+
+    .toolbar-spacer { flex: 1 1 auto; }
+
+    .tool-button {
+        padding: 7px 10px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--muted);
+        background: #030604;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+    }
+
+    .tool-button:hover {
+        color: var(--accent);
+        border-color: #00ff8835;
+        background: #00ff880a;
+    }
+
+    .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 10px;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .toggle input {
+        width: auto;
+        accent-color: var(--accent);
+        cursor: pointer;
+    }
+
+    .screen-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: #020503;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        min-height: 320px;
+        box-shadow: inset 0 0 80px #00ff8805;
+    }
+
+    #screenCanvas {
+        max-width: 100%;
+        max-height: 72vh;
+        background: #000;
+        border-radius: 2px;
+        cursor: crosshair;
+        touch-action: none;
+        box-shadow: 0 0 30px #00ff8815;
+    }
+
+    .screen-overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        background: #020503cc;
+        border-radius: var(--radius);
+        pointer-events: none;
+    }
+
+    .live-meta {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        font-size: 10px;
+        color: #33543f;
+        letter-spacing: 0.8px;
+    }
+
+    /* ----------------------------------------------------------- modal */
 
     .modal-backdrop {
         position: fixed;
@@ -617,9 +890,9 @@
         z-index: 40;
         display: grid;
         place-items: center;
-        padding: 24px;
-        background: #05090fcc;
-        backdrop-filter: blur(4px);
+        padding: 22px;
+        background: #020503e0;
+        backdrop-filter: blur(3px);
     }
 
     .modal-card {
@@ -628,10 +901,10 @@
         max-height: 85vh;
         display: flex;
         flex-direction: column;
-        background: #101827;
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        box-shadow: 0 30px 90px #000a;
+        background: #061009;
+        border: 1px solid #00ff8830;
+        border-radius: var(--radius);
+        box-shadow: 0 0 60px #00ff8815, 0 30px 90px #000c;
     }
 
     .modal-header {
@@ -639,226 +912,197 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding: 18px 20px;
+        padding: 14px 16px;
         border-bottom: 1px solid var(--border);
+        background: #00ff8805;
     }
 
     .modal-header h3 {
         margin: 0;
-        font-size: 16px;
+        font-size: 12px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: var(--accent);
         overflow-wrap: anywhere;
     }
 
-    .modal-body {
-        padding: 8px 20px 20px;
-        overflow-y: auto;
-    }
+    .modal-body { padding: 6px 16px 16px; overflow-y: auto; }
 
-    .detail-group {
-        margin-top: 18px;
-    }
+    .detail-group { margin-top: 16px; }
 
     .detail-group h4 {
-        margin: 0 0 8px;
-        font-size: 11px;
-        letter-spacing: 1.2px;
+        margin: 0 0 7px;
+        font-size: 9px;
+        letter-spacing: 2px;
         text-transform: uppercase;
-        color: #71819b;
+        color: #33543f;
     }
+
+    .detail-group h4::before { content: "// "; color: var(--accent-dim); }
 
     .detail-row {
         display: flex;
         justify-content: space-between;
         gap: 16px;
-        padding: 9px 0;
-        border-bottom: 1px solid #ffffff0a;
-        font-size: 13px;
+        padding: 8px 0;
+        border-bottom: 1px dashed #0f2a1a;
+        font-size: 11px;
     }
 
-    .detail-row span:first-child {
-        color: var(--muted);
-        flex: 0 0 auto;
-    }
+    .detail-row span:first-child { color: var(--muted); flex: 0 0 auto; }
 
     .detail-row span:last-child {
         text-align: right;
         overflow-wrap: anywhere;
+        color: var(--text);
     }
 
     /* ------------------------------------------------------ responsive */
 
     @media (max-width: 1100px) {
-        .stats-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .content-grid {
-            grid-template-columns: 1fr;
-        }
+        .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .content-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 760px) {
-        .topbar {
-            padding: 14px 16px;
-        }
+        .topbar { padding: 11px 14px; }
+        .topbar .brand-text p { display: none; }
+        .topbar-right { gap: 7px; }
+        .status-pill { display: none; }
 
-        .topbar .brand p {
-            display: none;
-        }
-
-        .topbar-right {
-            gap: 8px;
-        }
-
-        .status-pill {
-            display: none;
-        }
-
-        .layout {
-            grid-template-columns: 1fr;
-        }
+        .layout { grid-template-columns: 1fr; }
 
         .sidebar {
             display: flex;
-            gap: 6px;
-            padding: 10px;
+            gap: 5px;
+            padding: 9px;
             overflow-x: auto;
             border-right: 0;
             border-bottom: 1px solid var(--border);
         }
 
-        .sidebar-label,
-        .sidebar-footer {
-            display: none;
-        }
+        .sidebar-label, .sidebar-footer { display: none; }
 
         .nav-button {
             width: auto;
             flex: 0 0 auto;
             margin: 0;
-            padding: 10px 12px;
-            font-size: 12px;
+            padding: 9px 11px;
+            font-size: 10px;
         }
 
-        .nav-icon {
-            display: none;
-        }
+        .nav-icon { display: none; }
 
-        main {
-            padding: 20px 14px;
-        }
-
-        .page-header {
-            align-items: center;
-        }
-
-        .stats-grid {
-            gap: 10px;
-        }
-
-        .stat-card {
-            padding: 15px;
-        }
-
-        .stat-value {
-            font-size: 26px;
-        }
-
-        .panel-header,
-        .panel-body {
-            padding: 15px;
-        }
-
-        .login-card {
-            padding: 25px;
-        }
+        main { padding: 18px 13px; }
+        .page-header { align-items: center; }
+        .stats-grid { gap: 9px; }
+        .stat-card { padding: 13px; }
+        .stat-value { font-size: 23px; }
+        .panel-header, .panel-body { padding: 13px; }
+        .login-card { padding: 22px; }
     }
 
     @media (max-width: 380px) {
-        .stats-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .brand h1 {
-            font-size: 16px;
-        }
-
-        .logout-button {
-            padding: 9px;
-            font-size: 12px;
-        }
+        .stats-grid { grid-template-columns: 1fr; }
+        .brand-text h1 { font-size: 14px; letter-spacing: 2px; }
+        .logout-button { padding: 8px; font-size: 10px; }
     }
 </style>
 </head>
 <body>
 
-<!-- ============================================================= LOGIN -->
+<canvas id="matrix"></canvas>
 
+<!-- ============================================================== LOGIN -->
+
+<div class="layer">
 <section class="login-screen" id="loginScreen">
-    <div class="login-card">
+    <div class="login-card bracket">
         <div class="brand">
-            <div class="brand-icon">SL</div>
-            <div>
-                <h1>ScreenLink Remote</h1>
-                <p>Administration console</p>
+            <svg class="logo-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                <polygon points="24,2.5 43.5,13.5 43.5,34.5 24,45.5 4.5,34.5 4.5,13.5"
+                         stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+                <path d="M18 17.5 L11.5 24 L18 30.5"
+                      stroke="currentColor" stroke-width="2.4"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M30 17.5 L36.5 24 L30 30.5"
+                      stroke="currentColor" stroke-width="2.4"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M26.5 15 L21.5 33"
+                      stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <div class="brand-text">
+                <h1>TPC PANEL</h1>
+                <p>Remote Ops Console</p>
             </div>
         </div>
 
-        <h2>Welcome back</h2>
-        <p>Sign in with your administrator account to manage registered devices and support sessions.</p>
+        <div class="boot-line" id="bootLine"></div>
+
+        <h2>Authenticate</h2>
+        <p>Enter operator credentials to access the device fleet.</p>
 
         <form id="loginForm">
-            <label for="username">Admin username</label>
-            <input
-                id="username"
-                name="username"
-                autocomplete="username"
-                placeholder="Enter username"
-                required
-            >
+            <label for="username">Operator</label>
+            <input id="username" name="username" autocomplete="username"
+                   placeholder="username" required>
 
-            <label for="password">Password</label>
-            <input
-                id="password"
-                name="password"
-                type="password"
-                autocomplete="current-password"
-                placeholder="Enter password"
-                required
-            >
+            <label for="password">Passkey</label>
+            <input id="password" name="password" type="password"
+                   autocomplete="current-password" placeholder="••••••••" required>
 
             <button class="primary-button login-submit" id="loginButton" type="submit">
-                Sign in
+                ▸ Connect
             </button>
 
             <div class="message" id="loginMessage" role="status" aria-live="polite"></div>
         </form>
 
-        <p class="small" style="margin:22px 0 0">
-            Secure access · Authorized administrators only
-        </p>
+        <div class="login-foot">
+            <span>Secure channel</span>
+            <a href="https://t.me/icivan" target="_blank" rel="noopener">owner ↗</a>
+        </div>
     </div>
 </section>
 
-<!-- ========================================================= DASHBOARD -->
+<!-- ========================================================== DASHBOARD -->
 
 <div class="app" id="dashboardApp" hidden>
     <header class="topbar">
         <div class="brand">
-            <div class="brand-icon">SL</div>
-            <div>
-                <h1>ScreenLink Remote</h1>
-                <p>Remote support administration</p>
+            <svg class="logo-mark" style="width:34px;height:34px" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                <polygon points="24,2.5 43.5,13.5 43.5,34.5 24,45.5 4.5,34.5 4.5,13.5"
+                         stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+                <path d="M18 17.5 L11.5 24 L18 30.5"
+                      stroke="currentColor" stroke-width="2.6"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M30 17.5 L36.5 24 L30 30.5"
+                      stroke="currentColor" stroke-width="2.6"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M26.5 15 L21.5 33"
+                      stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            </svg>
+            <div class="brand-text">
+                <h1>TPC PANEL</h1>
+                <p>Remote Ops Console</p>
             </div>
         </div>
 
         <div class="topbar-right">
             <span class="status-pill">
                 <span class="status-dot"></span>
-                <span id="connectionLabel">Checking server</span>
+                <span id="connectionLabel">Checking</span>
             </span>
+
+            <a class="telegram-button" href="https://t.me/icivan"
+               target="_blank" rel="noopener" title="Contact owner on Telegram">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                    <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+                </svg>
+            </a>
+
             <button class="logout-button" id="logoutButton" type="button">
-                Sign out
+                Disconnect
             </button>
         </div>
     </header>
@@ -871,20 +1115,20 @@
                 <button class="nav-button active" data-page="overview" type="button">
                     <span class="nav-icon">▦</span> Overview
                 </button>
-
                 <button class="nav-button" data-page="devices" type="button">
                     <span class="nav-icon">▣</span> Devices
                 </button>
-
+                <button class="nav-button" data-page="live" type="button">
+                    <span class="nav-icon">▶</span> Live view
+                </button>
                 <button class="nav-button" data-page="sessions" type="button">
                     <span class="nav-icon">◉</span> Sessions
                 </button>
-
                 <button class="nav-button" data-page="activity" type="button">
-                    <span class="nav-icon">≡</span> Activity logs
+                    <span class="nav-icon">≡</span> Logs
                 </button>
 
-                <p class="sidebar-label" style="margin-top:28px">System</p>
+                <p class="sidebar-label" style="margin-top:24px">System</p>
 
                 <button class="nav-button" data-page="settings" type="button">
                     <span class="nav-icon">⚙</span> Settings
@@ -892,70 +1136,72 @@
             </div>
 
             <div class="sidebar-footer">
-                <div>ScreenLink Remote</div>
-                <div>Admin Console · v2.1</div>
+                <div>TPC PANEL · v3.0</div>
+                <div>
+                    owner:
+                    <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a>
+                </div>
             </div>
         </aside>
 
         <main>
             <div class="notice" id="globalNotice" hidden></div>
 
-            <!-- ------------------------------------------------ OVERVIEW -->
+            <!-- ---------------------------------------------- OVERVIEW -->
 
             <section class="page-section active" id="page-overview">
                 <div class="page-header">
                     <div>
                         <h2>Overview</h2>
-                        <p>Monitor your registered devices and support activity.</p>
+                        <p>Fleet status and live support activity</p>
                     </div>
-
                     <button class="secondary-button" id="refreshButton" type="button">
                         ↻ Refresh
                     </button>
                 </div>
 
                 <div class="stats-grid">
-                    <article class="stat-card">
+                    <article class="stat-card bracket">
                         <div class="stat-top">
                             <span class="stat-label">Total devices</span>
                             <span class="stat-icon">▣</span>
                         </div>
                         <div class="stat-value" id="totalDevices">—</div>
-                        <div class="stat-foot">Registered devices</div>
+                        <div class="stat-foot">registered</div>
                     </article>
 
-                    <article class="stat-card">
+                    <article class="stat-card bracket">
                         <div class="stat-top">
-                            <span class="stat-label">Active devices</span>
+                            <span class="stat-label">Active</span>
                             <span class="stat-icon">◉</span>
                         </div>
                         <div class="stat-value" id="activeDevices">—</div>
-                        <div class="stat-foot" id="chargingDevicesFoot">Seen in last 90 seconds</div>
+                        <div class="stat-foot" id="chargingDevicesFoot">last 90s</div>
                     </article>
 
-                    <article class="stat-card">
+                    <article class="stat-card bracket">
                         <div class="stat-top">
-                            <span class="stat-label">Support sessions</span>
+                            <span class="stat-label">Sessions</span>
                             <span class="stat-icon">⇄</span>
                         </div>
                         <div class="stat-value" id="activeSessions">—</div>
-                        <div class="stat-foot">Active or pending workflow states</div>
+                        <div class="stat-foot" id="streamingDevicesFoot">open workflow</div>
                     </article>
 
-                    <article class="stat-card">
+                    <article class="stat-card bracket">
                         <div class="stat-top">
                             <span class="stat-label">Database</span>
                             <span class="stat-icon">⌘</span>
                         </div>
-                        <div class="stat-value" id="databaseStatus" style="font-size:23px">Checking</div>
-                        <div class="stat-foot" id="lastUpdated">Waiting for response</div>
+                        <div class="stat-value" id="databaseStatus" style="font-size:20px">Checking</div>
+                        <div class="stat-foot" id="lastUpdated">waiting</div>
                     </article>
                 </div>
 
                 <div class="content-grid">
-                    <section class="panel">
+                    <section class="panel bracket">
                         <div class="panel-header">
-                            <h3>Recently registered devices</h3>
+                            <h3>Recent registrations</h3>
                             <button class="secondary-button" data-goto="devices" type="button">
                                 View all
                             </button>
@@ -974,7 +1220,7 @@
                         </div>
                     </section>
 
-                    <section class="panel">
+                    <section class="panel bracket">
                         <div class="panel-header">
                             <h3>System status</h3>
                         </div>
@@ -982,7 +1228,7 @@
                             <div class="connection-row">
                                 <div>
                                     <div class="connection-name">Backend API</div>
-                                    <div class="connection-desc">Application health check</div>
+                                    <div class="connection-desc">/health</div>
                                 </div>
                                 <span class="badge" id="apiBadge">Checking</span>
                             </div>
@@ -990,39 +1236,39 @@
                             <div class="connection-row">
                                 <div>
                                     <div class="connection-name">MongoDB</div>
-                                    <div class="connection-desc">Database connectivity</div>
+                                    <div class="connection-desc">/health/database</div>
                                 </div>
                                 <span class="badge" id="dbBadge">Checking</span>
                             </div>
 
                             <div class="connection-row">
                                 <div>
-                                    <div class="connection-name">Admin session</div>
-                                    <div class="connection-desc">Signed-in administrator</div>
+                                    <div class="connection-name">Operator session</div>
+                                    <div class="connection-desc">authenticated</div>
                                 </div>
-                                <span class="badge online" id="adminBadge">Authenticated</span>
+                                <span class="badge online" id="adminBadge">Active</span>
                             </div>
                         </div>
                     </section>
                 </div>
             </section>
 
-            <!-- ------------------------------------------------- DEVICES -->
+            <!-- ----------------------------------------------- DEVICES -->
 
             <section class="page-section" id="page-devices">
                 <div class="page-header">
                     <div>
                         <h2>Devices</h2>
-                        <p>Registered devices with live SIM, battery and system telemetry.</p>
+                        <p>Registered fleet with live SIM, power and network telemetry</p>
                     </div>
                     <button class="secondary-button" data-refresh="devices" type="button">
                         ↻ Refresh
                     </button>
                 </div>
 
-                <section class="panel">
+                <section class="panel bracket">
                     <div class="panel-header">
-                        <h3>Registered devices</h3>
+                        <h3>Fleet</h3>
                         <span class="badge" id="deviceCount">0 devices</span>
                     </div>
                     <div class="table-wrap">
@@ -1031,7 +1277,7 @@
                                 <tr>
                                     <th>Device</th>
                                     <th>Carrier / SIM</th>
-                                    <th>Battery</th>
+                                    <th>Power</th>
                                     <th>Network</th>
                                     <th>Status</th>
                                     <th>Registered</th>
@@ -1044,22 +1290,66 @@
                 </section>
             </section>
 
-            <!-- ------------------------------------------------ SESSIONS -->
+            <!-- --------------------------------------------- LIVE VIEW -->
+
+            <section class="page-section" id="page-live">
+                <div class="page-header">
+                    <div>
+                        <h2 id="liveTitle">Live view</h2>
+                        <p id="liveSubtitle">No target selected</p>
+                    </div>
+                    <div class="live-actions">
+                        <button class="secondary-button" id="liveReconnect" type="button">
+                            ↻ Reconnect
+                        </button>
+                        <button class="secondary-button" id="liveDisconnect" type="button">
+                            ✕ Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <div class="live-toolbar">
+                    <button class="tool-button" data-global="back" type="button">◀ Back</button>
+                    <button class="tool-button" data-global="home" type="button">⌂ Home</button>
+                    <button class="tool-button" data-global="recents" type="button">▢ Recents</button>
+                    <button class="tool-button" data-global="notifications" type="button">≡ Notifs</button>
+                    <span class="toolbar-spacer"></span>
+                    <label class="toggle">
+                        <input type="checkbox" id="liveControlToggle" checked>
+                        <span>Control</span>
+                    </label>
+                    <span class="badge" id="liveStatus">Offline</span>
+                    <span class="badge" id="liveFps">0 fps</span>
+                    <span class="badge" id="liveLatency">— ms</span>
+                </div>
+
+                <div class="screen-wrap bracket">
+                    <canvas id="screenCanvas" width="720" height="1280"></canvas>
+                    <div class="screen-overlay" id="screenOverlay">Select a device to start</div>
+                </div>
+
+                <div class="live-meta">
+                    <span id="liveDeviceMeta">—</span>
+                    <span id="liveResolution">—</span>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------- SESSIONS -->
 
             <section class="page-section" id="page-sessions">
                 <div class="page-header">
                     <div>
-                        <h2>Support sessions</h2>
-                        <p>Review session records and their current status.</p>
+                        <h2>Sessions</h2>
+                        <p>Support session history</p>
                     </div>
                     <button class="secondary-button" data-refresh="sessions" type="button">
                         ↻ Refresh
                     </button>
                 </div>
 
-                <section class="panel">
+                <section class="panel bracket">
                     <div class="panel-header">
-                        <h3>Session history</h3>
+                        <h3>Session log</h3>
                         <span class="badge" id="sessionCount">0 sessions</span>
                     </div>
                     <div class="table-wrap">
@@ -1078,22 +1368,22 @@
                 </section>
             </section>
 
-            <!-- ------------------------------------------------ ACTIVITY -->
+            <!-- -------------------------------------------------- LOGS -->
 
             <section class="page-section" id="page-activity">
                 <div class="page-header">
                     <div>
-                        <h2>Activity logs</h2>
-                        <p>Recent administrative and system events.</p>
+                        <h2>Logs</h2>
+                        <p>Recent operator and system events</p>
                     </div>
                     <button class="secondary-button" data-refresh="activity" type="button">
                         ↻ Refresh
                     </button>
                 </div>
 
-                <section class="panel">
+                <section class="panel bracket">
                     <div class="panel-header">
-                        <h3>Recent activity</h3>
+                        <h3>Event stream</h3>
                         <span class="badge" id="activityCount">0 events</span>
                     </div>
                     <div class="table-wrap">
@@ -1111,77 +1401,84 @@
                 </section>
             </section>
 
-            <!-- ------------------------------------------------ SETTINGS -->
+            <!-- ---------------------------------------------- SETTINGS -->
 
             <section class="page-section" id="page-settings">
                 <div class="page-header">
                     <div>
                         <h2>Settings</h2>
-                        <p>Application information and security guidance.</p>
+                        <p>Build info, endpoints and operator notes</p>
                     </div>
                 </div>
 
-                <section class="panel">
+                <section class="panel bracket">
                     <div class="panel-header">
                         <h3>Application</h3>
                     </div>
                     <div class="panel-body">
                         <div class="settings-row">
-                            <strong>Application name</strong>
-                            <p>ScreenLink Remote</p>
+                            <strong>Panel</strong>
+                            <p>TPC PANEL · Remote Ops Console v3.0</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Backend health endpoint</strong>
+                            <strong>Owner</strong>
+                            <p>
+                                <a href="https://t.me/icivan" target="_blank" rel="noopener">
+                                    https://t.me/icivan
+                                </a>
+                            </p>
+                        </div>
+                        <div class="settings-row">
+                            <strong>Backend health</strong>
                             <p>/health</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Database health endpoint</strong>
+                            <strong>Database health</strong>
                             <p>/health/database</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Admin authentication</strong>
-                            <p>Uses the authenticated admin session established by the backend.</p>
+                            <strong>Device socket</strong>
+                            <p>/ws/device/{registration_id}</p>
                         </div>
                         <div class="settings-row">
-                            <strong>Device telemetry</strong>
+                            <strong>Viewer socket</strong>
+                            <p>/ws/view/{device_id}</p>
+                        </div>
+                        <div class="settings-row">
+                            <strong>Telemetry</strong>
                             <p>
-                                Registered devices report model, Android version, SIM carrier,
-                                SIM number, battery level, charging state, network type and
-                                system resources. Telemetry refreshes with every heartbeat
-                                (roughly every 30 seconds while the app is in the foreground).
+                                Devices report model, Android version, SIM carrier and number,
+                                battery level, charging state, network type and system
+                                resources. Refreshes with every heartbeat (~30s).
                             </p>
                         </div>
                         <div class="settings-row">
-                            <strong>Security reminder</strong>
+                            <strong>Remote control</strong>
                             <p>
-                                Keep SESSION_SECRET, ADMIN_API_KEY, database credentials
-                                and administrator password on the server. Never place
-                                secrets in this HTML file or expose them in browser JavaScript.
+                                Requires the accessibility service enabled on the target
+                                device. Click = tap, drag = swipe, press-and-hold = long press.
                             </p>
                         </div>
                         <div class="settings-row">
-                            <strong>Remote support consent</strong>
+                            <strong>Secrets</strong>
                             <p>
-                                Only support devices whose owners have knowingly approved
-                                the session. A client-supplied approval flag alone is not
-                                proof of consent.
+                                Keep SESSION_SECRET, ADMIN_API_KEY and database credentials
+                                server-side. Never inline them in this file.
                             </p>
                         </div>
                     </div>
                 </section>
             </section>
 
-            <div class="footer">
-                ScreenLink Remote · Authorized support administration
-            </div>
+            <div class="footer">TPC PANEL · authorized operator access</div>
         </main>
     </div>
 </div>
 
-<!-- ============================================================ MODAL -->
+<!-- ============================================================= MODAL -->
 
 <div class="modal-backdrop" id="deviceModal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card bracket" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-header">
             <h3 id="modalTitle">Device details</h3>
             <button class="secondary-button" id="modalClose" type="button">Close</button>
@@ -1207,7 +1504,66 @@
         toastTimer: null
     };
 
-    /* ------------------------------------------------------------ utils */
+    /* ----------------------------------------------------- matrix rain */
+
+    (function matrixRain() {
+        const canvas = $("#matrix");
+        const ctx = canvas.getContext("2d");
+        const glyphs = "01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ<>{}[]/\\|=$#*+";
+        let columns = 0;
+        let drops = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            columns = Math.floor(canvas.width / 14);
+            drops = new Array(columns).fill(0).map(() => Math.random() * -60);
+        }
+
+        function draw() {
+            ctx.fillStyle = "rgba(3, 6, 4, 0.09)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#00ff88";
+            ctx.font = "13px 'JetBrains Mono', monospace";
+
+            for (let i = 0; i < columns; i++) {
+                const char = glyphs[Math.floor(Math.random() * glyphs.length)];
+                ctx.fillText(char, i * 14, drops[i] * 16);
+
+                if (drops[i] * 16 > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        window.addEventListener("resize", resize);
+        resize();
+        setInterval(draw, 70);
+    })();
+
+    /* --------------------------------------------------- boot typing */
+
+    (function bootSequence() {
+        const line = $("#bootLine");
+        if (!line) return;
+
+        const text = "> initializing tpc panel... ok";
+        let index = 0;
+
+        const tick = setInterval(() => {
+            line.textContent = text.slice(0, ++index);
+            if (index >= text.length) {
+                clearInterval(tick);
+                const cursor = document.createElement("span");
+                cursor.className = "cursor";
+                line.appendChild(cursor);
+            }
+        }, 42);
+    })();
+
+    /* ---------------------------------------------------------- utils */
 
     function showToast(message) {
         const toast = $("#toast");
@@ -1215,9 +1571,7 @@
         toast.hidden = false;
 
         clearTimeout(state.toastTimer);
-        state.toastTimer = setTimeout(() => {
-            toast.hidden = true;
-        }, 3500);
+        state.toastTimer = setTimeout(() => { toast.hidden = true; }, 3500);
     }
 
     function setLoginMessage(message, type = "error") {
@@ -1233,30 +1587,17 @@
 
     function formatDate(value) {
         if (!value) return "—";
-
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-
         return date.toLocaleString();
     }
 
     function safeValue(value, fallback = "—") {
-        if (value === null || value === undefined || value === "") {
-            return fallback;
-        }
-
-        if (typeof value === "boolean") {
-            return value ? "Yes" : "No";
-        }
-
+        if (value === null || value === undefined || value === "") return fallback;
+        if (typeof value === "boolean") return value ? "Yes" : "No";
         if (typeof value === "object") {
-            try {
-                return JSON.stringify(value);
-            } catch {
-                return fallback;
-            }
+            try { return JSON.stringify(value); } catch { return fallback; }
         }
-
         return String(value);
     }
 
@@ -1301,15 +1642,11 @@
         tbody.appendChild(row);
     }
 
-    /* --------------------------------------------------- device helpers */
+    /* ------------------------------------------------- device helpers */
 
     function getDeviceName(device) {
-        return device.device_name ||
-            device.name ||
-            device.model ||
-            device.device_id ||
-            device._id ||
-            "Unnamed device";
+        return device.device_name || device.name || device.model ||
+            device.device_id || device._id || "Unnamed device";
     }
 
     function getDeviceStatus(device) {
@@ -1330,7 +1667,7 @@
         if (level === null || level === undefined || level < 0) return "—";
 
         const charging = telemetry.battery_charging ?? device.battery_charging;
-        return charging ? `${level}% · charging` : `${level}%`;
+        return charging ? `${level}% ⚡` : `${level}%`;
     }
 
     function getDeviceModelLine(device) {
@@ -1345,7 +1682,7 @@
         return parts.join(" · ") || "—";
     }
 
-    /* --------------------------------------------------------- renderers */
+    /* -------------------------------------------------------- renderers */
 
     function renderDevices() {
         const body = $("#devicesBody");
@@ -1354,8 +1691,8 @@
         $("#deviceCount").textContent = `${state.devices.length} devices`;
 
         if (!state.devices.length) {
-            renderEmpty(body, 7, "No registered devices found.");
-            renderEmpty(recentBody, 3, "No devices registered yet.");
+            renderEmpty(body, 7, "No registered devices found");
+            renderEmpty(recentBody, 3, "No devices registered yet");
             return;
         }
 
@@ -1366,7 +1703,6 @@
             const telemetry = getTelemetry(device);
             const row = document.createElement("tr");
 
-            // Device + model/OS subtitle
             const nameCell = document.createElement("td");
             nameCell.textContent = getDeviceName(device);
 
@@ -1376,7 +1712,6 @@
             nameCell.appendChild(sub);
             row.appendChild(nameCell);
 
-            // Carrier / SIM
             const carrierCell = document.createElement("td");
             const carrier = telemetry.sim_carrier || device.sim_carrier || "—";
             const simNumber = telemetry.sim_number || device.sim_number || "";
@@ -1385,13 +1720,10 @@
 
             const simSub = document.createElement("span");
             simSub.className = "cell-sub";
-            simSub.textContent = simNumber
-                ? `SIM ${simNumber}`
-                : "number not exposed";
+            simSub.textContent = simNumber ? `SIM ${simNumber}` : "number not exposed";
             carrierCell.appendChild(simSub);
             row.appendChild(carrierCell);
 
-            // Battery badge
             const batteryCell = document.createElement("td");
             const batteryBadge = document.createElement("span");
             const charging = telemetry.battery_charging ?? device.battery_charging;
@@ -1407,28 +1739,34 @@
                 device.created_at || device.registered_at || device.updated_at
             ));
 
-            // Details action
             const actionCell = document.createElement("td");
+
             const detailsButton = document.createElement("button");
             detailsButton.type = "button";
             detailsButton.className = "row-button";
-            detailsButton.textContent = "Details";
+            detailsButton.textContent = "Info";
             detailsButton.addEventListener("click", () => openDeviceDetails(device));
             actionCell.appendChild(detailsButton);
-            row.appendChild(actionCell);
 
+            const liveButton = document.createElement("button");
+            liveButton.type = "button";
+            liveButton.className = "row-button danger";
+            liveButton.style.marginLeft = "5px";
+            liveButton.textContent = "Live";
+            liveButton.addEventListener("click", () => openLive(device));
+            actionCell.appendChild(liveButton);
+
+            row.appendChild(actionCell);
             body.appendChild(row);
         });
 
         state.devices.slice(0, 5).forEach((device) => {
             const row = document.createElement("tr");
-
             appendCell(row, getDeviceName(device));
             createBadgeCell(row, getDeviceStatus(device));
             appendCell(row, formatDate(
                 device.created_at || device.registered_at || device.updated_at
             ));
-
             recentBody.appendChild(row);
         });
     }
@@ -1438,7 +1776,7 @@
         $("#sessionCount").textContent = `${state.sessions.length} sessions`;
 
         if (!state.sessions.length) {
-            renderEmpty(body, 4, "No support sessions found.");
+            renderEmpty(body, 4, "No support sessions found");
             return;
         }
 
@@ -1446,18 +1784,10 @@
 
         state.sessions.forEach((session) => {
             const row = document.createElement("tr");
-
-            appendCell(
-                row,
-                session.session_id ||
-                session._id ||
-                session.id
-            );
-
+            appendCell(row, session.session_id || session._id || session.id);
             createBadgeCell(row, session.status);
             appendCell(row, formatDate(session.created_at));
             appendCell(row, formatDate(session.updated_at || session.ended_at));
-
             body.appendChild(row);
         });
     }
@@ -1467,7 +1797,7 @@
         $("#activityCount").textContent = `${state.activity.length} events`;
 
         if (!state.activity.length) {
-            renderEmpty(body, 3, "No activity logs found.");
+            renderEmpty(body, 3, "No activity logs found");
             return;
         }
 
@@ -1476,31 +1806,18 @@
         state.activity.forEach((event) => {
             const row = document.createElement("tr");
 
-            appendCell(
-                row,
-                event.event ||
-                event.action ||
-                event.event_type ||
-                event.type ||
-                "Event"
-            );
+            appendCell(row, event.event || event.action ||
+                event.event_type || event.type || "Event");
 
-            appendCell(
-                row,
-                event.message ||
-                event.details ||
-                event.description ||
-                event.admin_username ||
-                "—"
-            );
+            appendCell(row, event.message || event.details ||
+                event.description || event.admin_username || "—");
 
             appendCell(row, formatDate(event.created_at || event.timestamp));
-
             body.appendChild(row);
         });
     }
 
-    /* ------------------------------------------------------------- modal */
+    /* ------------------------------------------------------------ modal */
 
     function detailGroup(title, rows) {
         const group = document.createElement("div");
@@ -1538,7 +1855,7 @@
         modalBody.replaceChildren();
 
         modalBody.appendChild(detailGroup("Identity", [
-            ["Device name", getDeviceName(device)],
+            ["Device", getDeviceName(device)],
             ["Manufacturer", telemetry.manufacturer],
             ["Brand", telemetry.brand],
             ["Model", telemetry.model],
@@ -1549,9 +1866,9 @@
         ]));
 
         modalBody.appendChild(detailGroup("Status", [
-            ["Status", getDeviceStatus(device)],
+            ["State", getDeviceStatus(device)],
             ["Last seen", formatDate(device.last_seen)],
-            ["Telemetry updated", formatDate(
+            ["Telemetry", formatDate(
                 telemetry.telemetry_updated_at || device.telemetry_updated_at
             )],
             ["Registered", formatDate(device.created_at || device.registered_at)]
@@ -1561,12 +1878,13 @@
             ["Carrier", telemetry.sim_carrier || device.sim_carrier],
             ["SIM operator", telemetry.sim_operator],
             ["SIM number", telemetry.sim_number || device.sim_number],
-            ["SIM serial (ICCID)", telemetry.sim_serial],
+            ["Number source", telemetry.sim_number_source],
+            ["SIM serial", telemetry.sim_serial],
             ["SIM country", telemetry.sim_country],
-            ["SIM slots detected", sims.length || 0],
+            ["Slots", sims.length || 0],
             ["Network type", telemetry.network_type],
             ["Local IP", telemetry.local_ip],
-            ["Wi-Fi connected", telemetry.wifi_connected],
+            ["Wi-Fi", telemetry.wifi_connected],
             ["Mobile data", telemetry.mobile_connected]
         ]));
 
@@ -1574,26 +1892,26 @@
             modalBody.appendChild(detailGroup(`SIM slot ${(sim.slot ?? index) + 1}`, [
                 ["Carrier", sim.carrier],
                 ["Number", sim.number],
+                ["Source", sim.number_source],
                 ["Country", sim.country]
             ]));
         });
 
         modalBody.appendChild(detailGroup("Power", [
-            ["Battery level", telemetry.battery_level != null
-                ? `${telemetry.battery_level}%`
-                : null],
+            ["Level", telemetry.battery_level != null
+                ? `${telemetry.battery_level}%` : null],
             ["Charging", telemetry.battery_charging],
-            ["Plugged source", telemetry.battery_plugged],
-            ["Battery temp (°C)", telemetry.battery_temperature_c]
+            ["Source", telemetry.battery_plugged],
+            ["Temp (°C)", telemetry.battery_temperature_c]
         ]));
 
         modalBody.appendChild(detailGroup("System", [
-            ["Android version", telemetry.android_version],
+            ["Android", telemetry.android_version],
             ["SDK", telemetry.sdk_int],
             ["Screen", telemetry.screen_resolution],
-            ["Density (dpi)", telemetry.screen_density],
+            ["Density", telemetry.screen_density],
             ["RAM total (MB)", telemetry.ram_total_mb],
-            ["RAM available (MB)", telemetry.ram_available_mb],
+            ["RAM free (MB)", telemetry.ram_available_mb],
             ["Storage total (GB)", telemetry.storage_total_gb],
             ["Storage free (GB)", telemetry.storage_free_gb]
         ]));
@@ -1601,11 +1919,9 @@
         $("#deviceModal").hidden = false;
     }
 
-    function closeDeviceModal() {
-        $("#deviceModal").hidden = true;
-    }
+    function closeDeviceModal() { $("#deviceModal").hidden = true; }
 
-    /* --------------------------------------------------------------- api */
+    /* -------------------------------------------------------------- api */
 
     async function api(path, options = {}) {
         const response = await fetch(path, {
@@ -1635,11 +1951,8 @@
         }
 
         if (!response.ok) {
-            throw new Error(
-                data.detail ||
-                data.message ||
-                `Request failed (${response.status})`
-            );
+            throw new Error(data.detail || data.message ||
+                `Request failed (${response.status})`);
         }
 
         return data;
@@ -1649,6 +1962,8 @@
 
     function showLogin() {
         state.authenticated = false;
+        disconnectLive();
+        closeDeviceModal();
         $("#dashboardApp").hidden = true;
         $("#loginScreen").hidden = false;
     }
@@ -1662,7 +1977,6 @@
     async function checkAuth() {
         try {
             const result = await api("/admin/auth/status");
-
             if (result.authenticated) {
                 showDashboard();
                 await refreshAll();
@@ -1670,15 +1984,10 @@
                 showLogin();
             }
         } catch (error) {
-            if (error.auth) {
-                showLogin();
-                return;
-            }
-
             showLogin();
-            setLoginMessage(
-                "Could not verify the admin session. Check the backend connection."
-            );
+            if (!error.auth) {
+                setLoginMessage("Could not verify session. Check backend link.");
+            }
         }
     }
 
@@ -1688,38 +1997,32 @@
         try {
             const health = await api("/health");
             $("#connectionLabel").textContent =
-                health.status === "ok" ? "Server online" : "Server responding";
-
-            setBadge(
-                $("#apiBadge"),
+                health.status === "ok" ? "Link up" : "Degraded";
+            setBadge($("#apiBadge"),
                 health.status === "ok" ? "Online" : "Check",
-                health.status === "ok" ? "online" : "pending"
-            );
+                health.status === "ok" ? "online" : "pending");
         } catch {
-            $("#connectionLabel").textContent = "Server issue";
-            setBadge($("#apiBadge"), "Unavailable", "error");
+            $("#connectionLabel").textContent = "Link down";
+            setBadge($("#apiBadge"), "Down", "error");
         }
 
         try {
             const db = await api("/health/database");
             const connected = db.status === "ok";
 
-            $("#databaseStatus").textContent = connected ? "Connected" : "Issue";
-            $("#databaseStatus").style.fontSize = connected ? "23px" : "21px";
+            $("#databaseStatus").textContent = connected ? "Linked" : "Issue";
+            $("#databaseStatus").style.fontSize = connected ? "20px" : "17px";
 
-            setBadge(
-                $("#dbBadge"),
-                connected ? "Connected" : "Unavailable",
-                connected ? "online" : "error"
-            );
+            setBadge($("#dbBadge"),
+                connected ? "Connected" : "Down",
+                connected ? "online" : "error");
         } catch {
-            $("#databaseStatus").textContent = "Unavailable";
-            $("#databaseStatus").style.fontSize = "19px";
-            setBadge($("#dbBadge"), "Unavailable", "error");
+            $("#databaseStatus").textContent = "Down";
+            $("#databaseStatus").style.fontSize = "17px";
+            setBadge($("#dbBadge"), "Down", "error");
         }
 
-        $("#lastUpdated").textContent =
-            `Last checked ${new Date().toLocaleTimeString()}`;
+        $("#lastUpdated").textContent = new Date().toLocaleTimeString();
     }
 
     async function loadOverview() {
@@ -1727,110 +2030,89 @@
             const data = await api("/admin/overview");
 
             $("#totalDevices").textContent = safeValue(
-                data.registered_devices ?? data.total_devices ?? data.devices_total,
-                "0"
-            );
+                data.registered_devices ?? data.total_devices, "0");
 
             $("#activeDevices").textContent = safeValue(
-                data.active_devices ?? data.devices_active,
-                "0"
-            );
+                data.active_devices ?? data.devices_active, "0");
 
             $("#activeSessions").textContent = safeValue(
-                data.active_sessions ?? data.sessions_active,
-                "0"
-            );
+                data.active_sessions ?? data.sessions_active, "0");
 
             const charging = data.charging_devices;
             $("#chargingDevicesFoot").textContent =
                 charging === null || charging === undefined
-                    ? "Seen in last 90 seconds"
-                    : `${charging} currently charging`;
+                    ? "last 90s"
+                    : `${charging} charging`;
+
+            const streaming = data.streaming_devices;
+            $("#streamingDevicesFoot").textContent =
+                streaming === null || streaming === undefined
+                    ? "open workflow"
+                    : `${streaming} streaming`;
         } catch (error) {
             if (error.auth) throw error;
-
             $("#totalDevices").textContent = "—";
             $("#activeDevices").textContent = "—";
             $("#activeSessions").textContent = "—";
-            $("#chargingDevicesFoot").textContent = "Seen in last 90 seconds";
-
-            showToast("Overview could not be loaded: " + error.message);
+            showToast("overview failed: " + error.message);
         }
     }
 
     async function loadDevices() {
         const data = await api("/admin/devices");
-        state.devices = Array.isArray(data)
-            ? data
-            : data.devices || data.items || [];
-
+        state.devices = Array.isArray(data) ? data : data.devices || data.items || [];
         renderDevices();
     }
 
     async function loadSessions() {
         const data = await api("/admin/sessions");
-        state.sessions = Array.isArray(data)
-            ? data
-            : data.sessions || data.items || [];
-
+        state.sessions = Array.isArray(data) ? data : data.sessions || data.items || [];
         renderSessions();
     }
 
     async function loadActivity() {
         const data = await api("/admin/activity");
-        state.activity = Array.isArray(data)
-            ? data
-            : data.activity || data.logs || data.items || [];
-
+        state.activity = Array.isArray(data) ? data : data.activity || data.logs || [];
         renderActivity();
     }
 
-    /* ------------------------------------------------------------ refresh */
+    /* ---------------------------------------------------------- refresh */
 
     async function refreshAll() {
         if (!state.authenticated) return;
 
         $("#refreshButton").disabled = true;
-        $("#refreshButton").textContent = "Refreshing…";
+        $("#refreshButton").textContent = "Syncing…";
 
         try {
             await loadHealth();
             await loadOverview();
 
             const results = await Promise.allSettled([
-                loadDevices(),
-                loadSessions(),
-                loadActivity()
+                loadDevices(), loadSessions(), loadActivity()
             ]);
 
             const authFailure = results.find(
-                (result) =>
-                    result.status === "rejected" &&
-                    result.reason &&
-                    result.reason.auth
+                (r) => r.status === "rejected" && r.reason && r.reason.auth
             );
 
             if (authFailure) {
                 showLogin();
-                setLoginMessage("Your session expired. Please sign in again.");
+                setLoginMessage("Session expired. Reconnect.");
                 return;
             }
 
-            const failed = results.filter((result) => result.status === "rejected");
-
-            if (failed.length) {
-                console.error("Some dashboard data failed to load:", failed);
-                showToast("Some sections could not load. Check backend endpoints.");
+            if (results.some((r) => r.status === "rejected")) {
+                showToast("some sections failed to sync");
             }
 
-            $("#lastUpdated").textContent =
-                `Updated ${new Date().toLocaleTimeString()}`;
+            $("#lastUpdated").textContent = new Date().toLocaleTimeString();
         } catch (error) {
             if (error.auth) {
                 showLogin();
-                setLoginMessage("Your session expired. Please sign in again.");
+                setLoginMessage("Session expired. Reconnect.");
             } else {
-                showToast(error.message || "Dashboard refresh failed.");
+                showToast(error.message || "refresh failed");
             }
         } finally {
             $("#refreshButton").disabled = false;
@@ -1843,19 +2125,18 @@
             if (section === "devices") await loadDevices();
             if (section === "sessions") await loadSessions();
             if (section === "activity") await loadActivity();
-
-            showToast("Section refreshed.");
+            showToast("section synced");
         } catch (error) {
             if (error.auth) {
                 showLogin();
-                setLoginMessage("Your session expired. Please sign in again.");
+                setLoginMessage("Session expired. Reconnect.");
             } else {
-                showToast(error.message || "Could not refresh section.");
+                showToast(error.message || "sync failed");
             }
         }
     }
 
-    /* ----------------------------------------------------------- navigate */
+    /* --------------------------------------------------------- navigate */
 
     function navigate(page) {
         document.querySelectorAll(".nav-button").forEach((button) => {
@@ -1866,44 +2147,270 @@
             section.classList.toggle("active", section.id === `page-${page}`);
         });
 
+        if (page === "live") startFpsTimer();
+        else stopFpsTimer();
+
         if (page === "devices") refreshSection("devices");
         if (page === "sessions") refreshSection("sessions");
         if (page === "activity") refreshSection("activity");
     }
 
-    /* --------------------------------------------------------- listeners */
+    /* -------------------------------------------------------- live view */
+
+    const live = {
+        socket: null,
+        device: null,
+        frames: 0,
+        fpsTimer: null,
+        decoding: false
+    };
+
+    function liveBadge(text, type = "") { setBadge($("#liveStatus"), text, type); }
+
+    function openLive(device) {
+        live.device = device;
+        navigate("live");
+
+        $("#liveTitle").textContent = getDeviceName(device);
+        $("#liveSubtitle").textContent = "Streaming from registered device";
+        $("#liveDeviceMeta").textContent = getDeviceModelLine(device);
+        $("#liveResolution").textContent = "—";
+        $("#screenOverlay").hidden = false;
+        $("#screenOverlay").textContent = "Connecting…";
+
+        connectLive();
+    }
+
+    function connectLive() {
+        if (!live.device) return;
+
+        disconnectLive();
+
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const socket = new WebSocket(`${proto}//${location.host}/ws/view/${live.device.id}`);
+        live.socket = socket;
+
+        liveBadge("Connecting", "pending");
+
+        socket.onopen = () => liveBadge("Connected", "online");
+
+        socket.onclose = () => {
+            liveBadge("Disconnected", "error");
+            $("#screenOverlay").hidden = false;
+            $("#screenOverlay").textContent = "Disconnected — press Reconnect";
+        };
+
+        socket.onerror = () => liveBadge("Socket error", "error");
+
+        socket.onmessage = (event) => {
+            let message;
+            try { message = JSON.parse(event.data); } catch { return; }
+
+            if (message.type === "snapshot") {
+                live.device = { ...live.device, ...message.device };
+                $("#liveTitle").textContent = getDeviceName(live.device);
+
+                if (!message.device_online) {
+                    liveBadge("Device offline", "error");
+                    $("#screenOverlay").hidden = false;
+                    $("#screenOverlay").textContent = "Device not connected";
+                }
+                return;
+            }
+
+            if (message.type === "device_status") {
+                if (message.online) {
+                    liveBadge("Streaming", "online");
+                    $("#screenOverlay").hidden = true;
+                } else {
+                    liveBadge("Device offline", "error");
+                    $("#screenOverlay").hidden = false;
+                    $("#screenOverlay").textContent = "Device went offline";
+                }
+                return;
+            }
+
+            if (message.type === "frame") { drawFrame(message); return; }
+
+            if (message.type === "control_ack" && message.delivered === false) {
+                showToast("control event not delivered");
+            }
+        };
+    }
+
+    function disconnectLive() {
+        if (live.socket) {
+            try { live.socket.close(); } catch (e) { /* ignore */ }
+            live.socket = null;
+        }
+        stopFpsTimer();
+    }
+
+    function base64ToBytes(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
+    function drawFrame(message) {
+        live.frames++;
+
+        if (live.decoding) return;
+        live.decoding = true;
+
+        const blob = new Blob([base64ToBytes(message.data)], { type: "image/jpeg" });
+
+        createImageBitmap(blob)
+            .then((bitmap) => {
+                const canvas = $("#screenCanvas");
+                const ctx = canvas.getContext("2d");
+
+                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+                    canvas.width = bitmap.width;
+                    canvas.height = bitmap.height;
+                    $("#liveResolution").textContent =
+                        `${bitmap.width} × ${bitmap.height}`;
+                }
+
+                ctx.drawImage(bitmap, 0, 0);
+                bitmap.close();
+
+                if (typeof message.ts === "number") {
+                    $("#liveLatency").textContent = `${Date.now() - message.ts} ms`;
+                }
+            })
+            .catch(() => {})
+            .finally(() => { live.decoding = false; });
+    }
+
+    function startFpsTimer() {
+        stopFpsTimer();
+        live.fpsTimer = setInterval(() => {
+            $("#liveFps").textContent = `${live.frames} fps`;
+            live.frames = 0;
+        }, 1000);
+    }
+
+    function stopFpsTimer() {
+        if (live.fpsTimer) clearInterval(live.fpsTimer);
+        live.fpsTimer = null;
+        $("#liveFps").textContent = "0 fps";
+    }
+
+    function sendControl(payload) {
+        if (!live.socket || live.socket.readyState !== WebSocket.OPEN) return;
+        if (!$("#liveControlToggle").checked) return;
+        live.socket.send(JSON.stringify({ type: "control", ...payload }));
+    }
+
+    const canvasPointer = { active: false, startX: 0, startY: 0, startAt: 0 };
+
+    function normalizedPoint(event) {
+        const rect = $("#screenCanvas").getBoundingClientRect();
+        return {
+            x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+            y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
+        };
+    }
+
+    $("#screenCanvas").addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        const point = normalizedPoint(event);
+        canvasPointer.active = true;
+        canvasPointer.startX = point.x;
+        canvasPointer.startY = point.y;
+        canvasPointer.startAt = Date.now();
+    });
+
+    $("#screenCanvas").addEventListener("pointerup", (event) => {
+        event.preventDefault();
+        if (!canvasPointer.active) return;
+        canvasPointer.active = false;
+
+        const point = normalizedPoint(event);
+        const distance = Math.hypot(
+            point.x - canvasPointer.startX,
+            point.y - canvasPointer.startY
+        );
+        const elapsed = Date.now() - canvasPointer.startAt;
+
+        if (distance < 0.015) {
+            if (elapsed > 600) {
+                sendControl({
+                    action: "long_press",
+                    x: canvasPointer.startX,
+                    y: canvasPointer.startY,
+                    duration: Math.min(elapsed, 1500)
+                });
+            } else {
+                sendControl({ action: "tap", x: point.x, y: point.y });
+            }
+            return;
+        }
+
+        sendControl({
+            action: "swipe",
+            x1: canvasPointer.startX,
+            y1: canvasPointer.startY,
+            x2: point.x,
+            y2: point.y,
+            duration: Math.min(Math.max(elapsed, 120), 1200)
+        });
+    });
+
+    document.querySelectorAll("[data-global]").forEach((button) => {
+        button.addEventListener("click", () => {
+            sendControl({ action: "global", name: button.dataset.global });
+        });
+    });
+
+    $("#liveReconnect").addEventListener("click", () => {
+        $("#screenOverlay").hidden = false;
+        $("#screenOverlay").textContent = "Connecting…";
+        connectLive();
+    });
+
+    $("#liveDisconnect").addEventListener("click", () => {
+        disconnectLive();
+        liveBadge("Disconnected");
+        $("#screenOverlay").hidden = false;
+        $("#screenOverlay").textContent = "Disconnected";
+    });
+
+    /* -------------------------------------------------------- listeners */
 
     $("#loginForm").addEventListener("submit", async (event) => {
         event.preventDefault();
 
         const button = $("#loginButton");
         button.disabled = true;
-        button.textContent = "Signing in…";
+        button.textContent = "▸ Connecting…";
         setLoginMessage("");
-
-        const username = $("#username").value.trim();
-        const password = $("#password").value;
 
         try {
             const result = await api("/admin/login", {
                 method: "POST",
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({
+                    username: $("#username").value.trim(),
+                    password: $("#password").value
+                })
             });
 
             if (!result.status && !result.authenticated) {
-                throw new Error(result.detail || "Sign-in failed.");
+                throw new Error(result.detail || "Sign-in failed");
             }
 
             $("#password").value = "";
-            setLoginMessage("Signed in successfully.", "success");
+            setLoginMessage("access granted", "success");
             showDashboard();
             await refreshAll();
-            showToast("Welcome to ScreenLink Remote Admin.");
+            showToast("welcome, operator");
         } catch (error) {
-            setLoginMessage(error.message || "Unable to sign in.");
+            setLoginMessage(error.message || "access denied");
         } finally {
             button.disabled = false;
-            button.textContent = "Sign in";
+            button.textContent = "▸ Connect";
         }
     });
 
@@ -1911,15 +2418,14 @@
         try {
             await api("/admin/logout", { method: "POST" });
         } catch (error) {
-            console.warn("Logout request failed:", error);
+            console.warn("logout failed:", error);
         }
 
         state.devices = [];
         state.sessions = [];
         state.activity = [];
-        closeDeviceModal();
         showLogin();
-        showToast("You have signed out.");
+        showToast("session terminated");
     });
 
     document.querySelectorAll(".nav-button").forEach((button) => {
@@ -1935,7 +2441,6 @@
     });
 
     $("#refreshButton").addEventListener("click", refreshAll);
-
     $("#modalClose").addEventListener("click", closeDeviceModal);
 
     $("#deviceModal").addEventListener("click", (event) => {
@@ -1946,9 +2451,10 @@
         if (event.key === "Escape") closeDeviceModal();
     });
 
-    /* -------------------------------------------------------------- start */
+    /* ------------------------------------------------------------- start */
 
     checkAuth();
 </script>
+</div>
 </body>
 </html>
