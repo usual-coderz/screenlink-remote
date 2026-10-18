@@ -4,302 +4,369 @@ import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
-import android.widget.*
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.UUID
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
 
-    private val serverUrl =
+    private val baseUrl =
         "https://rat-panel-b91839a4be83.herokuapp.com"
 
     private val executor = Executors.newSingleThreadExecutor()
 
     private lateinit var statusText: TextView
-    private lateinit var resultText: TextView
     private lateinit var deviceNameInput: EditText
-    private lateinit var pairButton: Button
+    private lateinit var registrationButton: Button
+    private lateinit var pairingButton: Button
 
-    private val bg = Color.rgb(12, 17, 32)
-    private val card = Color.rgb(23, 30, 49)
-    private val green = Color.rgb(70, 220, 150)
-    private val white = Color.WHITE
-    private val muted = Color.rgb(160, 171, 192)
+    private var registrationId: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        buildUI()
+
+        registrationId = getRegistrationId()
+
+        buildInterface()
         checkServer()
     }
 
-    private fun buildUI() {
+    private fun buildInterface() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 36, 24, 24)
-            setBackgroundColor(bg)
+            setPadding(28, 36, 28, 28)
+            setBackgroundColor(Color.rgb(13, 17, 28))
         }
 
-        val scroll = ScrollView(this)
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val scrollView = ScrollView(this)
+        scrollView.addView(root)
+
+        val title = TextView(this).apply {
+            text = "ScreenLink Remote"
+            textSize = 27f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
         }
 
-        content.addView(label("ScreenLink", 30f, green, true))
-        content.addView(label("REMOTE SUPPORT", 12f, muted, true))
-
-        val heading = label("Connect your device", 24f, white, true)
-        heading.setPadding(0, 32, 0, 8)
-        content.addView(heading)
-
-        content.addView(
-            label(
-                "Connect to your ScreenLink server and create a temporary pairing code.",
-                15f,
-                muted
-            )
-        )
-
-        val statusCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 18)
-            background = rounded(card, 18)
+        val subtitle = TextView(this).apply {
+            text = "Connect your device with permission"
+            textSize = 14f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, 8, 0, 24)
         }
 
-        statusCard.addView(
-            label("SERVER STATUS", 12f, muted, true)
-        )
-
-        statusText = label("Checking server...", 18f, white, true)
-        statusText.setPadding(0, 10, 0, 0)
-        statusCard.addView(statusText)
-
-        val statusParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = 24
+        statusText = TextView(this).apply {
+            text = "Checking server..."
+            textSize = 15f
+            setTextColor(Color.YELLOW)
+            setPadding(0, 8, 0, 20)
         }
-
-        content.addView(statusCard, statusParams)
-
-        val inputTitle = label("Device name", 14f, white, true)
-        inputTitle.setPadding(0, 24, 0, 8)
-        content.addView(inputTitle)
 
         deviceNameInput = EditText(this).apply {
-            hint = "e.g. My Android"
-            setHintTextColor(muted)
-            setTextColor(white)
-            textSize = 16f
+            hint = "Device name"
             setSingleLine(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
             setPadding(16, 12, 16, 12)
-            background = rounded(card, 14)
+            setBackgroundColor(Color.rgb(31, 38, 54))
+            setText("${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
         }
 
-        content.addView(
-            deviceNameInput,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                56
-            )
-        )
+        pairingButton = createButton("Generate Pairing Code")
+        registrationButton = createButton("Register This Device")
+        val refreshButton = createButton("Check Server")
 
-        pairButton = Button(this).apply {
-            text = "Create Pairing Code"
+        val info = TextView(this).apply {
+            text = "Pairing codes expire after 5 minutes. " +
+                "Device registration requires owner approval. " +
+                "This demo does not stream or control the screen."
+            textSize = 13f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, 22, 0, 0)
+        }
+
+        root.addView(title)
+        root.addView(subtitle)
+        root.addView(statusText)
+        root.addView(deviceNameInput)
+        addSpace(root, 16)
+        root.addView(pairingButton)
+        addSpace(root, 12)
+        root.addView(registrationButton)
+        addSpace(root, 12)
+        root.addView(refreshButton)
+        root.addView(info)
+
+        setContentView(scrollView)
+
+        pairingButton.setOnClickListener {
+            generatePairingCode()
+        }
+
+        registrationButton.setOnClickListener {
+            registerDevice()
+        }
+
+        refreshButton.setOnClickListener {
+            checkServer()
+        }
+    }
+
+    private fun createButton(label: String): Button {
+        return Button(this).apply {
+            text = label
             isAllCaps = false
-            textSize = 16f
-            setTextColor(bg)
-            background = rounded(green, 14)
-            setOnClickListener {
-                createPairingCode()
-            }
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(38, 110, 235))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
+    }
 
-        val pairParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            56
-        ).apply {
-            topMargin = 18
-        }
-
-        content.addView(pairButton, pairParams)
-
-        resultText = label("", 16f, green, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 8)
-        }
-
-        content.addView(resultText)
-
-        val note = label(
-            "Pairing codes are temporary. This prototype creates a code but does not yet establish a live screen-sharing session.",
-            13f,
-            muted
-        )
-        note.setPadding(0, 16, 0, 16)
-        content.addView(note)
-
-        scroll.addView(content)
-
-        root.addView(
-            scroll,
+    private fun addSpace(
+        parent: LinearLayout,
+        height: Int
+    ) {
+        val space = android.view.View(this)
+        parent.addView(
+            space,
             LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
+                1,
+                (height * resources.displayMetrics.density).toInt()
             )
         )
+    }
 
-        setContentView(root)
+    private fun getRegistrationId(): String {
+        val preferences = getSharedPreferences(
+            "screenlink_preferences",
+            MODE_PRIVATE
+        )
+
+        val existing = preferences.getString(
+            "registration_id",
+            null
+        )
+
+        if (!existing.isNullOrBlank()) {
+            return existing
+        }
+
+        val generated = UUID.randomUUID().toString() +
+            UUID.randomUUID().toString()
+
+        preferences.edit()
+            .putString("registration_id", generated)
+            .apply()
+
+        return generated
     }
 
     private fun checkServer() {
         statusText.text = "Checking server..."
+        statusText.setTextColor(Color.YELLOW)
 
         executor.execute {
             val result = request(
-                path = "/health",
-                method = "GET"
+                method = "GET",
+                path = "/health"
             )
 
             runOnUiThread {
-                statusText.text = if (result != null) {
-                    "● Server online"
+                if (result.first in 200..299) {
+                    statusText.text = "Server: Online"
+                    statusText.setTextColor(Color.GREEN)
                 } else {
-                    "● Server unavailable"
+                    statusText.text =
+                        "Server error: ${result.first}\n${result.second}"
+                    statusText.setTextColor(Color.RED)
                 }
-
-                statusText.setTextColor(
-                    if (result != null) green else Color.RED
-                )
             }
         }
     }
 
-    private fun createPairingCode() {
-        val name = deviceNameInput.text.toString().trim()
+    private fun generatePairingCode() {
+        val deviceName = deviceNameInput.text
+            .toString()
+            .trim()
 
-        if (name.isEmpty()) {
+        if (deviceName.isBlank()) {
             deviceNameInput.error = "Enter a device name"
             return
         }
 
-        pairButton.isEnabled = false
-        pairButton.text = "Creating..."
-        resultText.text = ""
+        pairingButton.isEnabled = false
+        statusText.text = "Generating pairing code..."
 
         executor.execute {
             val body = JSONObject().apply {
-                put("device_name", name)
+                put("device_name", deviceName)
             }
 
-            val response = request(
-                path = "/pair",
+            val result = request(
                 method = "POST",
-                body = body.toString()
+                path = "/pair",
+                body = body
             )
 
             runOnUiThread {
-                pairButton.isEnabled = true
-                pairButton.text = "Create Pairing Code"
+                pairingButton.isEnabled = true
 
-                if (response != null) {
+                if (result.first in 200..299) {
                     try {
-                        val json = JSONObject(response)
-                        val code = json.getString("pair_code")
+                        val json = JSONObject(result.second)
+                        val code = json.optString("pair_code")
                         val expiry = json.optInt(
                             "expires_in_seconds",
                             300
                         )
 
-                        resultText.text =
-                            "Pairing code:\n$code\n\nExpires in $expiry seconds"
+                        statusText.text =
+                            "Server: Online\n\n" +
+                            "Pairing code:\n$code\n\n" +
+                            "Expires in $expiry seconds"
+
+                        statusText.setTextColor(Color.GREEN)
                     } catch (_: Exception) {
-                        resultText.text = "Invalid server response"
+                        statusText.text = result.second
                     }
                 } else {
-                    resultText.text =
-                        "Could not create pairing code. Try again."
+                    statusText.text =
+                        "Pairing failed: ${result.second}"
+                    statusText.setTextColor(Color.RED)
+                }
+            }
+        }
+    }
+
+    private fun registerDevice() {
+        val deviceName = deviceNameInput.text
+            .toString()
+            .trim()
+
+        if (deviceName.isBlank()) {
+            deviceNameInput.error = "Enter a device name"
+            return
+        }
+
+        val confirmed = android.app.AlertDialog.Builder(this)
+            .setTitle("Register this device?")
+            .setMessage(
+                "This will send this device's name and a random " +
+                "registration identifier to the ScreenLink server. Continue?"
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Continue") { _, _ ->
+                submitRegistration(deviceName)
+            }
+            .create()
+
+        confirmed.show()
+    }
+
+    private fun submitRegistration(deviceName: String) {
+        registrationButton.isEnabled = false
+        statusText.text = "Registering device..."
+
+        executor.execute {
+            val body = JSONObject().apply {
+                put("device_name", deviceName)
+                put("platform", "android")
+                put("registration_id", registrationId)
+                put("owner_approved", true)
+            }
+
+            val result = request(
+                method = "POST",
+                path = "/devices/register",
+                body = body
+            )
+
+            runOnUiThread {
+                registrationButton.isEnabled = true
+
+                if (result.first in 200..299) {
+                    statusText.text =
+                        "Device registered successfully.\n${result.second}"
+                    statusText.setTextColor(Color.GREEN)
+                } else {
+                    statusText.text =
+                        "Registration failed (${result.first}):\n" +
+                        result.second
+                    statusText.setTextColor(Color.RED)
                 }
             }
         }
     }
 
     private fun request(
-        path: String,
         method: String,
-        body: String? = null
-    ): String? {
+        path: String,
+        body: JSONObject? = null
+    ): Pair<Int, String> {
         var connection: HttpURLConnection? = null
 
         return try {
-            connection = URL("$serverUrl$path")
-                .openConnection() as HttpURLConnection
-
-            connection.requestMethod = method
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
-            connection.setRequestProperty(
-                "Accept",
-                "application/json"
-            )
+            connection = (
+                URL("$baseUrl$path").openConnection()
+                as HttpURLConnection
+            ).apply {
+                requestMethod = method
+                connectTimeout = 15000
+                readTimeout = 15000
+                setRequestProperty(
+                    "Accept",
+                    "application/json"
+                )
+            }
 
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty(
                     "Content-Type",
-                    "application/json"
+                    "application/json; charset=UTF-8"
                 )
 
-                connection.outputStream.use {
-                    it.write(body.toByteArray(Charsets.UTF_8))
+                connection.outputStream.use { output ->
+                    output.write(
+                        body.toString().toByteArray(Charsets.UTF_8)
+                    )
                 }
             }
 
-            val stream = if (connection.responseCode in 200..299) {
+            val responseCode = connection.responseCode
+
+            val stream = if (responseCode in 200..299) {
                 connection.inputStream
             } else {
                 connection.errorStream
             }
 
-            stream?.bufferedReader()?.use {
+            val response = stream?.bufferedReader()?.use {
                 it.readText()
-            }
-        } catch (_: Exception) {
-            null
+            } ?: ""
+
+            Pair(responseCode, response)
+
+        } catch (e: Exception) {
+            Pair(
+                -1,
+                e.message ?: "Unable to connect to server"
+            )
         } finally {
             connection?.disconnect()
-        }
-    }
-
-    private fun label(
-        text: String,
-        size: Float,
-        color: Int,
-        bold: Boolean = false
-    ): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = size
-            setTextColor(color)
-
-            if (bold) {
-                typeface = Typeface.DEFAULT_BOLD
-            }
-        }
-    }
-
-    private fun rounded(
-        color: Int,
-        radius: Int
-    ): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = radius.toFloat()
         }
     }
 
