@@ -34,7 +34,9 @@ def init_db():
     pairing_codes.create_index("code_hash", unique=True)
     pairing_codes.create_index("expires_at", expireAfterSeconds=0)
     support_sessions.create_index("status")
-    activity_logs.create_index("created_at", DESCENDING)
+    activity_logs.create_index(
+    [("created_at", DESCENDING)]
+)
 
 
 def utc_now():
