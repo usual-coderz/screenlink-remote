@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.screenlink.remote"
-        minSdk = 23
+        minSdk = 24          // dispatchGesture ke liye 24 chahiye
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     compileOptions {
@@ -23,4 +23,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.core:core-ktx:1.13.1")
 }
