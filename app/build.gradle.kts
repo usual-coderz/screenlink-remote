@@ -15,6 +15,11 @@ android {
         versionName = "4.3"
     }
 
+    // AGP 8 me BuildConfig default off hai — Telemetry ise use karta hai
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
