@@ -1,3 +1,4 @@
+package com.screenlink.remote
 
 import android.app.Activity
 import android.os.Bundle
@@ -6,7 +7,7 @@ import android.os.Looper
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
-import android.view.ViewGroup
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -18,174 +19,374 @@ import java.util.UUID
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
-    private val baseUrl = "https://rat-panel-b91839a4be83.herokuapp.com"
+
+    companion object {
+        private const val API_BASE_URL =
+            "https://rat-panel-b91839a4be83.herokuapp.com"
+
+        private const val PREFS_NAME = "screenlink_preferences"
+        private const val KEY_REGISTRATION_ID = "registration_id"
+        private const val HEARTBEAT_INTERVAL = 30_000L
+    }
+
     private val executor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var statusText: TextView
-    private lateinit var deviceNameText: TextView
-    private lateinit var connectButton: Button
-    private var registrationId = ""
-    private var registered = false
 
-    private val heartbeatTask = object : Runnable {
+    private lateinit var statusText: TextView
+    private lateinit var deviceIdText: TextView
+    private lateinit var registerButton: Button
+
+    private var isActivityVisible = false
+    private var isRequestRunning = false
+
+    private val heartbeatRunnable = object : Runnable {
         override fun run() {
-            if (registered) sendHeartbeat()
-            handler.postDelayed(this, 30_000)
+            if (!isActivityVisible) return
+
+            sendHeartbeat()
+            handler.postDelayed(this, HEARTBEAT_INTERVAL)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        registrationId = getRegistrationId()
-        buildInterface()
+
+        createInterface()
         registerDevice()
     }
 
-    private fun buildInterface() {
+    override fun onResume() {
+        super.onResume()
+
+        isActivityVisible = true
+        handler.removeCallbacks(heartbeatRunnable)
+        handler.post(heartbeatRunnable)
+    }
+
+    override fun onPause() {
+        isActivityVisible = false
+        handler.removeCallbacks(heartbeatRunnable)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        executor.shutdownNow()
+        super.onDestroy()
+    }
+
+    private fun createInterface() {
+        val backgroundColor = Color.rgb(11, 16, 32)
+        val cardColor = Color.rgb(23, 31, 51)
+        val accentColor = Color.rgb(75, 222, 151)
+        val primaryTextColor = Color.rgb(245, 247, 255)
+        val secondaryTextColor = Color.rgb(165, 176, 199)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(28, 36, 28, 28)
-            setBackgroundColor(Color.rgb(13, 17, 28))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(36), dp(24), dp(24))
+            setBackgroundColor(backgroundColor)
         }
-        val scroll = ScrollView(this)
-        scroll.addView(root)
 
-        root.addView(TextView(this).apply {
-            text = "ScreenLink Remote"
-            textSize = 27f
-            setTextColor(Color.WHITE)
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+
+        val title = TextView(this).apply {
+            text = "ScreenLink"
+            textSize = 30f
             typeface = Typeface.DEFAULT_BOLD
-        })
-        root.addView(TextView(this).apply {
-            text = "Device support connection"
-            textSize = 15f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 8, 0, 22)
-        })
-        deviceNameText = TextView(this).apply {
-            text = "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+            setTextColor(accentColor)
+            gravity = Gravity.CENTER
+        }
+
+        val subtitle = TextView(this).apply {
+            text = "Device Registration"
+            textSize = 16f
+            setTextColor(secondaryTextColor)
+            gravity = Gravity.CENTER
+        }
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(22), dp(20), dp(22))
+            setBackgroundColor(cardColor)
+        }
+
+        val statusHeading = TextView(this).apply {
+            text = "Connection status"
             textSize = 14f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 0, 0, 20)
+            setTextColor(secondaryTextColor)
         }
-        root.addView(deviceNameText)
+
         statusText = TextView(this).apply {
-            text = "Connecting to server..."
-            textSize = 15f
-            setTextColor(Color.YELLOW)
-            setPadding(0, 8, 0, 20)
+            text = "Connecting..."
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(primaryTextColor)
+            setPadding(0, dp(8), 0, dp(18))
         }
-        root.addView(statusText)
-        connectButton = Button(this).apply {
-            text = "Retry connection"
-            isAllCaps = false
-            setOnClickListener { registerDevice() }
+
+        val deviceHeading = TextView(this).apply {
+            text = "Registration ID"
+            textSize = 14f
+            setTextColor(secondaryTextColor)
         }
-        root.addView(connectButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        root.addView(TextView(this).apply {
-            text = "When this app connects, its device name and random installation ID are sent to ScreenLink for display in the administrator dashboard. Screen sharing does not start automatically. Starting a support session must require a separate Android system screen-capture prompt and the device user's approval."
+
+        deviceIdText = TextView(this).apply {
+            text = getRegistrationId()
             textSize = 13f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 24, 0, 0)
-        })
-        setContentView(scroll)
+            setTextColor(primaryTextColor)
+            setPadding(0, dp(8), 0, dp(18))
+        }
+
+        val information = TextView(this).apply {
+            text = "This app registers this device with the ScreenLink server. " +
+                "The registration ID and device name are sent to the server. " +
+                "Registration does not start screen sharing or remote control."
+            textSize = 14f
+            setTextColor(secondaryTextColor)
+            setLineSpacing(dp(4).toFloat(), 1f)
+        }
+
+        registerButton = Button(this).apply {
+            text = "Retry Registration"
+            setTextColor(Color.BLACK)
+            setBackgroundColor(accentColor)
+            setOnClickListener {
+                registerDevice()
+            }
+        }
+
+        card.addView(statusHeading)
+        card.addView(statusText)
+        card.addView(deviceHeading)
+        card.addView(deviceIdText)
+        card.addView(information)
+
+        root.addView(
+            title,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        root.addView(
+            subtitle,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(28)
+            }
+        )
+
+        root.addView(
+            card,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        root.addView(
+            registerButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(22)
+            }
+        )
+
+        setContentView(scrollView)
     }
 
     private fun getRegistrationId(): String {
-        val prefs = getSharedPreferences("screenlink_preferences", MODE_PRIVATE)
-        val existing = prefs.getString("registration_id", null)
-        if (!existing.isNullOrBlank()) return existing
-        val generated = UUID.randomUUID().toString() + UUID.randomUUID().toString()
-        prefs.edit().putString("registration_id", generated).apply()
-        return generated
+        val preferences = getSharedPreferences(
+            PREFS_NAME,
+            MODE_PRIVATE
+        )
+
+        val existingId = preferences.getString(
+            KEY_REGISTRATION_ID,
+            null
+        )
+
+        if (!existingId.isNullOrBlank()) {
+            return existingId
+        }
+
+        val newId = UUID.randomUUID().toString()
+
+        preferences.edit()
+            .putString(KEY_REGISTRATION_ID, newId)
+            .apply()
+
+        return newId
     }
 
     private fun registerDevice() {
-        connectButton.isEnabled = false
-        statusText.text = "Registering device..."
-        statusText.setTextColor(Color.YELLOW)
-        val name = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".take(40)
+        if (isRequestRunning) return
+
+        isRequestRunning = true
+        updateStatus("Registering device...", Color.YELLOW)
+        registerButton.isEnabled = false
+
+        val registrationId = getRegistrationId()
+
         executor.execute {
-            val body = JSONObject().apply {
-                put("device_name", name)
-                put("platform", "android")
-                put("registration_id", registrationId)
-                put("owner_approved", true)
-            }
-            val result = request("POST", "/devices/register", body)
-            runOnUiThread {
-                connectButton.isEnabled = true
-                if (result.first in 200..299) {
-                    registered = true
-                    statusText.text = "Device registered\nConnection: Online"
-                    statusText.setTextColor(Color.GREEN)
-                    handler.removeCallbacks(heartbeatTask)
-                    handler.post(heartbeatTask)
+            var connection: HttpURLConnection? = null
+
+            try {
+                val endpoint = URL("$API_BASE_URL/devices/register")
+
+                connection = endpoint.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 15_000
+                connection.doOutput = true
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/json; charset=UTF-8"
+                )
+                connection.setRequestProperty(
+                    "Accept",
+                    "application/json"
+                )
+
+                val requestBody = JSONObject().apply {
+                    put(
+                        "device_name",
+                        "${android.os.Build.MANUFACTURER} " +
+                            android.os.Build.MODEL
+                    )
+                    put("platform", "android")
+                    put("registration_id", registrationId)
+                    put("owner_approved", true)
+                }.toString()
+
+                connection.outputStream.use { output ->
+                    output.write(requestBody.toByteArray(Charsets.UTF_8))
+                }
+
+                val responseCode = connection.responseCode
+
+                val responseStream = if (responseCode in 200..299) {
+                    connection.inputStream
                 } else {
-                    registered = false
-                    statusText.text = "Connection failed (${result.first})\n${result.second}"
-                    statusText.setTextColor(Color.RED)
+                    connection.errorStream
+                }
+
+                val responseBody = responseStream
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+
+                if (responseCode in 200..299) {
+                    runOnUiThread {
+                        updateStatus(
+                            "Device registered",
+                            Color.rgb(75, 222, 151)
+                        )
+                        deviceIdText.text = registrationId
+                    }
+                } else {
+                    val message = try {
+                        JSONObject(responseBody).optString(
+                            "detail",
+                            "HTTP $responseCode"
+                        )
+                    } catch (_: Exception) {
+                        "HTTP $responseCode"
+                    }
+
+                    runOnUiThread {
+                        updateStatus(
+                            "Registration failed: $message",
+                            Color.rgb(255, 100, 100)
+                        )
+                    }
+                }
+            } catch (exception: Exception) {
+                runOnUiThread {
+                    updateStatus(
+                        "Connection failed. Check internet and retry.",
+                        Color.rgb(255, 100, 100)
+                    )
+                }
+            } finally {
+                connection?.disconnect()
+
+                runOnUiThread {
+                    isRequestRunning = false
+                    registerButton.isEnabled = true
                 }
             }
         }
     }
 
     private fun sendHeartbeat() {
+        if (isRequestRunning) return
+
+        val registrationId = getRegistrationId()
+
         executor.execute {
-            val body = JSONObject().put("registration_id", registrationId)
-            val result = request("POST", "/devices/heartbeat", body)
-            runOnUiThread {
-                if (result.first in 200..299) {
-                    statusText.text = "Device registered\nConnection: Online"
-                    statusText.setTextColor(Color.GREEN)
-                } else {
-                    registered = false
-                    statusText.text = "Connection: Offline\nTap retry to reconnect."
-                    statusText.setTextColor(Color.RED)
-                }
-            }
-        }
-    }
+            var connection: HttpURLConnection? = null
 
-    private fun request(method: String, path: String, body: JSONObject? = null): Pair<Int, String> {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = (URL("$baseUrl$path").openConnection() as HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = 15000
-                readTimeout = 15000
-                setRequestProperty("Accept", "application/json")
-            }
-            if (body != null) {
+            try {
+                connection = URL(
+                    "$API_BASE_URL/devices/heartbeat"
+                ).openConnection() as HttpURLConnection
+
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 10_000
                 connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                connection.outputStream.use {
-                    it.write(body.toString().toByteArray(Charsets.UTF_8))
+
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/json; charset=UTF-8"
+                )
+
+                val body = JSONObject().apply {
+                    put("registration_id", registrationId)
+                }.toString()
+
+                connection.outputStream.use { output ->
+                    output.write(body.toByteArray(Charsets.UTF_8))
                 }
+
+                val responseCode = connection.responseCode
+
+                if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                    runOnUiThread {
+                        updateStatus(
+                            "Device not registered. Please retry.",
+                            Color.rgb(255, 100, 100)
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // A temporary heartbeat failure does not stop the app.
+            } finally {
+                connection?.disconnect()
             }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val response = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            Pair(code, response)
-        } catch (e: Exception) {
-            Pair(-1, e.message ?: "Unable to connect to server")
-        } finally {
-            connection?.disconnect()
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (registered) sendHeartbeat()
+    private fun updateStatus(message: String, color: Int) {
+        if (!::statusText.isInitialized) return
+
+        statusText.text = message
+        statusText.setTextColor(color)
     }
 
-    override fun onDestroy() {
-        handler.removeCallbacks(heartbeatTask)
-        executor.shutdownNow()
-        super.onDestroy()
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }
