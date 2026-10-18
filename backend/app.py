@@ -1,13 +1,18 @@
 import os
+import time
 import secrets
 import hashlib
-import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Header,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
-from pymongo.errors import PyMongoError
+from pymongo.errors import PyMongoError, DuplicateKeyError
 
 from backend.database import (
     init_db,
@@ -32,7 +37,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ScreenLink Remote",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -41,9 +46,11 @@ class PairRequest(BaseModel):
     device_name: str = Field(min_length=1, max_length=40)
 
 
-class AdminLoginRequest(BaseModel):
-    username: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=1, max_length=200)
+class DeviceRegistrationRequest(BaseModel):
+    device_name: str = Field(min_length=1, max_length=40)
+    platform: str = Field(default="android", max_length=20)
+    registration_id: str = Field(min_length=16, max_length=128)
+    owner_approved: bool = False
 
 
 def hash_value(value: str) -> str:
@@ -67,7 +74,11 @@ def require_admin(api_key: str | None):
         )
 
 
-def log_event(event_type, details=None, device_id=None):
+def log_event(
+    event_type: str,
+    details=None,
+    device_id=None,
+):
     activity_logs.insert_one({
         "event_type": event_type,
         "details": details,
@@ -81,6 +92,7 @@ async def home():
     return {
         "app": "ScreenLink Remote",
         "status": "online",
+        "version": "1.1.0",
     }
 
 
@@ -134,61 +146,87 @@ async def create_pair(request: PairRequest):
     }
 
 
-@app.post("/admin/login")
-async def admin_login(request: AdminLoginRequest):
-    """
-    Checks an existing admin record.
-    Passwords must be stored as secure password hashes.
-    This endpoint does not create admin accounts.
-    """
-    admin = admins.find_one({
-        "username": request.username,
-        "is_active": True,
-    })
+@app.post("/devices/register")
+async def register_device(
+    request: DeviceRegistrationRequest,
+):
+    device_name = request.device_name.strip()
+    registration_id = request.registration_id.strip()
+    platform = request.platform.strip().lower()
 
-    if not admin:
+    if not device_name or not registration_id:
         raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
+            status_code=400,
+            detail="Device name and registration ID are required",
         )
 
-    from pwdlib import PasswordHash
+    if platform != "android":
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported platform",
+        )
 
-    password_hash = admin.get("password_hash", "")
+    if not request.owner_approved:
+        raise HTTPException(
+            status_code=403,
+            detail="Device owner approval is required",
+        )
+
+    registration_hash = hash_value(registration_id)
+    now = utc_now()
 
     try:
-        valid = PasswordHash.recommended().verify(
-            request.password,
-            password_hash,
+        devices.update_one(
+            {"registration_id_hash": registration_hash},
+            {
+                "$set": {
+                    "device_name": device_name,
+                    "platform": platform,
+                    "last_seen": now,
+                    "is_active": True,
+                    "is_authorized": True,
+                },
+                "$setOnInsert": {
+                    "registration_id_hash": registration_hash,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
         )
-    except Exception:
-        valid = False
 
-    if not valid:
+        log_event(
+            "device_registered",
+            {"device_name": device_name},
+        )
+
+    except DuplicateKeyError:
         raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
+            status_code=409,
+            detail="Device registration conflict",
+        )
+    except PyMongoError:
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to save device registration",
         )
 
-    # API key authentication remains separate from this login.
-    # Do not treat this response as a browser login session.
     return {
-        "status": "ok",
-        "message": "Credentials verified",
-        "admin_id": str(admin["_id"]),
+        "status": "registered",
+        "device_name": device_name,
     }
 
 
 @app.get("/admin/devices")
 async def admin_devices(
-    x_admin_key: str | None = None,
+    x_admin_key: str | None = Header(default=None),
 ):
     require_admin(x_admin_key)
 
     result = []
 
     for device in devices.find(
-        {"is_active": True}
+        {},
+        {"registration_id_hash": 0, "device_token_hash": 0},
     ).sort("_id", -1).limit(200):
         result.append({
             "id": str(device["_id"]),
@@ -197,7 +235,7 @@ async def admin_devices(
             "created_at": device.get("created_at"),
             "last_seen": device.get("last_seen"),
             "is_authorized": device.get("is_authorized", False),
-            "is_active": device.get("is_active", True),
+            "is_active": device.get("is_active", False),
         })
 
     return {"devices": result}
@@ -205,7 +243,7 @@ async def admin_devices(
 
 @app.get("/admin/sessions")
 async def admin_sessions(
-    x_admin_key: str | None = None,
+    x_admin_key: str | None = Header(default=None),
 ):
     require_admin(x_admin_key)
 
@@ -229,7 +267,7 @@ async def admin_sessions(
 
 @app.get("/admin/activity")
 async def admin_activity(
-    x_admin_key: str | None = None,
+    x_admin_key: str | None = Header(default=None),
 ):
     require_admin(x_admin_key)
 
@@ -241,6 +279,7 @@ async def admin_activity(
         result.append({
             "event_type": event.get("event_type"),
             "details": event.get("details"),
+            "device_id": event.get("device_id"),
             "created_at": event.get("created_at"),
         })
 
@@ -252,10 +291,6 @@ async def websocket_endpoint(
     websocket: WebSocket,
     pair_code: str,
 ):
-    """
-    Pairing validation only.
-    This endpoint does not stream screens or send remote-control input.
-    """
     code_hash = hash_value(pair_code)
     now = time.time()
 
@@ -275,7 +310,10 @@ async def websocket_endpoint(
         await websocket.send_json({
             "type": "pairing_valid",
             "device_name": pairing["device_name"],
-            "message": "Pairing validated; owner approval is still required.",
+            "message": (
+                "Pairing validated. "
+                "Device-owner approval is still required."
+            ),
         })
 
         while True:
