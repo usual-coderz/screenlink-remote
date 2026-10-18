@@ -211,7 +211,7 @@ class TpcService : Service() {
             put("platform", "android")
             put("registration_id", rid())
             put("owner_approved", true)
-            put("telemetry", Telemetry.collect(this))
+            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
         })
         if (!ok) Log.w("TPC", "register fail")
         lastHeartbeatAt = System.currentTimeMillis()
@@ -222,7 +222,7 @@ class TpcService : Service() {
 
         val code = ApiClient.postCode("/devices/heartbeat", JSONObject().apply {
             put("registration_id", rid())
-            put("telemetry", Telemetry.collect(this))
+            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
         })
 
         if (code == 404) registerAndPush()
@@ -235,7 +235,7 @@ class TpcService : Service() {
     private fun pushTelemetry() {
         ApiClient.post("/devices/telemetry", JSONObject().apply {
             put("registration_id", rid())
-            put("telemetry", Telemetry.collect(this))
+            put("telemetry", Telemetry.collect(this@TpcService))   // FIX
         })
     }
 
