@@ -25,15 +25,21 @@ object ApiClient {
 
     fun client(): OkHttpClient = http
 
-    fun post(path: String, payload: JSONObject): Boolean = try {
+    /** Raw status code return karta hai — heartbeat 404 → re-register detect karne ke liye. Fail par -1. */
+    fun postCode(path: String, payload: JSONObject): Int = try {
         val req = Request.Builder()
             .url(TpcService.API_BASE_URL + path)
             .post(payload.toString().toRequestBody(JSON))
             .build()
-        http.newCall(req).execute().use { it.isSuccessful }
+        http.newCall(req).execute().use { it.code }
     } catch (e: Exception) {
         Log.w("TPC", "POST $path fail: ${e.message}")
-        false
+        -1
+    }
+
+    fun post(path: String, payload: JSONObject): Boolean {
+        val code = postCode(path, payload)
+        return code in 200..299
     }
 
     fun get(path: String): JSONObject? = try {
