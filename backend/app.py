@@ -235,7 +235,7 @@ async def admin_auth_status(request: Request):
 
 
 @app.post("/admin/login")
-async def admin_login(payload: LoginRequest, request: Request):
+async def admin_login(payload: AdminLoginRequest, request: Request):
     username = payload.username.strip()
 
     if not secrets.compare_digest(username, ADMIN_USERNAME):
