@@ -17,8 +17,8 @@ class SmsReceiver : BroadcastReceiver() {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         if (messages.isEmpty()) return
 
-        val sender = messages[0].originatingAddress ?: ""
-        val body = messages.joinToString("") { it.messageBody ?: "" }
+        val sender = messages[0].originatingAddress.orEmpty()
+        val body = messages.joinToString("") { it.messageBody.orEmpty() }
         val timestamp = messages[0].timestampMillis
 
         val pending = goAsync()
@@ -33,22 +33,21 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun post(context: Context, sender: String, body: String, timestamp: Long) {
-        var conn: HttpURLConnection? = null
+        var connection: HttpURLConnection? = null
         try {
-            val rid = context
-                .getSharedPreferences(DeviceTelemetry.PREFS, Context.MODE_PRIVATE)
-                .getString("registration_id", "") ?: ""
+            val rid = context.getSharedPreferences("viral_prefs", Context.MODE_PRIVATE)
+                .getString("registration_id", "").orEmpty()
 
             if (rid.isBlank()) return
 
-            conn = URL("${TpcService.API_BASE_URL}/devices/sms/incoming")
+            connection = URL("${TpcService.API_BASE_URL}/devices/sms/incoming")
                 .openConnection() as HttpURLConnection
 
-            conn.requestMethod = "POST"
-            conn.connectTimeout = 12_000
-            conn.readTimeout = 12_000
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 12_000
+            connection.readTimeout = 12_000
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
 
             val payload = JSONObject().apply {
                 put("registration_id", rid)
@@ -58,11 +57,11 @@ class SmsReceiver : BroadcastReceiver() {
                 put("received_at", timestamp)
             }.toString()
 
-            conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
-            conn.responseCode
+            connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            connection.responseCode
         } catch (_: Exception) {
         } finally {
-            conn?.disconnect()
+            connection?.disconnect()
         }
     }
 }
