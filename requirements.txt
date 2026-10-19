@@ -5,3 +5,4 @@ pymongo[srv]
 dnspython
 httpx
 itsdangerous
+telethon
