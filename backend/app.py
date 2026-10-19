@@ -1,12 +1,16 @@
-"""TPC PANEL — backend API (v5.0)
+"""TPC PANEL — backend API (v5.1)
 
-v5.0 changes
+v5.1 changes
 ------------
-* Session: https_only auto-detect (http par bhi cookie chalti hai), SESSION_SECRET
-  disk par persist, Bearer-token fallback, 30-din TTL, UTF-8 safe password compare.
+* Login: rate-limit sirf GALAT credentials par lagta hai. Sahi password par
+  lockout ke beech bhi login ho jaata hai (pehle 6 fails ke baad sahi password
+  bhi 429 se reject ho raha tha).
+* Session: https_only auto-detect, SESSION_SECRET disk par persist, Bearer
+  token fallback, 30-din TTL, UTF-8 safe password compare.
 * Telegram Bot (Bot API) flow poori tarah hata diya — sirf MTProto relay.
-* Auto Sender ab per-device hai (device doc me auto_sender config), relay har
-  enabled channel ko watch karta hai.
+* Auto Sender per-device hai (device doc me auto_sender config); relay har
+  enabled channel ko ek global handler se watch karta hai.
+* Boot pe graceful shutdown (relay + mongo client close).
 """
 
 import os
@@ -21,14 +25,14 @@ import secrets
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Any, List, Tuple
+from typing import Dict, Optional, List, Tuple
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import (
     FastAPI, HTTPException, Header, Request, WebSocket, WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
@@ -41,6 +45,12 @@ from backend.database import (
     pairing_codes, activity_logs, banned_senders, relay_config, counters, tg_logs,
     utc_now,
 )
+
+try:
+    from backend.database import close_db
+except ImportError:  # purana database.py
+    def close_db():
+        pass
 
 try:
     from telethon import TelegramClient, events
@@ -70,9 +80,9 @@ ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 COOKIE_NAME = os.getenv("COOKIE_NAME", "tpc_admin_session")
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 
-SESSION_TTL = 300                      # pairing code
-SESSION_MAX_AGE = 60 * 60 * 24 * 30    # 30 din — cookie
-TOKEN_TTL = 60 * 60 * 24 * 30          # 30 din — bearer
+SESSION_TTL = 300
+SESSION_MAX_AGE = 60 * 60 * 24 * 30
+TOKEN_TTL = 60 * 60 * 24 * 30
 
 ONLINE_WINDOW_SECONDS = 90
 MAX_TELEMETRY_KEYS = 60
@@ -86,13 +96,12 @@ WS_IDLE_TIMEOUT = 120
 OUTBOX_REPUSH_AFTER = 45
 NUMBER_RETRY_AFTER = 300
 
-LOGIN_MAX_TRIES = 6
-LOGIN_LOCK_SECONDS = 300
+LOGIN_MAX_TRIES = 10
+LOGIN_LOCK_SECONDS = 120
 
 UPI_KEYWORDS = ("upi", "credited", "debited", "vpa", "paid to", "received from")
 AMOUNT_RE = re.compile(r"(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 
-# --- Telegram relay (MTProto) — bot API hata diya
 TELE_API_ID = int(os.getenv("TELE_API_ID", "0") or 0)
 TELE_API_HASH = os.getenv("TELE_API_HASH", "")
 TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID", "0") or 0)
@@ -106,7 +115,6 @@ MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
 def _load_session_secret() -> Tuple[str, str]:
-    """env -> file -> generate (aur file me likh do). Restart pe sessions zinda rehte hain."""
     env = (os.getenv("SESSION_SECRET") or "").strip()
     if env:
         return env, "env"
@@ -134,16 +142,16 @@ def _load_session_secret() -> Tuple[str, str]:
 SESSION_SECRET, SESSION_SECRET_SRC = _load_session_secret()
 if SESSION_SECRET_SRC == "generated":
     log.warning(
-        "SESSION_SECRET set nahi tha — naya secret bana ke %s me save kar diya. "
-        "Restart pe sessions zinda rahenge.", SECRET_FILE,
+        "SESSION_SECRET set nahi hai — naya secret bana ke %s me save kiya. "
+        "Heroku/container par ye file ephemeral hoti hai, isliye env me set karo.",
+        SECRET_FILE,
     )
 
 
-# ---------------------------------------------------------------- admin users
+# ---------------------------------------------------------------- admins
 
 
 def _build_admins() -> Dict[str, str]:
-    """ADMIN_USERS='ivan:pw,ops:pw2'  (fallback: ADMIN_USERNAME/ADMIN_PASSWORD)."""
     users: Dict[str, str] = {}
     raw = os.getenv("ADMIN_USERS", "").strip()
     if raw:
@@ -164,7 +172,6 @@ ADMINS = _build_admins()
 
 
 def const_eq(a: str, b: str) -> bool:
-    """UTF-8 safe constant-time compare (compare_digest str par non-ASCII pe tootta hai)."""
     try:
         return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
     except Exception:
@@ -174,25 +181,14 @@ def const_eq(a: str, b: str) -> bool:
 _login_fails: Dict[str, List[float]] = {}
 
 
-def login_guard(ip: str):
+def recent_fails(ip: str) -> List[float]:
     now = time.time()
     hits = [t for t in _login_fails.get(ip, []) if now - t < LOGIN_LOCK_SECONDS]
     _login_fails[ip] = hits
-    if len(hits) >= LOGIN_MAX_TRIES:
-        wait = int(LOGIN_LOCK_SECONDS - (now - hits[0]))
-        raise HTTPException(429, f"Bahut zyada tries — {max(1, wait)}s baad try karo")
     return hits
 
 
-def login_fail(ip: str):
-    _login_fails.setdefault(ip, []).append(time.time())
-
-
-def login_ok(ip: str):
-    _login_fails.pop(ip, None)
-
-
-# --------------------------------------------------------------- token (bearer)
+# --------------------------------------------------------------- tokens
 
 
 def make_token(admin_id: str, ttl: int = TOKEN_TTL) -> str:
@@ -218,7 +214,7 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 
-# -------------------------------------------------------------- app / lifespan
+# ------------------------------------------------------------- lifespan
 
 
 @asynccontextmanager
@@ -229,23 +225,25 @@ async def lifespan(app: FastAPI):
     backfill_short_ids()
     backfill_auto_sender()
     load_bans()
+    load_relay_config()
     await start_relay()
-    log.info("TPC PANEL v5.0 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
-    yield
-    await stop_relay()
-    MAIN_LOOP = None
+    log.info("TPC PANEL v5.1 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
+    try:
+        yield
+    finally:
+        await stop_relay()
+        await close_sockets()
+        close_db()
+        MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="5.0.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="5.1.0", lifespan=lifespan)
 
 
 class AdaptiveSessionMiddleware(SessionMiddleware):
-    """`https_only=True` default ka problem: plain HTTP par browser cookie store hi
-    nahi karta -> login hota tha par session turant ud jaata tha.
-
-    Yahan secure flag sirf tab lagta hai jab request actually https ho
-    (ya COOKIE_SECURE=1 se force kiya ho).
-    """
+    """`https_only=True` default ka problem: plain HTTP par browser cookie store
+    hi nahi karta -> login hota tha par session turant ud jaata tha.
+    Yahan secure flag sirf tab lagta hai jab request actually https ho."""
 
     def __init__(self, *args, force_secure: bool = False, **kwargs):
         self.force_secure = force_secure
@@ -281,7 +279,10 @@ except Exception:  # pragma: no cover
         ProxyHeadersMiddleware = None
 
 if ProxyHeadersMiddleware is not None:
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    try:
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    except TypeError:
+        app.add_middleware(ProxyHeadersMiddleware, forwarded_allow_ips="*")
 
 
 # ------------------------------------------------------------------ models
@@ -417,7 +418,6 @@ def normalize_number(raw) -> str:
 
 
 def norm_channel_id(raw) -> str:
-    """-1001234567890 / @name / 'name' -> stable string key."""
     s = str(raw or "").strip()
     if not s:
         return ""
@@ -561,7 +561,6 @@ def backfill_short_ids():
 
 
 def backfill_auto_sender():
-    """Purane devices ko default auto_sender block do."""
     try:
         devices.update_many(
             {"auto_sender": {"$exists": False}},
@@ -581,6 +580,15 @@ def auto_sender_of(device: dict) -> dict:
         "channel_id": str(a.get("channel_id") or ""),
         "channel_title": a.get("channel_title") or "",
         "updated_at": serialize_dt(a.get("updated_at")),
+    }
+
+
+def auto_sender_plain(device: dict) -> dict:
+    a = auto_sender_of(device)
+    return {
+        "enabled": a["enabled"],
+        "channel_id": a["channel_id"],
+        "channel_title": a["channel_title"],
     }
 
 
@@ -644,7 +652,6 @@ def require_api_key(api_key: str | None):
 
 
 def require_admin(request: Request) -> str:
-    """Session cookie -> Bearer token. Dono me se koi bhi chale."""
     admin_id = request.session.get("admin_id")
     if admin_id:
         return admin_id
@@ -710,7 +717,7 @@ def view_device(d: dict, include_hash: bool = False) -> dict:
     s["ws_connected"] = hub.online(s["id"])
     s["live_number"] = resolve_device_number(d)
     s["entered_number"] = normalize_number(d.get("phone_number")) or (d.get("phone_number") or "")
-    s["auto_sender"] = auto_sender_of(d)
+    s["auto_sender"] = auto_sender_plain(d)
     if not include_hash:
         s.pop("registration_id", None)
     return s
@@ -993,13 +1000,26 @@ def resolve_targets(payload: SendRequest) -> tuple[list, bool]:
     return list(devices.find().limit(MAX_BROADCAST)), total > MAX_BROADCAST
 
 
+async def close_sockets():
+    for did, ws in list(hub.device_sockets.items()):
+        try:
+            await ws.close(code=1001)
+        except Exception:
+            pass
+    for ws in list(admin_hub.sockets):
+        try:
+            await ws.close(code=1001)
+        except Exception:
+            pass
+
+
 # --------------------------------------------------------------- public
 
 
 @app.get("/")
 async def home():
     return {
-        "app": "TPC PANEL", "status": "online", "version": "5.0.0",
+        "app": "TPC PANEL", "status": "online", "version": "5.1.0",
         "owner": "https://t.me/icivan",
         "relay": "mtproto" if TELETHON_OK else "unavailable",
     }
@@ -1045,13 +1065,17 @@ async def panel_alias():
 @app.get("/admin/auth/status")
 async def auth_status(request: Request):
     a = request.session.get("admin_id") or bearer_admin(request)
-    return {"authenticated": bool(a), "admin_id": a}
+    return {
+        "authenticated": bool(a),
+        "admin_id": a,
+        "secret_source": SESSION_SECRET_SRC,
+    }
 
 
 @app.post("/admin/login")
 async def admin_login(payload: AdminLoginRequest, request: Request):
     ip = (request.client.host if request.client else "?") or "?"
-    login_guard(ip)
+    hits = recent_fails(ip)
 
     user = (payload.login_id or payload.username or "").strip()
     if not user:
@@ -1059,17 +1083,20 @@ async def admin_login(payload: AdminLoginRequest, request: Request):
 
     expected = ADMINS.get(user)
     if expected is None:
-        # case-insensitive fallback
         for k, v in ADMINS.items():
             if k.lower() == user.lower():
                 user, expected = k, v
                 break
 
     if expected is None or not const_eq(payload.password, expected):
-        login_fail(ip)
+        hits.append(time.time())
+        _login_fails[ip] = hits
+        if len(hits) > LOGIN_MAX_TRIES:
+            wait = int(LOGIN_LOCK_SECONDS - (time.time() - hits[0]))
+            raise HTTPException(429, f"Bahut zyada galat tries — {max(1, wait)}s baad try karo")
         raise HTTPException(401, "Invalid Login ID or password")
 
-    login_ok(ip)
+    _login_fails.pop(ip, None)
     request.session["admin_id"] = user
     log_event("admin_login", {"username": user, "ip": ip}, admin_id=user)
     return {
@@ -1953,7 +1980,6 @@ async def admin_overview(request: Request):
 
 
 def enabled_channels() -> set:
-    """Har enabled device ka channel + legacy env channel."""
     out = set()
     try:
         for d in devices.find({"auto_sender.enabled": True}, {"auto_sender": 1}):
@@ -1998,11 +2024,10 @@ async def auto_sender_status(request: Request):
 
 @app.post("/admin/auto-sender/verify")
 async def auto_sender_verify(payload: ChannelRequest, request: Request):
-    """Channel reachable hai? Account admin hai? — bind se pehle check."""
     require_admin(request)
 
     if not (TELETHON_OK and relay_client and relay_state.get("authorized")):
-        raise HTTPException(400, "Pehle relay login karo (Admin → MTProto login)")
+        raise HTTPException(400, "Pehle relay login karo (Relay page)")
 
     cid = norm_channel_id(payload.channel_id)
     if not cid:
@@ -2028,7 +2053,6 @@ async def auto_sender_verify(payload: ChannelRequest, request: Request):
         "channel_id": str(getattr(ent, "id", cid)),
         "title": str(title),
         "admin": is_admin,
-        "message": "Account channel me hai — save karke bind kar do.",
     }
 
 
@@ -2068,20 +2092,13 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
     except PyMongoError:
         raise HTTPException(503, "Save failed")
 
-    broadcast_device(device_id, {"auto_sender": doc})
+    plain = {"enabled": enabled, "channel_id": channel_id, "channel_title": title}
+    broadcast_device(device_id, {"auto_sender": plain})
     log_event("auto_sender_update",
               {"enabled": enabled, "channel_id": channel_id},
               device_id=device_id, admin_id=admin)
 
-    return {
-        "status": "ok",
-        "auto_sender": {
-            "enabled": enabled,
-            "channel_id": channel_id,
-            "channel_title": title,
-        },
-        "watching": sorted(enabled_channels()),
-    }
+    return {"status": "ok", "auto_sender": plain, "watching": sorted(enabled_channels())}
 
 
 # ---------------------------------------------------------------- pairing
@@ -2108,7 +2125,7 @@ async def create_pair(payload: PairRequest):
 
 
 # =====================================================================
-#  RELAY — MTProto channel watcher + SMS forwarder (bot API hata diya)
+#  RELAY — MTProto channel watcher + SMS forwarder
 # =====================================================================
 
 relay_client = None
@@ -2174,6 +2191,15 @@ def load_bans():
         for d in banned_senders.find({}, {"address": 1}):
             if d.get("address"):
                 banned_cache.add(d["address"])
+    except PyMongoError:
+        pass
+
+
+def load_relay_config():
+    try:
+        doc = relay_config.find_one({"_id": "forward"}) or {}
+        if doc.get("target"):
+            relay_state["forward_user"] = doc["target"]
     except PyMongoError:
         pass
 
@@ -2267,7 +2293,6 @@ async def _after_relay_login(api_id=None, api_hash=None):
 
 
 def _install_relay_handlers():
-    """Global handler — dynamic channel list, dobara register karne ki zarurat nahi."""
     if relay_state["handlers_installed"] or not relay_client or not TELETHON_OK:
         return
     relay_client.add_event_handler(_on_relay_message, events.NewMessage(incoming=True))
@@ -2277,16 +2302,17 @@ def _install_relay_handlers():
 async def _on_relay_message(event):
     try:
         mid = event.message.id
-        key = (event.chat_id, mid)
+        chat_id = event.chat_id
+        key = (chat_id, mid)
         if key in _relay_seen:
             return
         _relay_seen.add(key)
         if len(_relay_seen) > 8000:
             _relay_seen.clear()
 
-        chat_id = event.chat_id
-        channels = enabled_channels()
-        if chat_id is None or str(chat_id) not in channels:
+        if chat_id is None:
+            return
+        if str(chat_id) not in enabled_channels():
             return
 
         relay_state["last_channel_at"] = utc_now().isoformat()
