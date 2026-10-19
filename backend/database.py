@@ -1,15 +1,21 @@
 import os
 import time
+import logging
 from datetime import datetime, timezone
 
 from pymongo import MongoClient, ASCENDING, DESCENDING
-from pymongo.errors import PyMongoError, OperationFailure
+from pymongo.errors import PyMongoError, OperationFailure, DuplicateKeyError
+
+log = logging.getLogger("tpc.db")
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 DB_NAME = os.getenv("DB_NAME", "tpcpanel")
 
 if not MONGODB_URI:
-    raise RuntimeError("MONGODB_URI environment variable is missing")
+    raise RuntimeError(
+        "MONGODB_URI environment variable is missing "
+        "(Heroku: heroku config:set MONGODB_URI='mongodb+srv://...')"
+    )
 
 
 def _int_env(name: str, default: int) -> int:
@@ -19,10 +25,20 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    v = (os.getenv(name) or "").strip().lower()
+    if not v:
+        return default
+    return v in ("1", "true", "yes", "on")
+
+
 RETENTION_DAYS = _int_env("RETENTION_DAYS", 30)
 LOG_RETENTION_DAYS = _int_env("LOG_RETENTION_DAYS", 7)
 OUTBOX_RETENTION_DAYS = _int_env("OUTBOX_RETENTION_DAYS", 14)
 PENDING_OUTBOX_GRACE_DAYS = _int_env("PENDING_OUTBOX_GRACE_DAYS", 45)
+
+# Index build ko boot pe blocking na kare (bade collection par kaam aata hai).
+INDEX_BACKGROUND = _bool_env("MONGO_INDEX_BACKGROUND", True)
 
 client = MongoClient(
     MONGODB_URI,
@@ -31,6 +47,10 @@ client = MongoClient(
     socketTimeoutMS=20000,
     maxPoolSize=50,
     retryWrites=True,
+    retryReads=True,
+    # tz_aware=False (default) -> reads naive UTC dete hain; app.py me
+    # serialize_dt() aur stale-check dono isi assumption par likhe hain.
+    tz_aware=False,
     appname="tpc-panel",
 )
 
@@ -49,27 +69,90 @@ relay_config = db["relay_config"]
 counters = db["counters"]
 
 
-def _ensure_index(collection, keys, **options):
-    """create_index jo conflict pe crash na kare.
+# --------------------------------------------------------------- index utils
 
-    - 85 / 86 (IndexOptionsConflict / KeySpecsConflict): existing index chhodo
-    - 11000 par unique: existing duplicates hain -> unique hata ke dobara try
+
+def _norm_keys(keys) -> dict:
+    if isinstance(keys, str):
+        return {keys: ASCENDING}
+    if isinstance(keys, (list, tuple)) and keys and isinstance(keys[0], tuple):
+        return {k: v for k, v in keys}
+    return dict(keys)
+
+
+def _find_index_name(collection, keys, partial=None):
+    """Isi key-pattern ka existing index ka naam dhoondo (naam guessing ke bajaye)."""
+    want = _norm_keys(keys)
+    want_partial = partial or None
+    try:
+        for info in collection.list_indexes():
+            name = info.get("name") or ""
+            if name == "_id_":
+                continue
+            if dict(info.get("key") or {}) != want:
+                continue
+            have_partial = info.get("partialFilterExpression") or None
+            if have_partial == want_partial:
+                return name
+    except Exception:
+        pass
+    return None
+
+
+def _drop(collection, name):
+    if not name or name == "_id_":
+        return False
+    try:
+        collection.drop_index(name)
+        return True
+    except Exception:
+        return False
+
+
+def _ensure_index(collection, keys, **options):
+    """create_index jo conflict pe crash na kare AUR options actually laga de.
+
+    Pehle sirf `return` karta tha — matlab existing non-unique index par
+    unique=True kabhi apply hi nahi hota tha. Ab conflict par purana index
+    drop karke naye options ke saath dobara banate hain.
     """
+    if INDEX_BACKGROUND:
+        options.setdefault("background", True)
+
     try:
         collection.create_index(keys, **options)
         return
     except OperationFailure as e:
-        if e.code in (85, 86):
+        if e.code not in (85, 86):          # 85=OptionsConflict, 86=KeySpecsConflict
+            raise
+        _drop(collection, _find_index_name(collection, keys,
+                                           options.get("partialFilterExpression")))
+        try:
+            collection.create_index(keys, **options)
             return
-        if e.code == 11000:
-            relaxed = {k: v for k, v in options.items()
-                       if k not in ("unique", "partialFilterExpression")}
-            try:
-                collection.create_index(keys, **relaxed)
-            except OperationFailure:
-                pass
-            return
-        raise
+        except OperationFailure:
+            pass
+    except DuplicateKeyError:
+        pass
+
+    # 11000 / unique fail: existing duplicates hain -> unique hata ke try karo.
+    # Pehle purana index drop, warna options change hone par phir 85/86 milega.
+    relaxed = {k: v for k, v in options.items()
+               if k not in ("unique", "partialFilterExpression", "background")}
+    relaxed["background"] = INDEX_BACKGROUND
+
+    _drop(collection, _find_index_name(collection, keys,
+                                       options.get("partialFilterExpression")))
+    try:
+        collection.create_index(keys, **relaxed)
+    except OperationFailure as e:
+        if e.code not in (85, 86):
+            raise
+        _drop(collection, _find_index_name(collection, keys))
+        try:
+            collection.create_index(keys, **relaxed)
+        except OperationFailure:
+            log.warning("index skip: %s %s", collection.name, keys)
 
 
 def _ensure_ttl(collection, field, seconds, direction=ASCENDING, partial=None):
@@ -84,7 +167,7 @@ def _ensure_ttl(collection, field, seconds, direction=ASCENDING, partial=None):
     name = f"{field}_ttl"
     keys = [(field, direction)]
 
-    opts = {"expireAfterSeconds": seconds, "name": name}
+    opts = {"expireAfterSeconds": int(seconds), "name": name}
     if partial:
         opts["partialFilterExpression"] = partial
 
@@ -95,27 +178,46 @@ def _ensure_ttl(collection, field, seconds, direction=ASCENDING, partial=None):
         if e.code not in (85, 86):
             raise
 
+    # Jitne bhi is field ke single-key index hain (naam ya partial mismatch) hata do,
+    # warna naya create phir conflict dega.
+    want = _norm_keys(keys)
     try:
         for info in collection.list_indexes():
             iname = info.get("name") or ""
             if iname == "_id_":
                 continue
-            same_keys = dict(info.get("key") or {}) == dict(keys)
-            same_partial = (info.get("partialFilterExpression") or None) == (partial or None)
-            if iname == name or (same_keys and same_partial):
-                collection.drop_index(iname)
+            if iname == name or dict(info.get("key") or {}) == want:
+                _drop(collection, iname)
     except Exception:
         pass
 
-    collection.create_index(keys, **opts)
+    try:
+        collection.create_index(keys, **opts)
+    except OperationFailure as e:
+        if e.code in (85, 86):
+            _drop(collection, name)
+            try:
+                collection.create_index(keys, **opts)
+            except OperationFailure:
+                log.warning("ttl skip: %s.%s", collection.name, field)
+        else:
+            raise
+
+
+# ------------------------------------------------------------------ init
 
 
 def init_db():
     client.admin.command("ping")
 
     # ------------------------------------------------------------ devices
-    _ensure_index(devices, "registration_id_hash", unique=True)
-    # partial + unique: short_id missing/null wale docs aapas me collide na karein
+    # partial+unique: legacy docs jinme field hi nahi hai, wo aapas me
+    # null-collide na karein (non-sparse unique me sirf EK null doc chalta hai).
+    _ensure_index(
+        devices, "registration_id_hash",
+        unique=True,
+        partialFilterExpression={"registration_id_hash": {"$type": "string"}},
+    )
     _ensure_index(
         devices, "short_id",
         unique=True,
@@ -162,9 +264,14 @@ def init_db():
     _ensure_index(rules, "enabled")
     _ensure_index(rules, "created_at")
     _ensure_index(bots, "bound")
-    _ensure_index(bots, "bot_id", unique=True)
+    _ensure_index(
+        bots, "bot_id",
+        unique=True,
+        partialFilterExpression={"bot_id": {"$type": "string"}},
+    )
 
     # ----------------------------------------------------- telegram logs
+    _ensure_index(tg_logs, "created_at")
     _ensure_ttl(tg_logs, "created_at", LOG_RETENTION_DAYS * 86400, DESCENDING)
 
     # ------------------------------------------------------ activity logs
@@ -181,19 +288,31 @@ def init_db():
     _ensure_index(banned_senders, "address", unique=True)
     _ensure_index(relay_config, "updated_at")
 
+    # ------------------------------------------------------------ counters
+    # _id hi kaafi hai (find_one_and_update {"_id": "device_seq"}), extra index nahi.
+
 
 def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
-    """Boot pe Mongo thoda late aaye (docker-compose) to app crash na ho."""
+    """Boot pe Mongo thoda late aaye (docker-compose) to app crash na ho.
+
+    Sirf PyMongoError nahi — koi bhi boot-time index error retry ho,
+    aur last error hi raise ho taaki traceback saaf rahe.
+    """
     attempts = max(1, attempts)
-    last = None
+    last: Exception | None = None
+
     for i in range(attempts):
         try:
             init_db()
+            if i:
+                log.info("Mongo connect ho gaya (attempt %d/%d)", i + 1, attempts)
             return
-        except PyMongoError as e:
+        except Exception as e:  # noqa: BLE001 — boot robustness
             last = e
+            log.warning("init_db attempt %d/%d fail: %s", i + 1, attempts, e)
             if i < attempts - 1:
                 time.sleep(delay)
+
     if last is not None:
         raise last
 
