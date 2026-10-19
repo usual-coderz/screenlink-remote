@@ -1,18 +1,3 @@
-"""TPC PANEL — backend API (v5.1)
-
-v5.1 changes
-------------
-* Login: rate-limit sirf GALAT credentials par lagta hai. Sahi password par
-  lockout ke beech bhi login ho jaata hai (pehle 6 fails ke baad sahi password
-  bhi 429 se reject ho raha tha).
-* Session: https_only auto-detect, SESSION_SECRET disk par persist, Bearer
-  token fallback, 30-din TTL, UTF-8 safe password compare.
-* Telegram Bot (Bot API) flow poori tarah hata diya — sirf MTProto relay.
-* Auto Sender per-device hai (device doc me auto_sender config); relay har
-  enabled channel ko ek global handler se watch karta hai.
-* Boot pe graceful shutdown (relay + mongo client close).
-"""
-
 import os
 import re
 import html
@@ -241,7 +226,7 @@ app = FastAPI(title="TPC PANEL", version="5.1.0", lifespan=lifespan)
 
 
 class AdaptiveSessionMiddleware(SessionMiddleware):
-    """`https_only=True` default ka problem: plain HTTP par browser cookie store
+    """https_only=True default ka problem: plain HTTP par browser cookie store
     hi nahi karta -> login hota tha par session turant ud jaata tha.
     Yahan secure flag sirf tab lagta hai jab request actually https ho."""
 
@@ -426,6 +411,32 @@ def norm_channel_id(raw) -> str:
         return str(int(s))
     except ValueError:
         return s
+
+
+# ---- FIX: channel identity helpers -------------------------------------
+# Telethon event.chat_id is -1001234567890 for supergroups/channels, while the
+# raw entity id is 1234567890 and a username is "@something". Inhe ek hi key
+# par collapse karte hain, warna auto sender chup-chaap kabhi match nahi karta.
+
+def chan_key(v) -> str:
+    """Digits-only channel key; -100 supergroup prefix strip karta hai.
+    -1001234567890 / 1001234567890 / 1234567890 -> sab '1234567890'."""
+    s = re.sub(r"[^\d]", "", str(v or ""))
+    if not s:
+        return ""
+    if s.startswith("100") and len(s) > 10:
+        s = s[3:]
+    return s
+
+
+def canonical_channel_id(ent, fallback=None) -> str:
+    """Telethon entity -> canonical chat_id form (supergroup ke liye -100...)."""
+    ent_id = getattr(ent, "id", None)
+    if isinstance(ent_id, int):
+        if getattr(ent, "broadcast", False) or getattr(ent, "megagroup", False):
+            return str(int(f"-100{ent_id}"))
+        return str(-abs(ent_id))
+    return str(fallback) if fallback is not None else ""
 
 
 def as_entity(cid):
@@ -1993,15 +2004,38 @@ def enabled_channels() -> set:
     return out
 
 
+# FIX: per-message DB query na kare — 5s TTL cache, keys par match.
+_enabled_keys_cache: Dict[str, object] = {"at": 0.0, "keys": set()}
+
+
+def invalidate_channel_cache():
+    _enabled_keys_cache["at"] = 0.0
+    _enabled_keys_cache["keys"] = set()
+
+
+def enabled_channel_keys() -> set:
+    now = time.time()
+    keys = _enabled_keys_cache.get("keys") or set()
+    if keys and now - float(_enabled_keys_cache.get("at") or 0.0) < 5:
+        return keys
+    fresh = {chan_key(c) for c in enabled_channels()}
+    fresh.discard("")
+    _enabled_keys_cache["at"] = now
+    _enabled_keys_cache["keys"] = fresh
+    return fresh
+
+
 def devices_for_channel(channel_id) -> list:
-    key = str(channel_id)
+    """FIX: -100… / raw id / @username sab ek hi key par match hote hain."""
+    key = chan_key(channel_id)
+    if not key:
+        return []
     try:
-        return list(devices.find({
-            "auto_sender.enabled": True,
-            "auto_sender.channel_id": key,
-        }).limit(MAX_BROADCAST))
+        rows = list(devices.find({"auto_sender.enabled": True}).limit(MAX_BROADCAST))
     except PyMongoError:
         return []
+    return [d for d in rows
+            if chan_key((d.get("auto_sender") or {}).get("channel_id")) == key]
 
 
 @app.get("/admin/auto-sender")
@@ -2050,7 +2084,8 @@ async def auto_sender_verify(payload: ChannelRequest, request: Request):
 
     return {
         "status": "ok",
-        "channel_id": str(getattr(ent, "id", cid)),
+        # FIX: canonical chat_id (-100…) — isi form me bind karne se watcher match karega
+        "channel_id": canonical_channel_id(ent, cid),
         "title": str(title),
         "admin": is_admin,
     }
@@ -2078,6 +2113,16 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
     channel_id = cur["channel_id"] if payload.channel_id is None else norm_channel_id(payload.channel_id)
     title = payload.channel_title or cur["channel_title"]
 
+    # FIX: username ya raw id diya ho to canonical -100 form me convert kar do
+    if channel_id and relay_client and relay_state.get("authorized"):
+        try:
+            ent = await relay_client.get_entity(as_entity(channel_id))
+            channel_id = canonical_channel_id(ent, channel_id)
+            if not title:
+                title = getattr(ent, "title", None) or getattr(ent, "username", None) or ""
+        except Exception:
+            pass
+
     if enabled and not channel_id:
         raise HTTPException(400, "Enable karne ke liye Channel ID chahiye")
 
@@ -2091,6 +2136,8 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
         devices.update_one({"_id": device["_id"]}, {"$set": {"auto_sender": doc}})
     except PyMongoError:
         raise HTTPException(503, "Save failed")
+
+    invalidate_channel_cache()
 
     plain = {"enabled": enabled, "channel_id": channel_id, "channel_title": title}
     broadcast_device(device_id, {"auto_sender": plain})
@@ -2289,7 +2336,45 @@ async def _after_relay_login(api_id=None, api_hash=None):
     load_bans()
     if api_id and api_hash:
         _save_relay_creds(api_id, api_hash, relay_state.get("phone"))
+    # FIX: purane username-bound channels ko canonical id me heal karo
+    try:
+        await normalize_auto_sender_channels()
+    except Exception as e:
+        relay_state["last_error"] = f"channel normalize: {e}"
     log_event("relay_login", relay_state["me"])
+
+
+async def normalize_auto_sender_channels():
+    """One-time heal: @username ya raw-id bound channels -> canonical -100 id."""
+    if not (relay_client and relay_state.get("authorized")):
+        return
+    try:
+        rows = list(devices.find({"auto_sender.channel_id": {"$ne": None}}).limit(MAX_BROADCAST))
+    except PyMongoError:
+        return
+
+    changed = 0
+    for d in rows:
+        cid = (d.get("auto_sender") or {}).get("channel_id")
+        if not cid or str(cid).lstrip("-").isdigit() and str(cid).startswith("-100"):
+            continue
+        try:
+            ent = await relay_client.get_entity(as_entity(cid))
+        except Exception:
+            continue
+        nid = canonical_channel_id(ent)
+        if not nid or nid == str(cid):
+            continue
+        try:
+            devices.update_one({"_id": d["_id"]},
+                               {"$set": {"auto_sender.channel_id": nid}})
+            changed += 1
+        except PyMongoError:
+            pass
+
+    if changed:
+        invalidate_channel_cache()
+        log_event("auto_sender_channels_normalized", {"count": changed})
 
 
 def _install_relay_handlers():
@@ -2312,7 +2397,8 @@ async def _on_relay_message(event):
 
         if chat_id is None:
             return
-        if str(chat_id) not in enabled_channels():
+        # FIX: key-based match — -100… / raw id / @username sab chalega
+        if chan_key(chat_id) not in enabled_channel_keys():
             return
 
         relay_state["last_channel_at"] = utc_now().isoformat()
@@ -2326,7 +2412,8 @@ async def _on_relay_message(event):
         targets = devices_for_channel(chat_id)
         if not targets and hint:
             targets = _resolve_relay_targets(hint)
-        if not targets and TARGET_CHANNEL_ID and chat_id == TARGET_CHANNEL_ID:
+        if (not targets and TARGET_CHANNEL_ID
+                and chan_key(chat_id) == chan_key(TARGET_CHANNEL_ID)):
             targets = _resolve_relay_targets(None)
 
         for d in targets:
@@ -2493,6 +2580,7 @@ async def relay_logout(request: Request):
         except Exception:
             pass
     relay_state.update({"authorized": False, "me": None, "handlers_installed": False})
+    invalidate_channel_cache()
     return {"status": "ok"}
 
 
@@ -2764,5 +2852,6 @@ async def device_socket(websocket: WebSocket, registration_id: str):
             devices.update_one({"_id": device["_id"]}, {"$set": {"ws_connected": False}})
         except PyMongoError:
             pass
+        # FIX: pehle yahan `device_i` likha tha -> NameError, offline event kabhi broadcast nahi hota tha
         broadcast_device(device_id, {"ws_connected": False, "status": "Offline"})
         log_event("device_socket_close", {"device_id": device_id})
