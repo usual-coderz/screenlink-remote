@@ -1024,6 +1024,13 @@ lastError: ""
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
+/* FIX: classList.add("") throws SyntaxError — safe wrapper */
+function addCls(el, name) {
+if (!el) return;
+const t = (name === null || name === undefined) ? "" : String(name).trim();
+if (t) el.classList.add(t);
+}
+
 function reportError(e) {
 const msg = (e && (e.message || e.reason && e.reason.message)) || String(e || "unknown error");
 state.lastError = msg;
@@ -1109,10 +1116,11 @@ const td = document.createElement("td");
 const b = document.createElement("span");
 const s = String(val(v, "unknown")).toLowerCase();
 b.className = "badge";
-if (force) b.classList.add(force);
-else if (["online","active","sent","success","bound","upi","delivered","received","ok"].indexOf(s) >= 0) b.classList.add("ok");
-else if (["pending","queued","sending"].indexOf(s) >= 0) b.classList.add("warn");
-else if (["failed","error","offline"].indexOf(s) >= 0) b.classList.add("bad");
+/* FIX: guard empty class token */
+if (force && String(force).trim()) addCls(b, force);
+else if (["online","active","sent","success","bound","upi","delivered","received","ok"].indexOf(s) >= 0) addCls(b, "ok");
+else if (["pending","queued","sending"].indexOf(s) >= 0) addCls(b, "warn");
+else if (["failed","error","offline"].indexOf(s) >= 0) addCls(b, "bad");
 b.textContent = val(v, "—");
 td.appendChild(b);
 row.appendChild(td);
@@ -1176,11 +1184,14 @@ const shell = document.createElement("span");
 shell.className = "batt-shell";
 const fill = document.createElement("span");
 fill.className = "batt-fill";
-if (lvl === null) fill.style.width = "0%";
-else {
+/* FIX: was classList.add(p <= 15 ? "low" : p <= 40 ? "mid" : "") */
+if (lvl === null) {
+fill.style.width = "0%";
+} else {
 const p = Math.max(0, Math.min(100, lvl));
 fill.style.width = p + "%";
-fill.classList.add(p <= 15 ? "low" : p <= 40 ? "mid" : "");
+if (p <= 15) addCls(fill, "low");
+else if (p <= 40) addCls(fill, "mid");
 }
 shell.appendChild(fill);
 wrap.appendChild(shell);
@@ -2549,6 +2560,8 @@ btn.disabled = true;
 btn.textContent = "checking…";
 try {
 const r = await api("/admin/auto-sender/verify", { method: "POST", body: JSON.stringify({ channel_id: cid }) });
+/* FIX: bind the canonical -100 id returned by the backend, not the typed username */
+if (r.channel_id) $("#chanInput").value = r.channel_id;
 $("#chanMsg").className = "ok-msg";
 $("#chanMsgTxt").textContent = (r.title || cid) + " reachable" + (r.admin ? " — admin ✓" : "") + " — save to bind.";
 $("#chanMsg").hidden = false;
