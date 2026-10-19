@@ -67,6 +67,7 @@ activity_logs = db["activity_logs"]
 banned_senders = db["banned_senders"]
 relay_config = db["relay_config"]
 counters = db["counters"]
+panel_users = db["panel_users"]
 
 
 # --------------------------------------------------------------- index utils
