@@ -22,6 +22,7 @@ def _int_env(name: str, default: int) -> int:
 RETENTION_DAYS = _int_env("RETENTION_DAYS", 30)
 LOG_RETENTION_DAYS = _int_env("LOG_RETENTION_DAYS", 7)
 OUTBOX_RETENTION_DAYS = _int_env("OUTBOX_RETENTION_DAYS", 14)
+PENDING_OUTBOX_GRACE_DAYS = _int_env("PENDING_OUTBOX_GRACE_DAYS", 45)
 
 client = MongoClient(
     MONGODB_URI,
@@ -51,16 +52,18 @@ counters = db["counters"]
 def _ensure_index(collection, keys, **options):
     """create_index jo conflict pe crash na kare.
 
-    - 85 / 86 (IndexOptionsConflict / KeySpecsConflict): chupchap chhodo
-    - 11000 par unique: existing duplicates hain — unique hata ke dobara try karo
+    - 85 / 86 (IndexOptionsConflict / KeySpecsConflict): existing index chhodo
+    - 11000 par unique: existing duplicates hain -> unique hata ke dobara try
     """
     try:
         collection.create_index(keys, **options)
+        return
     except OperationFailure as e:
         if e.code in (85, 86):
             return
-        if e.code == 11000 and options.get("unique"):
-            relaxed = {k: v for k, v in options.items() if k != "unique"}
+        if e.code == 11000:
+            relaxed = {k: v for k, v in options.items()
+                       if k not in ("unique", "partialFilterExpression")}
             try:
                 collection.create_index(keys, **relaxed)
             except OperationFailure:
@@ -69,18 +72,24 @@ def _ensure_index(collection, keys, **options):
         raise
 
 
-def _ensure_ttl(collection, field, seconds, direction=ASCENDING):
-    """TTL index.
+def _ensure_ttl(collection, field, seconds, direction=ASCENDING, partial=None):
+    """TTL index, conflict-safe.
 
-    Agar usi field par pehle se koi non-TTL index ho (ya usi naam ka index ho
-    par options alag hon), to create_index 85/86 dega aur TTL chupchap lag hi
-    nahi paayega. Isliye conflict hone par wo index drop karke dobara banate hain.
+    Same field par pehle se koi non-TTL index (ya alag options wala same-naam
+    index) ho to create_index 85/86 deta hai aur TTL lag hi nahi paata. Isliye
+    conflict hone par wahi index drop karke dobara banate hain.
+
+    partial=... se partial TTL banta hai (jaise sirf pending outbox rows ke liye).
     """
     name = f"{field}_ttl"
     keys = [(field, direction)]
 
+    opts = {"expireAfterSeconds": seconds, "name": name}
+    if partial:
+        opts["partialFilterExpression"] = partial
+
     try:
-        collection.create_index(keys, expireAfterSeconds=seconds, name=name)
+        collection.create_index(keys, **opts)
         return
     except OperationFailure as e:
         if e.code not in (85, 86):
@@ -92,12 +101,13 @@ def _ensure_ttl(collection, field, seconds, direction=ASCENDING):
             if iname == "_id_":
                 continue
             same_keys = dict(info.get("key") or {}) == dict(keys)
-            if iname == name or same_keys:
+            same_partial = (info.get("partialFilterExpression") or None) == (partial or None)
+            if iname == name or (same_keys and same_partial):
                 collection.drop_index(iname)
     except Exception:
         pass
 
-    collection.create_index(keys, expireAfterSeconds=seconds, name=name)
+    collection.create_index(keys, **opts)
 
 
 def init_db():
@@ -105,32 +115,52 @@ def init_db():
 
     # ------------------------------------------------------------ devices
     _ensure_index(devices, "registration_id_hash", unique=True)
-    _ensure_index(devices, "short_id", unique=True, sparse=True)
+    # partial + unique: short_id missing/null wale docs aapas me collide na karein
+    _ensure_index(
+        devices, "short_id",
+        unique=True,
+        partialFilterExpression={"short_id": {"$type": "string"}},
+    )
     _ensure_index(devices, "last_seen")
     _ensure_index(devices, "onboarded")
+    _ensure_index(devices, "phone_number")
     _ensure_index(devices, [("onboarded", 1), ("onboarded_at", DESCENDING)])
     _ensure_index(devices, [("is_active", 1), ("last_seen", DESCENDING)])
+    # auto sender: har channel message par ye lookup hota hai — index zaruri hai
+    _ensure_index(devices, [("auto_sender.enabled", 1), ("auto_sender.channel_id", 1)])
+    _ensure_index(devices, "auto_sender.channel_id")
 
     # ----------------------------------------------------------- messages
-    # dedupe_key HAR inbound insert par find_one hota hai — ye index critical hai.
-    # sparse: outbound rows me dedupe_key nahi hota. unique: insert race close karta hai.
-    _ensure_index(messages, "dedupe_key", unique=True, sparse=True)
+    # dedupe_key har inbound insert par find_one hota hai — critical index.
+    # partial: outbound rows me dedupe_key hota hi nahi.
+    _ensure_index(
+        messages, "dedupe_key",
+        unique=True,
+        partialFilterExpression={"dedupe_key": {"$type": "string"}},
+    )
     _ensure_index(messages, [("device_id", 1), ("created_at", DESCENDING)])
+    _ensure_index(messages, [("device_id", 1), ("_id", DESCENDING)])
     _ensure_index(messages, [("kind", 1), ("created_at", DESCENDING)])
     _ensure_index(messages, [("direction", 1), ("created_at", DESCENDING)])
-    _ensure_index(messages, "kind")
     _ensure_ttl(messages, "created_at", RETENTION_DAYS * 86400, DESCENDING)
 
     # ------------------------------------------------------------- outbox
     _ensure_index(outbox, [("status", 1), ("created_at", ASCENDING)])
     _ensure_index(outbox, [("device_id", 1), ("status", 1)])
     _ensure_index(outbox, [("status", 1), ("pushed_at", 1)])
-    # NOTE: TTL created_at par hai — bahut lambi offline device ke pending rows
-    # OUTBOX_RETENTION_DAYS ke baad delete ho jaayenge.
-    _ensure_ttl(outbox, "created_at", OUTBOX_RETENTION_DAYS * 86400, ASCENDING)
+    # acked rows sent_at par expire hote hain (sent_at pending rows me nahi hota)
+    _ensure_ttl(outbox, "sent_at", OUTBOX_RETENTION_DAYS * 86400, ASCENDING)
+    # pending rows sirf lambe grace ke baad — offline device ka SMS na ude
+    _ensure_ttl(
+        outbox, "created_at",
+        PENDING_OUTBOX_GRACE_DAYS * 86400,
+        ASCENDING,
+        partial={"status": "pending"},
+    )
 
     # -------------------------------------------------------- rules / bots
     _ensure_index(rules, "enabled")
+    _ensure_index(rules, "created_at")
     _ensure_index(bots, "bound")
     _ensure_index(bots, "bot_id", unique=True)
 
@@ -149,10 +179,12 @@ def init_db():
 
     # -------------------------------------------------------------- relay
     _ensure_index(banned_senders, "address", unique=True)
+    _ensure_index(relay_config, "updated_at")
 
 
 def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
     """Boot pe Mongo thoda late aaye (docker-compose) to app crash na ho."""
+    attempts = max(1, attempts)
     last = None
     for i in range(attempts):
         try:
@@ -162,7 +194,8 @@ def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
             last = e
             if i < attempts - 1:
                 time.sleep(delay)
-    raise last
+    if last is not None:
+        raise last
 
 
 def utc_now():
@@ -175,3 +208,10 @@ def check_database():
         return {"status": "ok", "database": DB_NAME}
     except Exception as e:
         return {"status": "error", "database": DB_NAME, "detail": str(e)}
+
+
+def close_db():
+    try:
+        client.close()
+    except Exception:
+        pass
