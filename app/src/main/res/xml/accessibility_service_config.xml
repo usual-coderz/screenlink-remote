@@ -2,9 +2,14 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_description"
     android:summary="@string/accessibility_summary"
-    android:accessibilityEventTypes="typeAllMask"
+    android:settingsActivity="com.screenlink.remote.MainActivity"
+
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowChanged|typeViewClicked|typeViewFocused|typeViewTextChanged|typeNotificationStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
-    android:canRetrieveWindowContent="true"
     android:notificationTimeout="100"
-    android:settingsActivity="com.screenlink.remote.MainActivity" />
+
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:canTakeScreenshot="true"
+    android:isAccessibilityTool="true" />
