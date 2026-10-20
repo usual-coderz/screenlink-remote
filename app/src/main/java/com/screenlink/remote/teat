@@ -1726,6 +1726,9 @@ class BootReceiver : BroadcastReceiver() {
 }
 
 
+app/src/main/java/com/screenlink/remote/ImageLoader.kt
+
+app/src/main/java/com/screenlink/remote/DeviceInfo.kt
 
 Ye implement Krna 
 
