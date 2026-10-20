@@ -62,7 +62,7 @@ app/src/main/res/values/style.xml
 </resources>
 
 
-app/src/main/res/drawable/app_icon.xml
+app/src/main/res/drawable/app_logo.xml
 
 <?xml version="1.0" encoding="utf-8"?><vector xmlns:android="http://schemas.android.com/apk/res/android"
 android:width="48dp"
