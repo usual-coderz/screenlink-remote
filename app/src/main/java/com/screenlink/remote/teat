@@ -1999,28 +1999,7 @@ object DeviceInfo {
 }
 
 
-Ye implement Krna 
-
-Android app side (send fix ke liye zaroori)
-Push payload me ab sim_slot sirf tab aata hai jab select kiya ho (0 = SIM 1, 1 = SIM 2). Field na ho to default SIM se bhejo.
 
 
-val slot = json.optInt("sim_slot", -1)
-val subId = if (slot >= 0) subscriptionIdForSlot(slot) else SubscriptionManager.getDefaultSmsSubscriptionId()
 
-fun subscriptionIdForSlot(slot: Int): Int {
-    val subs = SubscriptionManager.from(ctx).activeSubscriptionInfoList ?: return -1
-    return subs.firstOrNull { it.simSlotIndex == slot }?.subscriptionId ?: -1
-}
-
-smsManagerFor(subId).sendTextMessage(to, null, body, pi, null)
-
-Ack bhejte waqt {"type":"ack","id":..., "status":"sent"} me sim_slot bhi bhej do to panel me exact SIM badge dikhega.
-
-Send kaise verify karein: panel me Actions → 📤 push pending outbox hai — offline device online aane par ya manually force push karne ke liye. Har send ke baad toast me queued N · delivered M dikhta hai, isliye turant pata chal jaata hai bheja gaya ya nahi....Message Stopped
-
-
-and. aur chiz bhi daalskta like panel mai show ho kitne log install kre hai apk and kitne log delete kre hai aaise and proper working 
-
-
-Mera admin/index.html hai and backend/app.py and database.py bhi hai 
+ye code mai jo bug hai ya kuch missing hai vo file ko rewrite krdena and fix krdo jo jo nhi hai
