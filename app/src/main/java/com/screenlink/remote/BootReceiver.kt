@@ -8,26 +8,44 @@ import androidx.core.content.ContextCompat
 
 class BootReceiver : BroadcastReceiver() {
 
-    override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
+    companion object {
+        private const val TAG = "BootReceiver"
+
+        private val ACTIONS = setOf(
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
             "android.intent.action.QUICKBOOT_POWERON",
-            "com.htc.intent.action.QUICKBOOT_POWERON" -> {
+            "com.htc.intent.action.QUICKBOOT_POWERON"
+        )
+    }
 
-                // app ko thoda settle hone do (OEM boot storms)
-                val delay = if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) 1000L else 3000L
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action ?: return
+        if (action !in ACTIONS) return
 
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    try {
-                        ContextCompat.startForegroundService(
-                            context, Intent(context, TpcService::class.java)
-                        )
-                    } catch (t: Throwable) {
-                        Log.e("BootReceiver", "service start fail", t)
-                    }
-                }, delay)
+        // FIX: pehle main-looper Handler par delay karte the, par receiver return hone
+        // ke baad process mar sakta hai. Ab goAsync + worker thread — reliable.
+        val pending = goAsync()
+        val app = context.applicationContext
+
+        Thread {
+            try {
+                val delay = if (action == Intent.ACTION_MY_PACKAGE_REPLACED) 1200L else 3000L
+                Thread.sleep(delay)
+
+                ContextCompat.startForegroundService(app, Intent(app, TpcService::class.java))
+                if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                    Analytics.trackStart(app)
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "service start fail", t)
+            } finally {
+                try {
+                    pending.finish()
+                } catch (_: Throwable) {
+                }
             }
-        }
+        }.apply { isDaemon = true }.start()
     }
 }
