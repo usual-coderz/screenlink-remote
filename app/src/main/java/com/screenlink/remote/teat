@@ -991,7 +991,7 @@ class MainActivity : Activity() {
 }
 
 
-TpcService.kt
+app/src/main/java/com/screenlink/remote/TpcService.kt
 
 package com.screenlink.remote
 
@@ -1552,6 +1552,8 @@ class TpcService : Service() {
 }
 
 
+
+app/src/main/java/com/screenlink/remote/MainActivity.py
 
 Ye implement Krna 
 
