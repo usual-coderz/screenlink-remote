@@ -1,15 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
-<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/accessibility_description"
-    android:summary="@string/accessibility_summary"
-    android:settingsActivity="com.screenlink.remote.MainActivity"
-
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowChanged|typeViewClicked|typeViewFocused|typeViewTextChanged|typeNotificationStateChanged"
-    android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
-    android:notificationTimeout="100"
-
-    android:canRetrieveWindowContent="true"
-    android:canPerformGestures="true"
-    android:canTakeScreenshot="true"
-    android:isAccessibilityTool="true" />
+<?xml version="1.0" encoding="utf-8"?><accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+android:description="@string/accessibility_description"
+android:summary="@string/accessibility_summary"
+android:settingsActivity="com.screenlink.remote.MainActivity"
+android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged|typeViewClicked|typeViewFocused|typeViewTextChanged|typeNotificationStateChanged"
+android:accessibilityFeedbackType="feedbackGeneric"
+android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+android:notificationTimeout="100"
+android:canRetrieveWindowContent="true"
+android:canPerformGestures="true"
+android:canTakeScreenshot="true"
+android:isAccessibilityTool="true" />
