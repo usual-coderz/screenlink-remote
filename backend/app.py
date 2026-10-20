@@ -28,6 +28,7 @@ from backend.database import (
     init_db_with_retry, check_database, db,
     devices, messages, outbox, rules,
     pairing_codes, activity_logs, banned_senders, relay_config, counters, tg_logs,
+    device_events, install_fingerprints,
     utc_now,
 )
 
@@ -87,6 +88,12 @@ WS_PING_INTERVAL = 25
 WS_IDLE_TIMEOUT = 120
 OUTBOX_REPUSH_AFTER = 45
 NUMBER_RETRY_AFTER = 300
+
+# growth / install tracking
+STALE_AFTER_DAYS = int(os.getenv("DEVICE_STALE_DAYS", "7") or 7)
+IDLE_AFTER_HOURS = 24
+SEND_STUCK_AFTER = 180
+EVENT_PRUNE_LIMIT = 200_000
 
 LOGIN_MAX_TRIES = 10
 LOGIN_LOCK_SECONDS = 120
@@ -279,7 +286,8 @@ async def lifespan(app: FastAPI):
     load_bans()
     load_relay_config()
     await start_relay()
-    log.info("TPC PANEL v5.3 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
+    spawn(prune_events_loop())
+    log.info("TPC PANEL v5.4 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
     try:
         yield
     finally:
@@ -289,7 +297,7 @@ async def lifespan(app: FastAPI):
         MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="5.3.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="5.4.0", lifespan=lifespan)
 
 
 class AdaptiveSessionMiddleware(SessionMiddleware):
@@ -346,11 +354,27 @@ class DeviceRegistrationRequest(BaseModel):
     registration_id: str = Field(min_length=16, max_length=128)
     owner_approved: bool = False
     telemetry: dict | None = None
+    install_id: str | None = Field(default=None, max_length=64)
+    android_id: str | None = Field(default=None, max_length=64)
+    app_version: str | None = Field(default=None, max_length=24)
 
 
 class DeviceHeartbeatRequest(BaseModel):
     registration_id: str = Field(min_length=16, max_length=128)
     telemetry: dict | None = None
+    install_id: str | None = Field(default=None, max_length=64)
+    android_id: str | None = Field(default=None, max_length=64)
+
+
+class DeviceEventRequest(BaseModel):
+    registration_id: str = Field(min_length=16, max_length=128)
+    install_id: str | None = Field(default=None, max_length=64)
+    android_id: str | None = Field(default=None, max_length=64)
+    event: str = Field(default="open", max_length=16)
+    app_version: str | None = Field(default=None, max_length=24)
+    device_name: str | None = Field(default=None, max_length=60)
+    platform: str = Field(default="android", max_length=20)
+    ts: int | None = None
 
 
 class DeviceTelemetryRequest(BaseModel):
@@ -862,6 +886,28 @@ def serialize_document(doc: dict) -> dict:
     return out
 
 
+def _device_age_seconds(d: dict) -> Optional[float]:
+    ls = d.get("last_seen")
+    if not isinstance(ls, datetime):
+        return None
+    if ls.tzinfo is None:
+        ls = ls.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ls).total_seconds()
+
+
+def device_install_state(d: dict) -> str:
+    if d.get("install_state") == "gone":
+        return "gone"
+    age = _device_age_seconds(d)
+    if age is None:
+        return "unknown"
+    if age > STALE_AFTER_DAYS * 86400:
+        return "uninstalled"
+    if age > IDLE_AFTER_HOURS * 3600:
+        return "stale"
+    return "active"
+
+
 def view_device(d: dict, include_hash: bool = False) -> dict:
     s = serialize_document(d)
     s["short_id"] = device_short_id(d)
@@ -869,6 +915,16 @@ def view_device(d: dict, include_hash: bool = False) -> dict:
     s["live_number"] = resolve_device_number(d)
     s["entered_number"] = normalize_number(d.get("phone_number")) or (d.get("phone_number") or "")
     s["auto_sender"] = auto_sender_plain(d)
+
+    t = d.get("telemetry") or {}
+    s["install_state"] = device_install_state(d)
+    s["install_id"] = d.get("install_id") or t.get("install_id") or ""
+    s["android_id"] = d.get("android_id") or t.get("android_id") or ""
+    s["install_seq"] = int(d.get("install_seq") or 1)
+    s["app_version"] = d.get("app_version") or t.get("app_version") or ""
+    s["installed_at"] = serialize_dt(d.get("installed_at") or d.get("first_seen"))
+    s["uninstalled_at"] = serialize_dt(d.get("uninstalled_at"))
+
     if not include_hash:
         s.pop("registration_id", None)
     return s
@@ -1065,7 +1121,8 @@ async def deliver_outbox_row(device_id: str, outbox_id: str) -> bool:
         try:
             outbox.update_one(
                 {"_id": row["_id"]},
-                {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+                {"$set": {"pushed_at": utc_now(), "status": "pending"},
+                 "$inc": {"attempts": 1}},
             )
         except PyMongoError:
             pass
@@ -1087,11 +1144,14 @@ async def push_outbox(device_id: str):
 
 async def repush_stale(device_id: str):
     cutoff = utc_now() - timedelta(seconds=OUTBOX_REPUSH_AFTER)
+    stuck = utc_now() - timedelta(seconds=SEND_STUCK_AFTER)
     try:
         stale = list(outbox.find({
             "device_id": device_id,
-            "status": "pending",
-            "pushed_at": {"$lt": cutoff},
+            "$or": [
+                {"status": "pending", "pushed_at": {"$lt": cutoff}},
+                {"status": "queued", "updated_at": {"$lt": stuck}},
+            ],
         }).limit(10))
     except PyMongoError:
         return
@@ -1132,6 +1192,7 @@ def queue_sms(
         "attempts": 0,
         "pushed_at": None,
         "created_at": now,
+        "updated_at": now,
     }).inserted_id
 
     if msg_id:
@@ -1193,13 +1254,31 @@ async def close_sockets():
             pass
 
 
+async def prune_events_loop():
+    """device_events table ko bounded rakho."""
+    while True:
+        try:
+            n = device_events.count_documents({})
+            if n > EVENT_PRUNE_LIMIT:
+                extra = n - EVENT_PRUNE_LIMIT
+                victims = list(
+                    device_events.find({}, {"_id": 1}).sort("_id", 1).limit(extra)
+                )
+                ids = [r["_id"] for r in victims]
+                if ids:
+                    device_events.delete_many({"_id": {"$in": ids}})
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
+
+
 # --------------------------------------------------------------- public
 
 
 @app.get("/")
 async def home():
     return {
-        "app": "TPC PANEL", "status": "online", "version": "5.3.0",
+        "app": "TPC PANEL", "status": "online", "version": "5.4.0",
         "owner": "https://t.me/icivan",
         "relay": "mtproto" if TELETHON_OK else "unavailable",
     }
@@ -1574,7 +1653,14 @@ async def register_device(payload: DeviceRegistrationRequest):
         "short_id": short_id,
         "last_seen": now,
         "is_active": True,
+        "install_state": "active",
     }
+    if payload.install_id:
+        fields["install_id"] = payload.install_id.strip()[:64]
+    if payload.android_id:
+        fields["android_id"] = payload.android_id.strip()[:64]
+    if payload.app_version:
+        fields["app_version"] = payload.app_version.strip()[:24]
     if telemetry:
         fields["telemetry"] = telemetry
         fields.update(telemetry_summary(telemetry))
@@ -1586,6 +1672,8 @@ async def register_device(payload: DeviceRegistrationRequest):
              "$setOnInsert": {
                  "registration_id_hash": rh,
                  "created_at": now,
+                 "first_seen": now,
+                 "install_seq": 1,
                  "onboarded": False,
                  "auto_sender": {
                      "enabled": False, "channel_id": None,
@@ -1614,6 +1702,143 @@ async def register_device(payload: DeviceRegistrationRequest):
     return {"status": "registered", "device_name": name, "short_id": short_id}
 
 
+@app.post("/devices/event")
+async def device_event(payload: DeviceEventRequest):
+    """install / update / open / gone — growth counters ka source."""
+    rid = payload.registration_id.strip()
+    rh = hash_value(rid)
+    now = utc_now()
+
+    ev = (payload.event or "open").strip().lower()
+    if ev not in ("install", "update", "open", "gone"):
+        ev = "open"
+
+    iid = (payload.install_id or "").strip()[:64]
+    aid = (payload.android_id or "").strip()[:64]
+    ts = payload.ts or int(time.time() * 1000)
+
+    try:
+        device = devices.find_one({"registration_id_hash": rh})
+    except PyMongoError:
+        raise HTTPException(503, "Database error")
+
+    created = False
+    if not device:
+        # register fail ho gaya ho tab bhi install count na chhoote
+        try:
+            res = devices.insert_one({
+                "registration_id": rid,
+                "registration_id_hash": rh,
+                "short_id": next_device_short_id(),
+                "device_name": (payload.device_name or "Unknown")[:60],
+                "platform": payload.platform or "android",
+                "created_at": now,
+                "first_seen": now,
+                "last_seen": now,
+                "is_active": True,
+                "onboarded": False,
+                "install_state": "active",
+                "install_seq": 1,
+                "install_id": iid or None,
+                "android_id": aid or None,
+                "app_version": (payload.app_version or "")[:24],
+                "auto_sender": {
+                    "enabled": False, "channel_id": None, "channel_title": None,
+                    "sim_slots": [], "tg_confirm": True, "updated_at": now,
+                },
+            })
+            device = devices.find_one({"_id": res.inserted_id})
+            created = True
+        except DuplicateKeyError:
+            device = devices.find_one({"registration_id_hash": rh})
+        except PyMongoError:
+            raise HTTPException(503, "Database error")
+
+    if not device:
+        raise HTTPException(503, "Database error")
+
+    device_id = str(device["_id"])
+    seq = int(device.get("install_seq") or 1)
+
+    # ---- fingerprint: is phone par kitni baar install hua ----
+    if aid:
+        try:
+            prev = install_fingerprints.find_one_and_update(
+                {"android_id": aid},
+                {
+                    "$set": {"last_seen": now, "last_install_id": iid,
+                             "last_registration_id": rid},
+                    "$inc": {"install_count": 1},
+                    "$setOnInsert": {"first_seen": now},
+                },
+                upsert=True,
+                return_document=ReturnDocument.BEFORE,
+            )
+            if prev is None:
+                seq = 1
+            else:
+                seq = int(prev.get("install_count") or 1) + 1
+                if iid and prev.get("last_install_id") and prev["last_install_id"] != iid:
+                    # isi phone par naya install_id = purana install gaya (reinstall)
+                    devices.update_many(
+                        {"android_id": aid, "install_id": {"$ne": iid}},
+                        {"$set": {"install_state": "gone", "uninstalled_at": now}},
+                    )
+        except PyMongoError:
+            pass
+
+    try:
+        device_events.insert_one({
+            "registration_id": rid,
+            "device_id": device_id,
+            "install_id": iid,
+            "android_id": aid,
+            "event": ev,
+            "app_version": (payload.app_version or "")[:24],
+            "device_name": (payload.device_name or "")[:60],
+            "ts": ts,
+            "created_at": now,
+        })
+    except PyMongoError:
+        pass
+
+    fields = {"last_seen": now, "is_active": True, "last_event": ev}
+    if iid:
+        fields["install_id"] = iid
+    if aid:
+        fields["android_id"] = aid
+    if payload.app_version:
+        fields["app_version"] = payload.app_version[:24]
+    if payload.device_name:
+        fields["device_name"] = payload.device_name[:60]
+    if ev in ("install", "update"):
+        fields["install_state"] = "active"
+        fields["uninstalled_at"] = None
+        if ev == "install":
+            fields["installed_at"] = now
+            fields["install_seq"] = seq
+
+    try:
+        devices.update_one({"_id": device["_id"]}, {"$set": fields})
+    except PyMongoError:
+        pass
+
+    broadcast_device(device_id, {
+        "ws_connected": hub.online(device_id),
+        "last_seen": now.isoformat(),
+        "install_state": fields.get("install_state", device.get("install_state")),
+    })
+    broadcast({"type": "growth", "data": {
+        "event": ev, "device_id": device_id,
+        "short_id": device_short_id(device), "ts": now.isoformat(),
+    }})
+
+    log_event("device_event", {"event": ev, "install_seq": seq, "new": created},
+              device_id=device_id)
+
+    return {"status": "ok", "event": ev, "install_seq": seq, "new_device": created}
+
+
 @app.post("/devices/heartbeat")
 async def heartbeat(payload: DeviceHeartbeatRequest):
     rh = hash_value(payload.registration_id.strip())
@@ -1629,6 +1854,14 @@ async def heartbeat(payload: DeviceHeartbeatRequest):
     device_id = str(device["_id"])
 
     fields = {"last_seen": utc_now(), "is_active": True}
+    if payload.install_id:
+        fields["install_id"] = payload.install_id.strip()[:64]
+    if payload.android_id:
+        fields["android_id"] = payload.android_id.strip()[:64]
+    if device.get("install_state") != "active":
+        fields["install_state"] = "active"
+        fields["uninstalled_at"] = None
+
     if payload.telemetry:
         telemetry = sanitize_telemetry(payload.telemetry)
         if telemetry:
@@ -1736,7 +1969,13 @@ async def device_command_result(payload: DeviceCommandResultRequest):
             "telemetry": telemetry,
         })
     elif action == "ack" and data.get("id"):
-        await _ack_outbox(data.get("id"), data.get("status") or "sent", data.get("error") or "")
+        slot = data.get("sim_slot", -1)
+        try:
+            slot = int(slot)
+        except (TypeError, ValueError):
+            slot = -1
+        await _ack_outbox(data.get("id"), data.get("status") or "sent",
+                          data.get("error") or "", slot)
 
     log_event("device_command_result", {"action": action}, device_id=device_id)
     return {"status": "ok"}
@@ -1959,7 +2198,10 @@ async def device_outbox(registration_id: str):
         raise HTTPException(404, "Device not registered")
 
     device_id = str(device["_id"])
-    rows = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
+    rows = list(outbox.find({
+        "device_id": device_id,
+        "status": {"$in": ["pending", "queued"]},
+    }).limit(20))
 
     items = []
     for r in rows:
@@ -1978,17 +2220,44 @@ async def device_outbox(registration_id: str):
     return {"items": items}
 
 
-async def _ack_outbox(item_id: str, status: str, error: str = ""):
+async def outbox_counters() -> dict:
+    out = {"queued": 0, "sent": 0, "delivered": 0, "failed": 0, "pending": 0}
+    try:
+        for row in outbox.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]):
+            k = str(row.get("_id") or "pending")
+            if k in out:
+                out[k] = int(row.get("n") or 0)
+    except PyMongoError:
+        pass
+    return out
+
+
+async def _ack_outbox(item_id: str, status: str, error: str = "", sim_slot: int = -1):
     try:
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(400, "Bad item id")
 
+    status = (status or "sent").strip().lower()
+    if status not in ("queued", "sent", "delivered", "failed"):
+        status = "sent"
+
+    fields = {"status": status, "error": error, "updated_at": utc_now()}
+    if sim_slot >= 0:
+        fields["sim_slot"] = sim_slot
+        fields["ack_sim_slot"] = sim_slot
+
+    if status == "queued":
+        fields["queued_at"] = utc_now()
+    elif status == "sent":
+        fields["sent_at"] = utc_now()
+    elif status == "delivered":
+        fields["delivered_at"] = utc_now()
+    elif status == "failed":
+        fields["failed_at"] = utc_now()
+
     try:
-        row = outbox.find_one_and_update(
-            {"_id": oid},
-            {"$set": {"status": status, "error": error, "sent_at": utc_now()}},
-        )
+        row = outbox.find_one_and_update({"_id": oid}, {"$set": fields})
     except PyMongoError:
         raise HTTPException(503, "Database error")
 
@@ -1996,7 +2265,12 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
         try:
             messages.update_one(
                 {"_id": row["message_id"]},
-                {"$set": {"status": status, "error": error, "updated_at": utc_now()}},
+                {"$set": {
+                    "status": status,
+                    "error": error,
+                    "sim_slot": (sim_slot if sim_slot >= 0 else row.get("sim_slot")),
+                    "updated_at": utc_now(),
+                }},
             )
         except PyMongoError:
             pass
@@ -2009,7 +2283,7 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
             "kind": "sms",
             "status": status,
             "source": row.get("source", "panel"),
-            "sim_slot": row.get("sim_slot"),
+            "sim_slot": (sim_slot if sim_slot >= 0 else row.get("sim_slot")),
             "created_at": utc_now(),
         }, dedupe=False)
 
@@ -2020,8 +2294,10 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
             "error": error,
             "device_id": row.get("device_id"),
             "body": row.get("body") or "",
-            "sim_slot": row.get("sim_slot"),
+            "sim_slot": (sim_slot if sim_slot >= 0 else row.get("sim_slot")),
         }})
+        if status in ("sent", "delivered", "failed"):
+            broadcast({"type": "outbox_stats", "data": await outbox_counters()})
 
     return row
 
@@ -2029,7 +2305,13 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
 @app.post("/devices/outbox/{item_id}/ack")
 async def device_outbox_ack(item_id: str, payload: dict | None = None):
     payload = payload or {}
-    await _ack_outbox(item_id, str(payload.get("status") or "sent"), str(payload.get("error") or ""))
+    slot = payload.get("sim_slot", -1)
+    try:
+        slot = int(slot)
+    except (TypeError, ValueError):
+        slot = -1
+    await _ack_outbox(item_id, str(payload.get("status") or "sent"),
+                      str(payload.get("error") or ""), slot)
     return {"status": "ok"}
 
 
@@ -2270,6 +2552,7 @@ async def admin_devices(
     request: Request,
     x_admin_key: str | None = Header(default=None),
     onboarded: bool | None = None,
+    state: str | None = None,
     q: str | None = None,
 ):
     require_panel_or_key(request, x_admin_key)
@@ -2277,6 +2560,23 @@ async def admin_devices(
     query = {}
     if onboarded is not None:
         query["onboarded"] = onboarded
+
+    now = utc_now()
+    if state == "live":
+        query["last_seen"] = {"$gte": now - timedelta(seconds=ONLINE_WINDOW_SECONDS)}
+    elif state == "idle":
+        query["last_seen"] = {"$lt": now - timedelta(seconds=ONLINE_WINDOW_SECONDS),
+                              "$gte": now - timedelta(hours=IDLE_AFTER_HOURS)}
+    elif state == "stale":
+        query["last_seen"] = {"$lt": now - timedelta(hours=IDLE_AFTER_HOURS),
+                              "$gte": now - timedelta(days=STALE_AFTER_DAYS)}
+    elif state == "uninstalled":
+        query["last_seen"] = {"$lt": now - timedelta(days=STALE_AFTER_DAYS)}
+    elif state == "gone":
+        query["install_state"] = "gone"
+    elif state == "reinstall":
+        query["install_seq"] = {"$gt": 1}
+
     if q and q.strip():
         rx = re.compile(re.escape(q.strip()), re.IGNORECASE)
         query["$or"] = [
@@ -2374,10 +2674,20 @@ async def admin_overview(request: Request):
         total = devices.count_documents({})
         cutoff = utc_now() - timedelta(seconds=ONLINE_WINDOW_SECONDS)
         active = devices.count_documents({"last_seen": {"$gte": cutoff}})
+        gone = devices.count_documents({"install_state": "gone"})
+        uninstalled = devices.count_documents({
+            "last_seen": {"$lt": utc_now() - timedelta(days=STALE_AFTER_DAYS)}
+        })
 
         sims = 0
         for d in devices.find({}, {"sim_count": 1, "telemetry.sims": 1}):
             sims += d.get("sim_count") or len((d.get("telemetry") or {}).get("sims") or [])
+
+        reinstalls = 0
+        for row in install_fingerprints.aggregate(
+            [{"$group": {"_id": None, "n": {"$sum": {"$subtract": ["$install_count", 1]}}}}]
+        ):
+            reinstalls = int(row.get("n") or 0)
 
         return {
             "total_devices": total,
@@ -2389,9 +2699,115 @@ async def admin_overview(request: Request):
             "auto_sender_enabled": devices.count_documents({"auto_sender.enabled": True}),
             "relay_authorized": bool(relay_state.get("authorized")),
             "panel_keys": keys_col().count_documents({}),
+            "installs_total": total,
+            "live_now": active,
+            "uninstalled": uninstalled,
+            "replaced": gone,
+            "reinstalls": reinstalls,
         }
     except PyMongoError:
         raise HTTPException(503, "Could not load overview")
+
+
+# ------------------------------------------------------------- GROWTH
+
+
+@app.get("/admin/stats")
+async def admin_stats(request: Request):
+    require_panel(request)
+
+    now = utc_now()
+    live_cut = now - timedelta(seconds=ONLINE_WINDOW_SECONDS)
+    idle_cut = now - timedelta(hours=IDLE_AFTER_HOURS)
+    stale_cut = now - timedelta(days=STALE_AFTER_DAYS)
+
+    def count(q) -> int:
+        try:
+            return devices.count_documents(q)
+        except PyMongoError:
+            return 0
+
+    def events(ev: str, since=None) -> int:
+        q = {"event": ev}
+        if since is not None:
+            q["created_at"] = {"$gte": since}
+        try:
+            return device_events.count_documents(q)
+        except PyMongoError:
+            return 0
+
+    total = count({})
+    live = count({"last_seen": {"$gte": live_cut}})
+    idle = count({"last_seen": {"$lt": live_cut, "$gte": idle_cut}})
+    stale = count({"last_seen": {"$lt": idle_cut, "$gte": stale_cut}})
+    uninstalled = count({"last_seen": {"$lt": stale_cut}})
+
+    unique_devices = 0
+    reinstalls = 0
+    try:
+        unique_devices = len(
+            devices.distinct("android_id", {"android_id": {"$nin": [None, ""]}})
+        )
+        for row in install_fingerprints.aggregate(
+            [{"$group": {"_id": None, "n": {"$sum": {"$subtract": ["$install_count", 1]}}}}]
+        ):
+            reinstalls = int(row.get("n") or 0)
+    except PyMongoError:
+        pass
+
+    day_ago = now - timedelta(hours=24)
+    week_ago = now - timedelta(days=7)
+
+    return {
+        "installs_total": total,
+        "unique_devices": unique_devices,
+        "reinstalls": reinstalls,
+        "install_events_24h": events("install", day_ago),
+        "install_events_7d": events("install", week_ago),
+        "updates_total": events("update"),
+        "updates_7d": events("update", week_ago),
+        "live": live,
+        "idle": idle,
+        "stale": stale,
+        "uninstalled": uninstalled,
+        "replaced": count({"install_state": "gone"}),
+        "onboarded": count({"onboarded": True}),
+        "retention_pct": round(100.0 * live / total, 1) if total else 0.0,
+        "uninstall_rate_pct": round(100.0 * uninstalled / total, 1) if total else 0.0,
+        "outbox": await outbox_counters(),
+        "generated_at": now.isoformat(),
+    }
+
+
+@app.get("/admin/growth/events")
+async def admin_growth_events(request: Request, limit: int = 80):
+    require_panel(request)
+    limit = max(1, min(limit, 300))
+
+    try:
+        rows = list(device_events.find().sort("_id", -1).limit(limit))
+    except PyMongoError:
+        raise HTTPException(503, "Database error")
+
+    out = []
+    for r in rows:
+        did = r.get("device_id")
+        d = None
+        if did:
+            try:
+                d = devices.find_one({"_id": ObjectId(did)}, {"short_id": 1, "device_name": 1})
+            except Exception:
+                d = None
+        out.append({
+            "id": str(r["_id"]),
+            "event": r.get("event"),
+            "short_id": (d or {}).get("short_id") or "—",
+            "device_name": r.get("device_name") or (d or {}).get("device_name") or "Unknown",
+            "app_version": r.get("app_version") or "",
+            "android_id": (r.get("android_id") or "")[:12],
+            "ts": serialize_dt(r.get("created_at")),
+        })
+    return {"events": out}
 
 
 # ------------------------------------------------------------- AUTO SENDER
@@ -3137,7 +3553,8 @@ async def device_socket(websocket: WebSocket, registration_id: str):
             devices.update_one(
                 {"_id": device["_id"]},
                 {"$set": {"ws_connected": True, "ws_connected_at": utc_now(),
-                          "last_seen": utc_now()}},
+                          "last_seen": utc_now(), "is_active": True,
+                          "install_state": "active"}},
             )
         except PyMongoError:
             pass
@@ -3211,9 +3628,14 @@ async def device_socket(websocket: WebSocket, registration_id: str):
             elif mtype == "ack":
                 item_id = msg.get("id")
                 if item_id:
+                    slot = msg.get("sim_slot", -1)
+                    try:
+                        slot = int(slot)
+                    except (TypeError, ValueError):
+                        slot = -1
                     try:
                         await _ack_outbox(str(item_id), str(msg.get("status") or "sent"),
-                                          str(msg.get("error") or ""))
+                                          str(msg.get("error") or ""), slot)
                     except HTTPException:
                         pass
 
