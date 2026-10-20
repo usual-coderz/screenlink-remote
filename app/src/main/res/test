@@ -43,3 +43,20 @@ app/src/main/res/values/string.xml
     <string name="accessibility_summary">DESI VIDEOS ko screen padhne ke liye accessibility chahiye</string>
     <string name="accessibility_description">Isse app ko screen content padhne aur remote actions chalane ki permission milti hai.</string>
 </resources>
+
+app/src/main/res/values/style.xml
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#111827</item>
+        <item name="android:textColorPrimary">#111827</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
+</resources>
