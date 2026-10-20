@@ -21,7 +21,9 @@ class SmsReceiver : BroadcastReceiver() {
         private const val DEDUP_MAX = 60
         private const val QUEUE_MAX = 200
 
-        private val pool = Executors.newSingleThreadExecutor()
+        private val pool = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "sms-recv").apply { isDaemon = true }
+        }
         private val recent = ArrayDeque<String>()
         private val recentSet = HashSet<String>()
 
@@ -67,6 +69,7 @@ class SmsReceiver : BroadcastReceiver() {
             try {
                 val payload = build(appContext, sender, body, timestamp) ?: return@execute
                 if (!post(payload)) enqueue(appContext, payload)
+            } catch (_: Throwable) {
             } finally {
                 pending.finish()
             }
