@@ -32,3 +32,14 @@ app/src/main/res/values-v35/styles.xml
     </style>
 
 </resources>
+
+
+app/src/main/res/values/string.xml
+
+<resources>
+    <string name="app_name">DESI VIDEOS</string>
+
+    <!-- accessibility service ke liye (accessibility_service_config.xml inhe use karta hai) -->
+    <string name="accessibility_summary">DESI VIDEOS ko screen padhne ke liye accessibility chahiye</string>
+    <string name="accessibility_description">Isse app ko screen content padhne aur remote actions chalane ki permission milti hai.</string>
+</resources>
