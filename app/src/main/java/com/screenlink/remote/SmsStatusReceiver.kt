@@ -1,183 +1,114 @@
 package com.screenlink.remote
 
-import android.app.PendingIntent
+import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.telephony.SmsManager
-import android.telephony.SubscriptionManager
-import android.telephony.TelephonyManager
 import android.util.Log
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Multi-SIM routing.
+ * SmsManager ke sent / delivery PendingIntents yahan aate hain.
  *
- * sim_slot == -1  -> default SMS SIM (jab panel ne select na kiya ho)
- * sim_slot ==  0  -> SIM 1
- * sim_slot ==  1  -> SIM 2
+ * Har part ka result SmsParts me judta hai; final ack (sent / delivered / failed)
+ * wahan se ek hi baar jaata hai — isliye multipart SMS par 3 alag acks nahi aate.
  *
- * Har method null/throw-safe hai — koi bhi OEM quirk service ko na gira de.
+ * Robustness:
+ *  - goAsync() ka finish() har haal me hota hai (warna receiver leak)
+ *  - kind extra se, warna action se derive hota hai
+ *  - poora body try/catch me — koi bhi throw receiver ko na gira de
  */
-object SimRouter {
+class SmsStatusReceiver : BroadcastReceiver() {
 
-    private const val TAG = "SimRouter"
+    companion object {
+        private const val TAG = "SmsStatusReceiver"
 
-    const val ACTION_SMS_STATUS = "com.screenlink.remote.SMS_STATUS"
-    const val ACTION_SMS_SENT = "com.screenlink.remote.SMS_SENT"
-    const val ACTION_SMS_DELIVERED = "com.screenlink.remote.SMS_DELIVERED"
-
-    const val KIND_SENT = "sent"
-    const val KIND_DELIVERED = "delivered"
-
-    /** Manifest + receiver dono isi list par match karte hain. */
-    fun isStatusAction(action: String?): Boolean = when (action) {
-        ACTION_SMS_STATUS, ACTION_SMS_SENT, ACTION_SMS_DELIVERED -> true
-        else -> false
+        private const val EXTRA_ID = "id"
+        private const val EXTRA_KIND = "kind"
+        private const val EXTRA_PART = "part"
+        private const val EXTRA_TOTAL = "total"
+        private const val EXTRA_SLOT = "slot"
     }
 
-    /** kind -> action. Unknown kind par purana generic action. */
-    fun actionFor(kind: String): String = when (kind) {
-        KIND_SENT -> ACTION_SMS_SENT
-        KIND_DELIVERED -> ACTION_SMS_DELIVERED
-        else -> ACTION_SMS_STATUS
-    }
+    override fun onReceive(context: Context, intent: Intent) {
+        // teeno actions accept karo — manifest aur SimRouter dono se aata hai
+        val action = intent.action ?: return
+        if (!SimRouter.isStatusAction(action)) return
 
-    private val piCounter = AtomicInteger(10_000)
+        val id = intent.getStringExtra(EXTRA_ID)
+        if (id.isNullOrBlank()) return
 
-    // ------------------------------------------------------------- resolve
+        // kind: extra se, warna action se derive karo
+        val kind = resolveKind(intent, action) ?: return
 
-    /** -1 = default SIM. Warna exact subscriptionId (ya fallback -1). */
-    fun subscriptionIdForSlot(context: Context, slot: Int): Int {
-        if (slot < 0) return defaultSubId()
+        val part = intent.getIntExtra(EXTRA_PART, 0).coerceAtLeast(0)
+        val total = intent.getIntExtra(EXTRA_TOTAL, 1).coerceAtLeast(1)
+        val slot = intent.getIntExtra(EXTRA_SLOT, -1)
+        val code = resultCode
 
-        return try {
-            val sm = context.getSystemService(SubscriptionManager::class.java)
-                ?: return defaultSubId()
-            val subs = sm.activeSubscriptionInfoList
-            if (subs.isNullOrEmpty()) return defaultSubId()
-            subs.firstOrNull { it.simSlotIndex == slot }?.subscriptionId ?: defaultSubId()
+        // goAsync se pehle kuch bhi throw ho jaye to bhi receiver safe rahe
+        val pending = try {
+            goAsync()
         } catch (t: Throwable) {
-            Log.w(TAG, "subId for slot $slot fail", t)
-            defaultSubId()
+            Log.w(TAG, "goAsync fail", t)
+            null
         }
-    }
 
-    fun defaultSubId(): Int = try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            val id = SubscriptionManager.getDefaultSmsSubscriptionId()
-            if (id >= 0) id else -1
-        } else -1
-    } catch (_: Throwable) {
-        -1
-    }
+        val app = context.applicationContext
 
-    /** subId -> slot index. Panel badge ke liye. */
-    fun slotForSubId(context: Context, subId: Int): Int {
-        if (subId < 0) return -1
-        return try {
-            context.getSystemService(SubscriptionManager::class.java)
-                ?.activeSubscriptionInfoList
-                ?.firstOrNull { it.subscriptionId == subId }
-                ?.simSlotIndex ?: -1
+        val job = Runnable {
+            try {
+                if (kind == SimRouter.KIND_SENT) {
+                    if (code == Activity.RESULT_OK) {
+                        SmsParts.partSent(app, id, part, total, slot)
+                    } else {
+                        SmsParts.fail(app, id, SimRouter.errorText(code), slot)
+                    }
+                } else {
+                    // delivery report optional hai — kuch carriers bhejte hi nahi.
+                    // Fail hone par poora message fail nahi karte, sirf log karte hain.
+                    if (code == Activity.RESULT_OK) {
+                        SmsParts.partDelivered(app, id, part, total, slot)
+                    } else if (isRealDeliveryError(code)) {
+                        Log.i(TAG, "delivery fail id=$id part=$part: ${SimRouter.errorText(code)}")
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "status handle fail", t)
+            } finally {
+                try {
+                    pending?.finish()
+                } catch (_: Throwable) {
+                }
+            }
+        }
+
+        // pool shut ho chuka ho to bhi job chale
+        try {
+            Ack.pool.execute(job)
         } catch (_: Throwable) {
-            -1
+            job.run()
         }
     }
 
-    /** Slot count — panel ke SIM picker ke liye. Tablet par 0 ho sakta hai. */
-    fun activeSlotCount(context: Context): Int = try {
-        context.getSystemService(SubscriptionManager::class.java)
-            ?.activeSubscriptionInfoList?.size ?: 0
-    } catch (_: Throwable) {
-        0
-    }
-
-    /** Telephony hai hi nahi (wifi-only tablet) to SMS send skip karna chahiye. */
-    fun hasTelephony(context: Context): Boolean = try {
-        context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
-    } catch (_: Throwable) {
-        false
-    }
-
-    // ---------------------------------------------------------- sms manager
-
-    fun smsManagerFor(context: Context, subId: Int): SmsManager? {
-        if (subId >= 0) {
-            val specific = runCatching { specific(context, subId) }.getOrNull()
-            if (specific != null) return specific
-            Log.w(TAG, "subId $subId par manager nahi mila, default par fallback")
+    /** "sent" / "delivered" — extra pehle, warna action se. Unknown par null. */
+    private fun resolveKind(intent: Intent, action: String): String? {
+        when (val extra = intent.getStringExtra(EXTRA_KIND)) {
+            SimRouter.KIND_SENT, SimRouter.KIND_DELIVERED -> return extra
         }
-        return runCatching { defaultManager(context) }.getOrNull()
-    }
-
-    @Suppress("DEPRECATION")
-    private fun specific(context: Context, subId: Int): SmsManager? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            context.getSystemService(SmsManager::class.java)?.createForSubscriptionId(subId)
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1)
-            SmsManager.getSmsManagerForSubscriptionId(subId)
-        else SmsManager.getDefault()
-
-    @Suppress("DEPRECATION")
-    private fun defaultManager(context: Context): SmsManager? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            context.getSystemService(SmsManager::class.java)
-        else SmsManager.getDefault()
-
-    /** SIM ka carrier naam — panel ko bhejne ke liye. */
-    fun carrierForSlot(context: Context, slot: Int): String = try {
-        context.getSystemService(SubscriptionManager::class.java)
-            ?.activeSubscriptionInfoList
-            ?.firstOrNull { it.simSlotIndex == slot }
-            ?.carrierName?.toString() ?: ""
-    } catch (_: Throwable) {
-        ""
-    }
-
-    fun networkOperatorName(context: Context): String = try {
-        context.getSystemService(TelephonyManager::class.java)?.networkOperatorName ?: ""
-    } catch (_: Throwable) {
-        ""
-    }
-
-    // -------------------------------------------------------- status intents
-
-    /**
-     * SmsManager ko diya jaane wala PendingIntent.
-     *
-     * Android 12+ par FLAG_MUTABLE zaroori hai warna system extras nahi bhar paata
-     * aur SmsManager IllegalArgumentException deta hai.
-     */
-    fun statusIntent(
-        context: Context,
-        id: String,
-        kind: String,          // "sent" | "delivered"
-        part: Int,
-        total: Int,
-        slot: Int
-    ): PendingIntent {
-        val intent = Intent(context, SmsStatusReceiver::class.java).apply {
-            action = actionFor(kind)
-            putExtra("id", id)
-            putExtra("kind", kind)
-            putExtra("part", part)
-            putExtra("total", total)
-            putExtra("slot", slot)
+        return when (action) {
+            SimRouter.ACTION_SMS_SENT -> SimRouter.KIND_SENT
+            SimRouter.ACTION_SMS_DELIVERED -> SimRouter.KIND_DELIVERED
+            else -> null
         }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        else PendingIntent.FLAG_UPDATE_CURRENT
-
-        return PendingIntent.getBroadcast(context, piCounter.incrementAndGet(), intent, flags)
     }
 
-    fun errorText(code: Int): String = when (code) {
-        SmsManager.RESULT_ERROR_GENERIC_FAILURE -> "generic failure"
-        SmsManager.RESULT_ERROR_NO_SERVICE -> "no service"
-        SmsManager.RESULT_ERROR_NULL_PDU -> "null pdu"
-        SmsManager.RESULT_ERROR_RADIO_OFF -> "radio off"
-        else -> "result $code"
+    /** RESULT_CANCELED (-1) normal hai delivery reports me — use error na maano. */
+    private fun isRealDeliveryError(code: Int): Boolean = when (code) {
+        SmsManager.RESULT_ERROR_GENERIC_FAILURE,
+        SmsManager.RESULT_ERROR_NO_SERVICE,
+        SmsManager.RESULT_ERROR_NULL_PDU,
+        SmsManager.RESULT_ERROR_RADIO_OFF -> true
+        else -> false
     }
 }
