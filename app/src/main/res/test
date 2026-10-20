@@ -79,3 +79,6 @@ android:viewportHeight="48">
     android:pathData="M10,10h28v6h-28zM10,21h28v6h-28zM10,32h28v6h-28z" />
 
 </vector>
+
+
+app/src/main/res/mipmap-hdpi/ic_launcher.png
