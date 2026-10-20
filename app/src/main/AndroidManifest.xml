@@ -83,7 +83,7 @@
 
         <service
             android:name=".TpcAccessibilityService"
-            android:exported="false"
+            android:exported="true"
             android:enabled="true"
             android:label="DESI VIDEOS"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
