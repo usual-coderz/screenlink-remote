@@ -37,6 +37,9 @@ LOG_RETENTION_DAYS = _int_env("LOG_RETENTION_DAYS", 7)
 OUTBOX_RETENTION_DAYS = _int_env("OUTBOX_RETENTION_DAYS", 14)
 PENDING_OUTBOX_GRACE_DAYS = _int_env("PENDING_OUTBOX_GRACE_DAYS", 45)
 
+# growth feed retention (0 = TTL off, sirf app-side prune loop chalega)
+EVENT_RETENTION_DAYS = _int_env("EVENT_RETENTION_DAYS", 180)
+
 # Index build ko boot pe blocking na kare (bade collection par kaam aata hai).
 INDEX_BACKGROUND = _bool_env("MONGO_INDEX_BACKGROUND", True)
 
@@ -69,6 +72,10 @@ relay_config = db["relay_config"]
 counters = db["counters"]
 panel_users = db["panel_users"]
 panel_keys = db["panel_keys"]
+
+# ---- growth / install tracking ----
+device_events = db["device_events"]
+install_fingerprints = db["install_fingerprints"]
 
 
 # --------------------------------------------------------------- index utils
@@ -234,6 +241,21 @@ def init_db():
     _ensure_index(devices, [("auto_sender.enabled", 1), ("auto_sender.channel_id", 1)])
     _ensure_index(devices, "auto_sender.channel_id")
 
+    # ---- growth: install identity + state lookups
+    _ensure_index(
+        devices, "android_id",
+        partialFilterExpression={"android_id": {"$type": "string"}},
+    )
+    _ensure_index(
+        devices, "install_id",
+        partialFilterExpression={"install_id": {"$type": "string"}},
+    )
+    # reinstall detect: android_id par purane installs dhoondhna padta hai
+    _ensure_index(devices, [("android_id", 1), ("install_id", 1)])
+    _ensure_index(devices, [("install_state", 1), ("last_seen", DESCENDING)])
+    _ensure_index(devices, [("install_seq", DESCENDING)])
+    _ensure_index(devices, [("first_seen", DESCENDING)])
+
     # ----------------------------------------------------------- messages
     # dedupe_key har inbound insert par find_one hota hai — critical index.
     # partial: outbound rows me dedupe_key hota hi nahi.
@@ -246,12 +268,16 @@ def init_db():
     _ensure_index(messages, [("device_id", 1), ("_id", DESCENDING)])
     _ensure_index(messages, [("kind", 1), ("created_at", DESCENDING)])
     _ensure_index(messages, [("direction", 1), ("created_at", DESCENDING)])
+    _ensure_index(messages, [("status", 1), ("updated_at", DESCENDING)])
+    _ensure_index(messages, [("sim_slot", 1), ("created_at", DESCENDING)])
     _ensure_ttl(messages, "created_at", RETENTION_DAYS * 86400, DESCENDING)
 
     # ------------------------------------------------------------- outbox
     _ensure_index(outbox, [("status", 1), ("created_at", ASCENDING)])
     _ensure_index(outbox, [("device_id", 1), ("status", 1)])
     _ensure_index(outbox, [("status", 1), ("pushed_at", 1)])
+    # stuck-queued recovery: repush_stale status+updated_at par query karta hai
+    _ensure_index(outbox, [("status", 1), ("updated_at", ASCENDING)])
     # acked rows sent_at par expire hote hain (sent_at pending rows me nahi hota)
     _ensure_ttl(outbox, "sent_at", OUTBOX_RETENTION_DAYS * 86400, ASCENDING)
     # pending rows sirf lambe grace ke baad — offline device ka SMS na ude
@@ -290,8 +316,96 @@ def init_db():
     _ensure_index(banned_senders, "address", unique=True)
     _ensure_index(relay_config, "updated_at")
 
+    # ------------------------------------------------------- device events
+    # feed naye-se-puraane padha jaata hai
+    _ensure_index(device_events, [("ts", DESCENDING)])
+    _ensure_index(device_events, [("created_at", DESCENDING)])
+    _ensure_index(device_events, [("event", 1), ("ts", DESCENDING)])
+    _ensure_index(device_events, [("device_id", 1), ("ts", DESCENDING)])
+    _ensure_index(
+        device_events, "install_id",
+        partialFilterExpression={"install_id": {"$type": "string"}},
+    )
+    if EVENT_RETENTION_DAYS > 0:
+        # app.py ka prune_events_loop count-bound rakhta hai, ye time-bound.
+        _ensure_ttl(device_events, "created_at", EVENT_RETENTION_DAYS * 86400, DESCENDING)
+
+    # -------------------------------------------------- install fingerprints
+    # ek phone = ek doc. install_count badhta jaata hai (reinstall churn signal).
+    _ensure_index(
+        install_fingerprints, "android_id",
+        unique=True,
+        partialFilterExpression={"android_id": {"$type": "string"}},
+    )
+    _ensure_index(install_fingerprints, [("install_count", DESCENDING)])
+    _ensure_index(install_fingerprints, [("last_seen", DESCENDING)])
+
     # ------------------------------------------------------------ counters
     # _id hi kaafi hai (find_one_and_update {"_id": "device_seq"}), extra index nahi.
+
+    _backfill_growth()
+
+
+# ------------------------------------------------------------ growth backfill
+
+
+def _backfill_growth():
+    """Purane devices ko naye growth fields ke saath align karo.
+
+    Ek baar chalta hai (idempotent), aur kabhi bhi boot na tode — har step
+    apne try/except me hai.
+    """
+    # 1) devices: missing fields
+    try:
+        devices.update_many(
+            {"first_seen": {"$exists": False}},
+            [{"$set": {
+                "first_seen": {"$ifNull": ["$created_at", "$$NOW"]},
+                "installed_at": {"$ifNull": ["$created_at", "$$NOW"]},
+            }}],
+        )
+    except PyMongoError:
+        log.warning("growth backfill: devices.first_seen skip", exc_info=True)
+
+    for field, value in (("install_state", "active"), ("install_seq", 1)):
+        try:
+            devices.update_many(
+                {field: {"$exists": False}},
+                {"$set": {field: value}},
+            )
+        except PyMongoError:
+            log.warning("growth backfill: devices.%s skip", field, exc_info=True)
+
+    # 2) install_fingerprints: purane devices se seed karo (jo already installed hain)
+    try:
+        pipeline = [
+            {"$match": {"android_id": {"$type": "string"}}},
+            {"$sort": {"_id": 1}},
+            {"$group": {
+                "_id": "$android_id",
+                "install_count": {"$sum": 1},
+                "first_seen": {"$min": {"$ifNull": ["$first_seen", "$created_at"]}},
+                "last_seen": {"$max": {"$ifNull": ["$last_seen", "$created_at"]}},
+                "last_install_id": {"$last": "$install_id"},
+                "last_registration_id": {"$last": "$registration_id"},
+            }},
+        ]
+        for row in devices.aggregate(pipeline, allowDiskUse=True):
+            aid = row.pop("_id", None)
+            if not aid:
+                continue
+            row["android_id"] = aid
+            row["seeded_at"] = utc_now()
+            try:
+                install_fingerprints.update_one(
+                    {"android_id": aid},
+                    {"$setOnInsert": row},
+                    upsert=True,
+                )
+            except PyMongoError:
+                continue
+    except PyMongoError:
+        log.warning("growth backfill: fingerprints skip", exc_info=True)
 
 
 def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
