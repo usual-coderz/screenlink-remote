@@ -12,3 +12,23 @@ app/src/main/res/xml/accessibility_service_config.xml
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="100"
     android:settingsActivity="com.screenlink.remote.MainActivity" />
+
+
+app/src/main/res/values-v35/styles.xml
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#111827</item>
+        <item name="android:textColorPrimary">#111827</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
+</resources>
