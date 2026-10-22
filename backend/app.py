@@ -25,12 +25,16 @@ from pymongo.errors import PyMongoError, DuplicateKeyError
 from bson import ObjectId
 
 from backend.database import (
-    init_db_with_retry, check_database, db,
+    init_db_with_retry, check_database, builder_stats, db,
     devices, messages, outbox, rules,
     pairing_codes, activity_logs, banned_senders, relay_config, counters, tg_logs,
     device_events, install_fingerprints,
     utc_now,
 )
+
+# ---- APK builder ----
+from backend.apk_builder import config as builder_config
+from backend.apk_builder import init_queue, bind_loop, router as builder_router
 
 try:
     from backend.database import panel_keys as _panel_keys
@@ -109,6 +113,8 @@ TARGET_CHANNEL_ID = int(os.getenv("TARGET_CHANNEL_ID", "0") or 0)
 DEFAULT_FWD_USER = os.getenv("DEFAULT_FWD_USER", "").strip()
 RELAY_SESSION_FILE = os.getenv("RELAY_SESSION_FILE", str(BASE_DIR / "relay_session"))
 
+VERSION = "5.5.0"
+
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
@@ -148,7 +154,9 @@ SESSION_SECRET, SESSION_SECRET_SRC = _load_session_secret()
 if SESSION_SECRET_SRC == "generated":
     log.warning(
         "SESSION_SECRET set nahi hai — naya secret bana ke %s me save kiya. "
-        "Heroku/container par ye file ephemeral hoti hai, isliye env me set karo.",
+        "Heroku/container par ye file ephemeral hoti hai, isliye env me set karo. "
+        "NOTE: APK builder isi secret se app secrets encrypt karta hai — badalne par "
+        "purane secrets decrypt nahi honge, isliye APP_ENCRYPTION_KEY alag set karo.",
         SECRET_FILE,
     )
 
@@ -280,6 +288,7 @@ def key_active(doc: Optional[dict]) -> bool:
 async def lifespan(app: FastAPI):
     global MAIN_LOOP
     MAIN_LOOP = asyncio.get_running_loop()
+
     init_db_with_retry()
     backfill_short_ids()
     backfill_auto_sender()
@@ -287,17 +296,43 @@ async def lifespan(app: FastAPI):
     load_relay_config()
     await start_relay()
     spawn(prune_events_loop())
-    log.info("TPC PANEL v5.4 up — admins=%s secret=%s", list(ADMINS), SESSION_SECRET_SRC)
+
+    # ---- APK builder ----
+    # ensure_dirs pehle, warna pehla build workspace na bana paaye.
+    try:
+        builder_config.ensure_dirs()
+        bind_loop(MAIN_LOOP)
+        queue = init_queue()
+        if builder_config.WORKER_MODE == "inline":
+            await queue.start()
+        log.info(
+            "APK builder ready — mode=%s workers=%d variant=%s template=%s",
+            builder_config.WORKER_MODE,
+            builder_config.MAX_CONCURRENT_BUILDS,
+            builder_config.DEFAULT_VARIANT,
+            builder_config.TEMPLATE_DIR,
+        )
+    except Exception:
+        log.exception("APK builder start fail — panel chalta rahega")
+
+    log.info("TPC PANEL v%s up — admins=%s secret=%s", VERSION, list(ADMINS), SESSION_SECRET_SRC)
+
     try:
         yield
     finally:
+        try:
+            from backend.apk_builder.queue import get_queue
+            if builder_config.WORKER_MODE == "inline":
+                await get_queue().stop()
+        except Exception:
+            pass
         await stop_relay()
         await close_sockets()
         close_db()
         MAIN_LOOP = None
 
 
-app = FastAPI(title="TPC PANEL", version="5.4.0", lifespan=lifespan)
+app = FastAPI(title="TPC PANEL", version=VERSION, lifespan=lifespan)
 
 
 class AdaptiveSessionMiddleware(SessionMiddleware):
@@ -339,6 +374,9 @@ if ProxyHeadersMiddleware is not None:
         app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
     except TypeError:
         app.add_middleware(ProxyHeadersMiddleware, forwarded_allow_ips="*")
+
+# ---- APK builder routes (/api/apps, /api/builds, /api/orders, /ws/user, /ws/app) ----
+app.include_router(builder_router)
 
 
 # ------------------------------------------------------------------ models
@@ -1083,6 +1121,17 @@ def broadcast_device(device_id: str, extra: dict | None = None):
     broadcast({"type": "device_status", "data": {"id": device_id, **(extra or {})}})
 
 
+def broadcast_build(user_id: str, payload: dict):
+    """Build event ko admin panel par bhi bhejo (user room alag se routes.py me).
+
+    admin socket sab kuch dekhta hai — ye operator convenience ke liye hai.
+    """
+    try:
+        broadcast({"type": "build", "data": {**payload, "userId": user_id}})
+    except Exception:
+        pass
+
+
 async def send_command(device_id: str, action: str, extra: dict | None = None) -> bool:
     payload = {"type": "command", "action": action, "ts": int(time.time())}
     if extra:
@@ -1278,18 +1327,22 @@ async def prune_events_loop():
 @app.get("/")
 async def home():
     return {
-        "app": "TPC PANEL", "status": "online", "version": "5.4.0",
+        "app": "TPC PANEL", "status": "online", "version": VERSION,
         "owner": "https://t.me/icivan",
         "relay": "mtproto" if TELETHON_OK else "unavailable",
+        "builder": builder_config.WORKER_MODE,
     }
 
 
 @app.get("/health")
 async def health():
+    from backend.apk_builder.queue import get_queue
     return {
         "status": "ok",
+        "version": VERSION,
         "devices_online": hub.online_count,
         "relay_authorized": bool(relay_state.get("authorized")),
+        "build_queue": get_queue().stats(),
     }
 
 
@@ -1299,6 +1352,50 @@ async def database_health():
     if r["status"] != "ok":
         raise HTTPException(503, "Database connection failed")
     return r
+
+
+@app.get("/health/builder")
+async def builder_health():
+    """Builder readiness — gradle/keytool/apksigner available hain ya nahi.
+
+    Ye endpoint deploy ke baad pehli cheez check karne layak hai. Agar tools
+    missing hain to builds fail honge, panel nahi.
+    """
+    import shutil
+    from backend.apk_builder.queue import get_queue
+
+    tools = {
+        "gradle": shutil.which(builder_config.GRADLE_BIN),
+        "keytool": shutil.which(builder_config.KEYTOOL_BIN),
+        "apksigner": shutil.which(builder_config.APKSIGNER_BIN),
+        "zipalign": shutil.which(builder_config.ZIPALIGN_BIN),
+        "docker": shutil.which(builder_config.DOCKER_BIN),
+    }
+
+    gradle_ok = bool(tools["gradle"]) or builder_config.USE_DOCKER
+    sign_ok = bool(tools["apksigner"]) or not builder_config.REQUIRE_SIGNATURE
+    template_ok = (builder_config.TEMPLATE_DIR / "settings.gradle.kts").is_file() \
+        or (builder_config.TEMPLATE_DIR / "settings.gradle").is_file()
+
+    status = "ok" if (gradle_ok and template_ok) else "degraded"
+
+    return {
+        "status": status,
+        "version": VERSION,
+        "variant": builder_config.DEFAULT_VARIANT,
+        "worker_mode": builder_config.WORKER_MODE,
+        "template_dir": str(builder_config.TEMPLATE_DIR),
+        "template_ok": template_ok,
+        "storage_root": str(builder_config.STORAGE_ROOT),
+        "build_root": str(builder_config.BUILD_ROOT),
+        "keystore_dir": str(builder_config.KEYSTORE_DIR),
+        "require_signature": builder_config.REQUIRE_SIGNATURE,
+        "tools": {k: bool(v) for k, v in tools.items()},
+        "tool_paths": {k: v for k, v in tools.items() if v},
+        "signing_available": sign_ok,
+        "queue": get_queue().stats(),
+        "counts": builder_stats(),
+    }
 
 
 @app.get("/admin", include_in_schema=False)
