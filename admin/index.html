@@ -361,6 +361,16 @@ text-shadow:0 0 20px #fbbf2440;overflow-wrap:anywhere}
 .bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#38bdf8)}
 .bar.red>span{background:linear-gradient(90deg,#ff5c7a,#fbbf24)}
 
+/* ---------- builder ---------- */
+.build-log{max-height:340px;overflow:auto;font-size:11.5px;line-height:1.7}
+.snippet{margin:10px 0 0;padding:12px;border:1px dashed var(--border-hi);border-radius:10px;
+background:#04091a;font-family:var(--mono);font-size:11.5px;color:#9fc4e6;
+white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75}
+.snippet b{color:var(--neon);font-weight:700}
+.pulse-live{display:inline-flex;align-items:center;gap:6px;color:var(--amber);font-size:11.5px;font-weight:700}
+.pulse-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);
+box-shadow:0 0 10px var(--amber);animation:pulse 1.2s infinite}
+
 @media (max-width:1100px){
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid2{grid-template-columns:1fr}
@@ -498,13 +508,15 @@ main{padding:18px 13px}
 <button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
 <p class="side-label" style="margin-top:22px">Growth</p>
 <button class="nav" data-page="growth" data-admin-only="1" type="button"><i>📈</i> Installs</button>
+<p class="side-label" style="margin-top:22px">Builder</p>
+<button class="nav" data-page="builder" type="button"><i>📦</i> APK Builder</button>
 <p class="side-label" style="margin-top:22px">System</p>
 <button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
 <button class="nav" data-page="users" data-admin-only="1" type="button"><i>🔑</i> Access keys</button>
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v5.4</div>
+<div>TPC PANEL · v5.5</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -566,6 +578,7 @@ main{padding:18px 13px}
 <div class="panel-body">
 <div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health</div></div><span class="badge" id="apiBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">MongoDB</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/health/builder</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
 <div class="row"><div><div class="row-name">Relay</div><div class="row-desc">MTProto channel watcher</div></div><span class="badge" id="relayBadge">—</span></div>
 </div>
@@ -830,6 +843,109 @@ main{padding:18px 13px}
 </section>
 </section>
 
+<section class="page" id="page-builder">
+<div class="head">
+<div><h2>APK Builder</h2><p>App banao, secret lo, build karo, APK download karo — sab tumhara hi</p></div>
+<div class="toolbar">
+<span class="badge" id="bQueueBadge">—</span>
+<button class="btn ghost" data-refresh="builder" type="button">↻ Refresh</button>
+</div>
+</div>
+
+<div class="notice" id="builderNotice" hidden></div>
+
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">My apps</span><span class="stat-icon">📦</span></div>
+<div class="stat-val neon" id="bApps">—</div><div class="stat-foot">tumhare appId</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Builds today</span><span class="stat-icon">⚙</span></div>
+<div class="stat-val green" id="bToday">—</div><div class="stat-foot" id="bQuota">—</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">In queue</span><span class="stat-icon">⏳</span></div>
+<div class="stat-val violet" id="bQueued">—</div><div class="stat-foot">waiting</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Running</span><span class="stat-icon">▶</span></div>
+<div class="stat-val" id="bRunning">—</div><div class="stat-foot">workers busy</div>
+</article>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Create app</h3><span class="badge">isolated per user</span></div>
+<div class="keygen">
+<div><label for="appName">App name</label><input id="appName" placeholder="e.g. IvanShop"></div>
+<div><label for="appBase">API base URL (optional)</label><input id="appBase" class="mono" placeholder="https://panel.example.com"></div>
+<div><label for="appVariant">Variant</label>
+<select id="appVariant"><option value="release">release</option><option value="debug">debug</option></select></div>
+<div><button class="btn primary w100" id="appCreate" type="button">＋ Create app</button></div>
+</div>
+<div class="panel-body" style="padding-top:0">
+<div class="keyout" id="secretOut" hidden>
+<div style="min-width:0">
+<div class="small muted upper">Secret — sirf ek baar poora dikhta hai, save karo</div>
+<div class="k mono" id="secretValue">—</div>
+<div class="snippet" id="secretSnippet">—</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<button class="mini g" id="secretCopy" type="button">⧉ copy</button>
+<button class="mini" id="secretHide" type="button">hide</button>
+</div>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>My apps</h3><span class="badge" id="appCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>App</th><th>appId</th><th>Secret</th><th>Package</th><th>Builds</th><th>Actions</th></tr></thead>
+<tbody id="appBody"></tbody></table>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Builds</h3><span class="badge" id="buildCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Build</th><th>App</th><th>Status</th><th>Variant</th><th>Duration</th><th>Size</th><th>SHA256</th><th></th></tr></thead>
+<tbody id="buildBody"></tbody></table>
+</div>
+</section>
+
+<section class="panel-box panel" id="logPanel" hidden>
+<div class="panel-head">
+<h3>Build log <span class="badge" id="logBuildId">—</span></h3>
+<div style="display:flex;gap:8px;align-items:center">
+<span class="pulse-live" id="logLive" hidden>live</span>
+<button class="mini" id="logReload" type="button">↻</button>
+<button class="btn ghost" id="logClose" type="button">close</button>
+</div>
+</div>
+<div class="panel-body"><pre class="pre-out build-log" id="buildLog">—</pre></div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>APK integration</h3><span class="badge">signed requests</span></div>
+<div class="panel-body">
+<div class="settings-row"><strong>Headers</strong>
+<p>Har request par <code class="mono">X-App-Id</code>, <code class="mono">X-Timestamp</code> (epoch seconds) aur <code class="mono">X-Signature</code> bhejo.</p></div>
+<div class="settings-row"><strong>Signature</strong>
+<p><code class="mono">HMAC-SHA256(secret, raw_body + timestamp)</code> — hex lowercase. Secret APK ke strings.xml me embed hota hai.</p></div>
+<div class="settings-row"><strong>Window</strong>
+<p>Timestamp ±300s ke andar hona chahiye. Same signature dobara bheja to replay maan ke 401 milega.</p></div>
+<div class="settings-row"><strong>Isolation</strong>
+<p>appId sirf verified header se liya jaata hai — body me aaya appId ignore hota hai. Isliye ek app doosre app ka data nahi padh sakta.</p></div>
+<div class="settings-row"><strong>Endpoints</strong>
+<p><code class="mono">POST /api/orders</code> · <code class="mono">GET /api/orders</code> · <code class="mono">GET /api/orders/{id}</code> · <code class="mono">DELETE /api/orders/{id}</code> · <code class="mono">POST /api/echo</code></p></div>
+<div class="settings-row"><strong>Socket</strong>
+<p><code class="mono">/ws/app</code> par pehla frame: <code class="mono">{"type":"auth","appId":…,"ts":…,"sig":…,"body":""}</code>. Verify hone par app apne room me chala jaata hai.</p></div>
+<div class="settings-row"><strong>Rotation</strong>
+<p>Secret rotate karte ho to purana APK turant 401 dene lagta hai. Rebuild karo — naya secret APK me chala jayega.</p></div>
+</div>
+</section>
+</section>
+
 <section class="page" id="page-devices">
 <div class="head">
 <div><h2>Devices</h2><p>Kisi bhi phone par click karo — Actions me Auto Sender on/off karo</p></div>
@@ -921,7 +1037,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.4</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.5</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>APK</strong><p><a id="apkSettings" href="#" target="_blank" rel="noopener">—</a></p></div>
 <div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key (admin generate karta hai, koi self-register nahi).</p></div>
@@ -931,11 +1047,15 @@ main{padding:18px 13px}
 <div class="settings-row"><strong>Send</strong><p>/admin/send — target, device_id, to, body, sim_slots[] . Delivery fail ho to row pending rehti hai aur device online hote hi chali jaati hai.</p></div>
 <div class="settings-row"><strong>Send status</strong><p>queued → sent → delivered. Device har stage par ack bhejta hai; stale "queued" rows 3 min baad dobara push hoti hain.</p></div>
 <div class="settings-row"><strong>Growth</strong><p>/devices/event par install / update / open. Uninstall Android se broadcast nahi hota — 7 din silence = uninstalled. Same android_id par naya install_id = reinstall.</p></div>
+<div class="settings-row"><strong>APK Builder</strong><p>/api/apps, /api/builds, /api/builds/{id}/download. Har app ka apna appId + secret, apna keystore, apna APK. Cross-app read possible nahi.</p></div>
+<div class="settings-row"><strong>Builder health</strong><p>/health/builder — gradle/keytool/apksigner mil rahe hain ya nahi, queue kitni busy hai.</p></div>
+<div class="settings-row"><strong>App API</strong><p>/api/orders (signed) — X-App-Id + X-Timestamp + X-Signature = HMAC(secret, body + timestamp).</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
+<div class="settings-row"><strong>App socket</strong><p>/ws/app — signed handshake ke baad room app:&lt;appId&gt;</p></div>
 <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
 <div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test, forward target.</p></div>
-<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET (Heroku par set karna zaruri hai), ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
+<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, APP_ENCRYPTION_KEY (builder ke app secrets isse encrypt hote hain), ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
 </div>
 </section>
 </section>
@@ -1074,10 +1194,10 @@ const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" s
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h6.8L19 7.7V20a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><rect x="9.4" y="12.4" width="6.2" height="5.2" rx="1.1"/><path d="M9.4 9.4h3.4"/></svg>';
 
-const APK_URL = "https://github.com/usual-coderz/screenlink-remote/actions/runs/39284106720#artifacts";
+const APK_URL = "https://github.com/usual-coderz/screenlink-remote/actions";
 
-const TKEY = "tpc.token.v9";
-const SKEY = "tpc.session.v9";
+const TKEY = "tpc.token.v10";
+const SKEY = "tpc.session.v10";
 let DEMO = false;
 let reloginPromise = null;
 let gridSig = "";
@@ -1087,8 +1207,11 @@ const state = {
 auth:false, role:"user", me:null, users:[], devices:[], messages:[], devMsgs:{},
 rules:[], tgLogs:[], relay:null, relayAccount:null, forward:"", outbox:[],
 growth:null, growthEvents:[],
+apps:[], builds:[], buildCfg:null, quota:null,
+logBuild:null, logTimer:null,
 pinsOnly:false, active:null, asOpen:false, toastTimer:null, pollTimer:null,
-ws:null, wsOk:false, wsFails:0, wsTimer:null, linkOk:true, numTried:{}, lastError:"",
+ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null, linkOk:true,
+numTried:{}, lastError:"",
 sel:{ as:[], send:[], bulk:[] }
 };
 
@@ -1104,6 +1227,12 @@ window.addEventListener("unhandledrejection",(ev)=>{ reportError(ev.reason); });
 
 function notice(text,bad){
 const el=$("#notice");
+if(!text){el.hidden=true;return;}
+el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
+}
+function builderNotice(text,bad){
+const el=$("#builderNotice");
+if(!el)return;
 if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
@@ -1146,8 +1275,8 @@ const td=document.createElement("td"); const b=document.createElement("span");
 const s=String(val(v,"unknown")).toLowerCase(); b.className="badge";
 if(force&&String(force).trim())addCls(b,force);
 else if(["online","active","sent","success","bound","upi","delivered","received","ok","install"].indexOf(s)>=0)addCls(b,"ok");
-else if(["pending","queued","sending","update","stale"].indexOf(s)>=0)addCls(b,"warn");
-else if(["failed","error","offline","gone","uninstalled"].indexOf(s)>=0)addCls(b,"bad");
+else if(["pending","queued","sending","update","stale","running"].indexOf(s)>=0)addCls(b,"warn");
+else if(["failed","error","offline","gone","uninstalled","canceled"].indexOf(s)>=0)addCls(b,"bad");
 b.textContent=val(v,"—"); td.appendChild(b); row.appendChild(td);
 }
 function simCell(row,slot){
@@ -1424,6 +1553,7 @@ function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hi
 
 async function afterLogin(role){
 state.role=role||"user"; applyRole(); await refreshAll(); startRealtime();
+connectUserSocket();
 }
 
 async function checkAuth(){
@@ -1662,6 +1792,239 @@ cell(row,e.app_version||"—");
 cell(row,e.android_id||"—");
 body.appendChild(row);
 });
+}
+
+/* ============================ APK BUILDER ============================ */
+
+async function loadBuilderConfig(){
+try{
+state.buildCfg=await api("/api/builder/config");
+const q=state.buildCfg.queue||{};
+badge($("#bQueueBadge"),(q.queued||0)+" queued · "+(q.running||0)+" running",
+(q.running?"warn":""));
+}catch(e){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
+}
+
+async function loadApps(){
+try{
+const d=await api("/api/apps");
+state.apps=d.apps||[];
+state.quota=d.quota||null;
+builderNotice("");
+}catch(e){
+state.apps=[];
+builderNotice(e.message,true);
+}
+renderApps();
+}
+
+async function loadBuilds(){
+try{ const d=await api("/api/builds?limit=60"); state.builds=d.builds||[]; }
+catch(e){ state.builds=[]; }
+renderBuilds();
+}
+
+function renderApps(){
+const body=$("#appBody");
+$("#appCount").textContent=state.apps.length+" apps";
+$("#bApps").textContent=state.apps.length;
+const q=state.quota||{};
+$("#bToday").textContent=(q.used_today===undefined?"—":q.used_today);
+$("#bQuota").textContent=q.unlimited?"unlimited":("limit "+(q.daily_limit===undefined?"—":q.daily_limit));
+if(!state.apps.length){ empty(body,6,"Abhi koi app nahi — upar se banao"); return; }
+body.replaceChildren();
+state.apps.forEach((a)=>{
+const row=document.createElement("tr");
+cell(row,a.name||"—");
+const idc=document.createElement("td"); const idb=document.createElement("span");
+idb.className="badge key mono"; idb.textContent=a.appId; idc.appendChild(idb); row.appendChild(idc);
+cell(row,"••••"+(a.secret_last4||""));
+cell(row,a.package||"—");
+cell(row,String(a.builds_total||0));
+const ac=document.createElement("td"); const w=document.createElement("div"); w.className="u-actions";
+const b1=document.createElement("button"); b1.className="mini g"; b1.type="button"; b1.textContent="⚙ Build";
+b1.addEventListener("click",()=>startBuild(a));
+const b2=document.createElement("button"); b2.className="mini v"; b2.type="button"; b2.textContent="⟳ secret";
+b2.addEventListener("click",()=>rotateSecret(a.appId));
+const b3=document.createElement("button"); b3.className="mini"; b3.type="button"; b3.textContent="⧉ appId";
+b3.addEventListener("click",()=>copyText(a.appId,a.appId));
+const b4=document.createElement("button"); b4.className="mini d"; b4.type="button"; b4.textContent="del";
+b4.addEventListener("click",()=>deleteApp(a));
+w.appendChild(b1); w.appendChild(b2); w.appendChild(b3); w.appendChild(b4);
+ac.appendChild(w); row.appendChild(ac);
+body.appendChild(row);
+});
+}
+
+function renderBuilds(){
+const body=$("#buildBody");
+$("#buildCount").textContent=state.builds.length+" builds";
+const running=state.builds.filter((b)=>b.status==="running").length;
+const queued=state.builds.filter((b)=>b.status==="queued").length;
+$("#bRunning").textContent=running;
+$("#bQueued").textContent=queued;
+if(!state.builds.length){ empty(body,8,"Koi build nahi"); return; }
+body.replaceChildren();
+state.builds.forEach((b)=>{
+const row=document.createElement("tr");
+const bc=document.createElement("td"); const bb=document.createElement("span");
+bb.className="badge key mono"; bb.textContent=b.buildId; bc.appendChild(bb); row.appendChild(bc);
+cell(row,b.appName||b.appId);
+badgeCell(row,b.status,b.status==="success"?"ok":b.status==="failed"?"bad"
+:b.status==="canceled"?"warn":b.status==="running"?"warn":"");
+cell(row,b.variant||"—");
+cell(row,b.duration_ms?(b.duration_ms/1000).toFixed(1)+"s":"—");
+cell(row,b.apk_size?(b.apk_size/1048576).toFixed(2)+" MB":"—");
+cell(row,b.apk_sha256?b.apk_sha256.slice(0,12):"—");
+const ac=document.createElement("td"); const w=document.createElement("div"); w.className="u-actions";
+if(b.status==="success"){
+const dl=document.createElement("button"); dl.className="mini g"; dl.type="button"; dl.textContent="⬇ APK";
+dl.addEventListener("click",()=>downloadBuild(b)); w.appendChild(dl);
+}
+if(b.status==="queued"||b.status==="running"){
+const cn=document.createElement("button"); cn.className="mini d"; cn.type="button"; cn.textContent="cancel";
+cn.addEventListener("click",()=>cancelBuild(b)); w.appendChild(cn);
+}
+if(b.status==="failed"||b.status==="canceled"){
+const rt=document.createElement("button"); rt.className="mini"; rt.type="button"; rt.textContent="retry";
+rt.addEventListener("click",()=>retryBuild(b)); w.appendChild(rt);
+}
+const lg=document.createElement("button"); lg.className="mini v"; lg.type="button"; lg.textContent="log";
+lg.addEventListener("click",()=>showBuildLog(b.buildId)); w.appendChild(lg);
+ac.appendChild(w); row.appendChild(ac);
+body.appendChild(row);
+});
+}
+
+async function createApp(){
+const name=$("#appName").value.trim();
+if(!name){ toast("app name daalo"); return; }
+const btn=$("#appCreate"); btn.disabled=true;
+try{
+const r=await api("/api/apps",{method:"POST",body:JSON.stringify({name:name})});
+showSecret(r.app);
+$("#appName").value="";
+toast("app ban gaya: "+r.app.appId);
+await loadApps(); await loadBuilds();
+}catch(e){ toast(e.message); } finally{ btn.disabled=false; }
+}
+
+function showSecret(app){
+if(!app||!app.secret){ return; }
+$("#secretValue").textContent=app.secret;
+const base=$("#appBase").value.trim()||location.origin;
+$("#secretSnippet").textContent=
+"appId   = "+app.appId+"\n"+
+"secret  = "+app.secret+"\n"+
+"base    = "+base+"\n\n"+
+"POST "+base+"/api/orders\n"+
+"  X-App-Id: "+app.appId+"\n"+
+"  X-Timestamp: <epoch seconds>\n"+
+"  X-Signature: HMAC_SHA256(secret, raw_body + timestamp)  // hex\n";
+$("#secretOut").hidden=false;
+}
+
+async function startBuild(app){
+const variant=$("#appVariant")?$("#appVariant").value:"release";
+const base=$("#appBase").value.trim()||null;
+try{
+const r=await api("/api/builds",{method:"POST",body:JSON.stringify({
+appId:app.appId,variant:variant,baseUrl:base
+})});
+toast("build queued: "+r.build.buildId);
+await loadBuilds();
+subscribeBuild(r.build.buildId);
+showBuildLog(r.build.buildId);
+}catch(e){ toast(e.message); }
+}
+
+async function cancelBuild(b){
+try{ await api("/api/builds/"+b.buildId+"/cancel",{method:"POST"});
+toast("canceled"); await loadBuilds(); }catch(e){ toast(e.message); }
+}
+
+async function retryBuild(b){
+try{
+const r=await api("/api/builds/"+b.buildId+"/retry",{method:"POST"});
+toast("requeued: "+r.build.buildId); await loadBuilds(); subscribeBuild(r.build.buildId);
+}catch(e){ toast(e.message); }
+}
+
+async function rotateSecret(appId){
+if(!confirm("Secret rotate karein? Purana secret turant 401 dega, APK rebuild karna padega."))return;
+try{
+const r=await api("/api/apps/"+appId+"/secret/rotate",{method:"POST"});
+showSecret(r.app);
+toast("secret rotated — APK rebuild karo");
+await loadApps();
+}catch(e){ toast(e.message); }
+}
+
+async function deleteApp(a){
+if(!confirm("Delete app "+a.appId+"? Iske orders bhi hat jayenge."))return;
+try{ await api("/api/apps/"+a.appId,{method:"DELETE"});
+toast("deleted"); await loadApps(); await loadBuilds(); }catch(e){ toast(e.message); }
+}
+
+async function downloadBuild(b){
+try{
+const r=await api("/api/builds/"+b.buildId+"/download");
+toast("download start");
+const a=document.createElement("a");
+a.href=r.url;
+a.download=(b.appName||b.appId)+"-"+b.buildId+".apk";
+document.body.appendChild(a); a.click(); a.remove();
+}catch(e){ toast(e.message); }
+}
+
+async function showBuildLog(buildId){
+state.logBuild=buildId;
+$("#logPanel").hidden=false;
+$("#logBuildId").textContent=buildId;
+await fetchBuildLog();
+$("#logPanel").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function fetchBuildLog(){
+const id=state.logBuild; if(!id)return;
+try{
+const r=await api("/api/builds/"+id+"?log_tail=true");
+const b=r.build||{};
+let txt=(b.log_tail||[]).join("\n")||"(log khali)";
+if(b.error)txt+="\n\nERROR:\n"+b.error;
+$("#buildLog").textContent=txt;
+$("#logLive").hidden=!(b.status==="running"||b.status==="queued");
+const pre=$("#buildLog"); pre.scrollTop=pre.scrollHeight;
+}catch(e){ $("#buildLog").textContent=e.message; }
+}
+
+function subscribeBuild(buildId){
+try{
+if(state.wsUser&&state.wsUser.readyState===1)
+state.wsUser.send(JSON.stringify({type:"subscribe",buildId:buildId}));
+}catch(e){}
+}
+
+function connectUserSocket(){
+if(!state.auth||DEMO)return;
+try{
+const proto=location.protocol==="https:"?"wss:":"ws:";
+const qs=token()?"?token="+encodeURIComponent(token()):"";
+const ws=new WebSocket(proto+"//"+location.host+"/ws/user"+qs);
+state.wsUser=ws;
+ws.onmessage=(ev)=>{
+try{
+const m=JSON.parse(ev.data);
+if(String(m.type)==="build"){
+const d=m.data||{};
+toast("build "+d.buildId+" → "+d.status);
+loadBuilds().catch(()=>{});
+if(state.logBuild===d.buildId)fetchBuildLog();
+}
+}catch(e){}
+};
+ws.onclose=()=>{ setTimeout(()=>{ if(state.auth)connectUserSocket(); },3000); };
+}catch(e){}
 }
 
 /* ------------------------------- KEYS ------------------------------- */
@@ -2082,6 +2445,14 @@ catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); 
 try{ const db=await api("/health/database");
 badge($("#dbBadge"),db.status==="ok"?"Connected":"Issue",db.status==="ok"?"ok":"bad"); }
 catch(e){ badge($("#dbBadge"),"Down","bad"); }
+try{
+const b=await api("/health/builder");
+const ok=b.status==="ok";
+badge($("#builderBadge"),ok?"Ready":"Degraded",ok?"ok":"warn");
+const tools=b.tools||{};
+const missing=Object.keys(tools).filter((k)=>!tools[k]&&k!=="docker");
+if(missing.length&&!ok)builderNotice("Builder tools missing: "+missing.join(", ")+" — /health/builder dekho",true);
+}catch(e){ badge($("#builderBadge"),"Down","bad"); }
 }
 
 async function loadDevices(){
@@ -2180,7 +2551,7 @@ $("#refreshBtn").disabled=true;
 try{
 await loadHealth();
 const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),loadRelayLogs(),
-loadAutoSender(),loadStats(),loadGrowthEvents()];
+loadAutoSender(),loadStats(),loadGrowthEvents(),loadBuilderConfig(),loadApps(),loadBuilds()];
 if(state.role==="admin")jobs.push(loadUsers());
 const res=await Promise.allSettled(jobs);
 if(res.some((r)=>r.status==="rejected"))toast("some sections failed to sync");
@@ -2196,6 +2567,7 @@ if(section==="users")await loadUsers();
 if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
 if(section==="relay"){ await loadRelay(); await loadRelayLogs(); await loadRules(); }
 if(section==="live"){ await loadDevices(); await loadMessages(); }
+if(section==="builder"){ await loadBuilderConfig(); await loadApps(); await loadBuilds(); }
 toast("synced");
 }catch(e){ toast(e.message); }
 }
@@ -2250,6 +2622,10 @@ const j=state.outbox.find((x)=>x.status!=="sent"&&x.status!=="failed"&&
 (!did||String(x.deviceId)===String(did))&&(!dbody||String(x.body)===String(dbody)));
 if(j){ j.status=data.status==="failed"?"failed":"sent"; renderOutbox(); }
 }
+if(type.indexOf("build")>=0){
+loadBuilds().catch(()=>{});
+if(state.logBuild)fetchBuildLog();
+}
 if(type.indexOf("growth")>=0||type.indexOf("outbox_stats")>=0){
 loadStats().catch(()=>{});
 if(type.indexOf("growth")>=0)loadGrowthEvents().catch(()=>{});
@@ -2262,6 +2638,9 @@ const fast=state.devices.some(online);
 state.pollTimer=setTimeout(async()=>{
 if(state.auth&&!document.hidden){
 await Promise.allSettled([loadDevices(),loadMessages(),loadStats()]);
+if(state.builds.some((b)=>b.status==="running"||b.status==="queued")){
+await Promise.allSettled([loadBuilds(),loadBuilderConfig()]);
+}
 }
 schedulePoll();
 },fast?8000:20000);
@@ -2283,6 +2662,7 @@ if(page==="messages")refreshSection("messages");
 if(page==="relay")refreshSection("relay");
 if(page==="users")refreshSection("users");
 if(page==="growth")refreshSection("growth");
+if(page==="builder")refreshSection("builder");
 }
 
 /* ------------------------------- wiring ------------------------------- */
@@ -2485,6 +2865,14 @@ catch(e){ $("#parseOut").textContent=e.message; } });
 $("#msgFilter").addEventListener("change",renderMessages);
 $("#msgSearch").addEventListener("input",renderMessages);
 
+/* -------- builder wiring -------- */
+$("#appCreate").addEventListener("click",createApp);
+$("#appName").addEventListener("keydown",(e)=>{ if(e.key==="Enter")createApp(); });
+$("#secretCopy").addEventListener("click",()=>copyText($("#secretValue").textContent.trim()));
+$("#secretHide").addEventListener("click",()=>{ $("#secretOut").hidden=true; });
+$("#logClose").addEventListener("click",()=>{ $("#logPanel").hidden=true; state.logBuild=null; });
+$("#logReload").addEventListener("click",fetchBuildLog);
+
 /* -------- key generate -------- */
 $("#kGen").addEventListener("click",async()=>{
 const btn=$("#kGen"); btn.disabled=true;
@@ -2533,14 +2921,17 @@ loginMsg(err.message||"Access denied");
 $("#logoutBtn").addEventListener("click",async()=>{
 try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
 try{ if(state.ws)state.ws.close(); }catch(e){}
-clearTimeout(state.pollTimer); clearTimeout(state.wsTimer);
+try{ if(state.wsUser)state.wsUser.close(); }catch(e){}
+clearTimeout(state.pollTimer); clearTimeout(state.wsTimer); clearTimeout(state.logTimer);
 clearSession();
 state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
 state.growth=null; state.growthEvents=[];
+state.apps=[]; state.builds=[]; state.logBuild=null; state.quota=null;
 state.pinsOnly=false; state.role="user";
 state.sel={as:[],send:[],bulk:[]};
 gridSig=""; liveSig="";
 $("#pinsBtn").classList.remove("on");
+$("#logPanel").hidden=true;
 showLogin(""); toast("logged out");
 });
 
@@ -2576,6 +2967,16 @@ const DEMO_KEYS=[
 {id:"k3",key:"TPC-2A9B-PQRS-6DEF",label:"Amit",phone:"",created_at:Date.now()-86400000*3,last_login_at:null,login_count:0,expires_at:new Date(Date.now()+86400000*4).toISOString(),blocked:false,expired:false}
 ];
 
+const DEMO_APPS=[
+{appId:"a_demo_8f3k2",name:"DemoShop",package:"com.tpcapp.demo.8f3k2",secret_last4:"9Xq2",secret_version:1,created_at:Date.now()-86400000*3,builds_total:2,last_build_at:Date.now()-3600000},
+{appId:"a_demo_2m7p9",name:"DemoNotes",package:"com.tpcapp.demo.2m7p9",secret_last4:"Lw2a",secret_version:2,created_at:Date.now()-86400000,builds_total:0,last_build_at:null}
+];
+
+const DEMO_BUILDS=[
+{buildId:"b_2",appId:"a_demo_8f3k2",appName:"DemoShop",status:"success",variant:"release",versionCode:1,versionName:"1.0",duration_ms:184000,apk_size:4718592,apk_sha256:"9f2ab1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",signed:true,queued_at:Date.now()-300000,finished_at:Date.now()-116000,download_ready:true},
+{buildId:"b_1",appId:"a_demo_8f3k2",appName:"DemoShop",status:"failed",variant:"release",versionCode:1,versionName:"1.0",duration_ms:41000,apk_size:null,apk_sha256:null,signed:false,error:"gradle exit 1\n> Task :app:compileReleaseKotlin FAILED",queued_at:Date.now()-900000,finished_at:Date.now()-859000,download_ready:false}
+];
+
 function mockApi(path,options){
 const p=path.split("?")[0]; const o=options||{};
 let body={}; try{ body=o.body?JSON.parse(o.body):{}; }catch(e){ body={}; }
@@ -2583,8 +2984,11 @@ if(p==="/admin/auth/status")return{authenticated:Boolean(readSession()),role:(re
 if(p==="/panel/login")return{status:"ok",username:body.username||"admin",role:"admin",token:"demo."+btoa(body.username||"a"),expires_in:2592000};
 if(p==="/panel/access")return{status:"ok",username:"keyuser",role:"user",token:"demo."+btoa(body.key||"k"),expires_in:2592000};
 if(p==="/admin/logout")return{status:"ok"};
-if(p==="/health")return{status:"ok"};
+if(p==="/health")return{status:"ok",version:"5.5.0",build_queue:{queued:0,running:0}};
 if(p==="/health/database")return{status:"ok"};
+if(p==="/health/builder")return{status:"ok",variant:"release",worker_mode:"inline",template_ok:true,
+tools:{gradle:"/usr/bin/gradle",keytool:"/usr/bin/keytool",apksigner:"/usr/bin/apksigner",zipalign:"/usr/bin/zipalign",docker:null},
+queue:{queued:0,running:0,concurrency:1},counts:{apps:2,builds:2,queued:0,running:0,success:1,failed:1}};
 if(p==="/admin/devices")return{devices:DEMO_DEVICES};
 if(p==="/admin/messages")return{messages:DEMO_MESSAGES};
 if(p==="/admin/stats")return{
@@ -2600,6 +3004,74 @@ if(p==="/admin/growth/events")return{events:[
 {id:"e3",event:"update",short_id:"TPC-0001",device_name:"Redmi Note 12",app_version:"4.4",android_id:"c3d4e5f6a1b2",ts:new Date(Date.now()-10800000).toISOString()},
 {id:"e4",event:"gone",short_id:"TPC-0003",device_name:"Poco M6",app_version:"4.3",android_id:"d4e5f6a1b2c3",ts:new Date(Date.now()-14400000).toISOString()}
 ]};
+
+/* ---- builder ---- */
+if(p==="/api/builder/config")return{variant:"release",daily_quota:20,download_ttl:300,
+signature_window:300,signature_version:1,concurrency:1,worker_mode:"inline",
+queue:{queued:0,running:0,concurrency:1}};
+if(p==="/api/builder/socket-stats")return{rooms:1,sockets:1};
+if(p==="/api/apps"){
+if(o.method==="POST"){
+const aid="a_demo_"+Math.random().toString(36).slice(2,7);
+const secret="s3c_"+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
+const app={appId:aid,name:body.name,package:"com.tpcapp.demo."+aid.slice(-5),
+secret_last4:secret.slice(-4),secret_version:1,created_at:Date.now(),builds_total:0,last_build_at:null,secret:secret};
+DEMO_APPS.unshift(app); return{status:"ok",app:app};
+}
+return{apps:DEMO_APPS,quota:{used_today:2,daily_limit:20,remaining:18,unlimited:false}};
+}
+if(/^\/api\/apps\/[^/]+\/secret\/rotate$/.test(p)){
+const aid=p.split("/")[3]; const a=DEMO_APPS.find((x)=>x.appId===aid);
+const secret="s3c_"+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
+if(a){ a.secret_last4=secret.slice(-4); a.secret_version=(a.secret_version||1)+1; a.secret=secret; }
+return{status:"ok",app:a||{},note:"purana secret ab 401 dega"};
+}
+if(/^\/api\/apps\/[^/]+$/.test(p)&&o.method==="DELETE"){
+const aid=p.split("/")[3]; const i=DEMO_APPS.findIndex((x)=>x.appId===aid);
+if(i>=0)DEMO_APPS.splice(i,1); return{status:"ok"};
+}
+if(p==="/api/builds"){
+if(o.method==="POST"){
+const b={buildId:"b_"+(DEMO_BUILDS.length+1),appId:body.appId,
+appName:(DEMO_APPS.find((x)=>x.appId===body.appId)||{}).name||"App",
+status:"queued",variant:body.variant||"release",versionCode:1,versionName:"1.0",
+queued_at:Date.now(),download_ready:false};
+DEMO_BUILDS.unshift(b); return{status:"ok",build:b,queued:true};
+}
+return{builds:DEMO_BUILDS,queue:{queued:0,running:0,concurrency:1}};
+}
+if(/^\/api\/builds\/[^/]+\/cancel$/.test(p)){
+const bid=p.split("/")[3]; const b=DEMO_BUILDS.find((x)=>x.buildId===bid);
+if(b)b.status="canceled"; return{status:"ok",build:b||{}};
+}
+if(/^\/api\/builds\/[^/]+\/retry$/.test(p)){
+const bid=p.split("/")[3]; const old=DEMO_BUILDS.find((x)=>x.buildId===bid)||{};
+const nb={buildId:"b_"+(DEMO_BUILDS.length+1),appId:old.appId,appName:old.appName,
+status:"queued",variant:old.variant||"release",queued_at:Date.now(),download_ready:false};
+DEMO_BUILDS.unshift(nb); return{status:"ok",build:nb,queued:true};
+}
+if(/^\/api\/builds\/[^/]+\/download$/.test(p)){
+const bid=p.split("/")[3];
+return{status:"ok",url:"/api/builds/"+bid+"/download?token=demo",expires_in:300,
+expires_at:Math.floor(Date.now()/1000)+300,apk_size:4718592,apk_sha256:"demo",signed:true};
+}
+if(/^\/api\/builds\/[^/]+$/.test(p)){
+const bid=p.split("/")[3]; const b=DEMO_BUILDS.find((x)=>x.buildId===bid)||{};
+return{build:Object.assign({log_tail:[
+"[1/7] workspace /tmp/tpc_builds/"+bid,
+"[2/7] keystore ready",
+"[3/7] strings.xml patched",
+"[4/7] builder.properties written",
+"[5/7] gradle assembleRelease",
+"> Task :app:compileReleaseKotlin",
+"> Task :app:packageRelease",
+"BUILD SUCCESSFUL in 1m 48s",
+"[6/7] apksigner sign + verify ok",
+"[7/7] published "+bid+".apk"
+]},b)};
+}
+
+/* ---- keys ---- */
 if(p==="/admin/keys"){
 if(o.method==="POST"){
 const k="TPC-"+Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
