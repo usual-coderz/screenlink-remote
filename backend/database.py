@@ -1,3 +1,16 @@
+"""MongoDB layer — collections, conflict-safe indexes, boot-time backfill.
+
+Do cheezein yahan important hain:
+
+  1. Index creation kabhi boot na tode. Conflicting index mile to drop karke
+     naye options ke saath dobara banao, aur agar unique lagna hi possible na
+     ho to non-unique par gir jao (index na hone se better hai).
+  2. TTL hamesha BSON date par lage, epoch number par nahi — warna TTL
+     chalta hi nahi.
+
+APK builder ke liye alag collections hain (apps/builds/build_events/orders/
+app_nonces). appId in sab me pehla key hai, kyunki har query app-scoped hai.
+"""
 import os
 import time
 import logging
@@ -40,6 +53,9 @@ PENDING_OUTBOX_GRACE_DAYS = _int_env("PENDING_OUTBOX_GRACE_DAYS", 45)
 # growth feed retention (0 = TTL off, sirf app-side prune loop chalega)
 EVENT_RETENTION_DAYS = _int_env("EVENT_RETENTION_DAYS", 180)
 
+# builder: signed-request replay guard ki durability window
+NONCE_TTL_SECONDS = _int_env("APK_NONCE_TTL", 900)
+
 # Index build ko boot pe blocking na kare (bade collection par kaam aata hai).
 INDEX_BACKGROUND = _bool_env("MONGO_INDEX_BACKGROUND", True)
 
@@ -77,6 +93,13 @@ panel_keys = db["panel_keys"]
 device_events = db["device_events"]
 install_fingerprints = db["install_fingerprints"]
 
+# ---- APK builder (multi-tenant) ----
+apps = db["apps"]
+builds = db["builds"]
+build_events = db["build_events"]
+orders = db["orders"]
+app_nonces = db["app_nonces"]
+
 
 # --------------------------------------------------------------- index utils
 
@@ -108,6 +131,22 @@ def _find_index_name(collection, keys, partial=None):
     return None
 
 
+def _all_index_names_for(collection, keys):
+    """Isi key-pattern ke saare indexes (naam wapas) — conflict cleanup ke liye."""
+    want = _norm_keys(keys)
+    names = []
+    try:
+        for info in collection.list_indexes():
+            name = info.get("name") or ""
+            if name == "_id_":
+                continue
+            if dict(info.get("key") or {}) == want:
+                names.append(name)
+    except Exception:
+        pass
+    return names
+
+
 def _drop(collection, name):
     if not name or name == "_id_":
         return False
@@ -121,9 +160,11 @@ def _drop(collection, name):
 def _ensure_index(collection, keys, **options):
     """create_index jo conflict pe crash na kare AUR options actually laga de.
 
-    Pehle sirf `return` karta tha — matlab existing non-unique index par
-    unique=True kabhi apply hi nahi hota tha. Ab conflict par purana index
-    drop karke naye options ke saath dobara banate hain.
+    Teen level ka fallback:
+      1. as-is try
+      2. conflict (85/86) -> purana conflicting index drop karke dobara
+      3. unique bhi na lage (duplicates hain) -> non-unique par gir jao
+      4. last resort -> plain index, warna index ke bina chhod do
     """
     if INDEX_BACKGROUND:
         options.setdefault("background", True)
@@ -145,23 +186,27 @@ def _ensure_index(collection, keys, **options):
         pass
 
     # 11000 / unique fail: existing duplicates hain -> unique hata ke try karo.
-    # Pehle purana index drop, warna options change hone par phir 85/86 milega.
     relaxed = {k: v for k, v in options.items()
                if k not in ("unique", "partialFilterExpression", "background")}
     relaxed["background"] = INDEX_BACKGROUND
 
-    _drop(collection, _find_index_name(collection, keys,
-                                       options.get("partialFilterExpression")))
+    for name in _all_index_names_for(collection, keys):
+        _drop(collection, name)
+
     try:
         collection.create_index(keys, **relaxed)
+        return
     except OperationFailure as e:
         if e.code not in (85, 86):
             raise
-        _drop(collection, _find_index_name(collection, keys))
-        try:
-            collection.create_index(keys, **relaxed)
-        except OperationFailure:
-            log.warning("index skip: %s %s", collection.name, keys)
+
+    # last resort: bina kisi option ke plain index
+    for name in _all_index_names_for(collection, keys):
+        _drop(collection, name)
+    try:
+        collection.create_index(keys, background=INDEX_BACKGROUND)
+    except Exception:
+        log.warning("index skip: %s %s", collection.name, keys)
 
 
 def _ensure_ttl(collection, field, seconds, direction=ASCENDING, partial=None):
@@ -343,6 +388,59 @@ def init_db():
     # ------------------------------------------------------------ counters
     # _id hi kaafi hai (find_one_and_update {"_id": "device_seq"}), extra index nahi.
 
+    # =====================================================================
+    #  APK BUILDER — isolation ka data layer
+    # =====================================================================
+
+    # ---------------------------------------------------------------- apps
+    # appId globally unique. Yeh line poori isolation ki neev hai: ek appId
+    # sirf ek user ka ho sakta hai, isliye signed request verify hone ke baad
+    # appId hi tenant key ban jaata hai.
+    _ensure_index(
+        apps, "appId",
+        unique=True,
+        partialFilterExpression={"appId": {"$type": "string"}},
+    )
+    _ensure_index(apps, [("userId", 1), ("_id", DESCENDING)])
+    _ensure_index(apps, [("userId", 1), ("deleted", 1)])
+    _ensure_index(apps, [("package", 1)])
+
+    # -------------------------------------------------------------- builds
+    _ensure_index(
+        builds, "buildId",
+        unique=True,
+        partialFilterExpression={"buildId": {"$type": "string"}},
+    )
+    _ensure_index(builds, [("userId", 1), ("_id", DESCENDING)])
+    _ensure_index(builds, [("appId", 1), ("_id", DESCENDING)])
+    _ensure_index(builds, [("appId", 1), ("status", 1)])
+    # queue poller: sabse purana queued pehle
+    _ensure_index(builds, [("status", 1), ("_id", ASCENDING)])
+    # stuck-running recovery
+    _ensure_index(builds, [("status", 1), ("updated_at", ASCENDING)])
+    _ensure_index(builds, [("userId", 1), ("created_at", DESCENDING)])
+
+    # --------------------------------------------------------- build_events
+    _ensure_index(build_events, [("buildId", 1), ("_id", DESCENDING)])
+    _ensure_index(build_events, [("appId", 1), ("_id", DESCENDING)])
+    _ensure_ttl(build_events, "created_at", LOG_RETENTION_DAYS * 86400, DESCENDING)
+
+    # --------------------------------------------------------------- orders
+    # scopedRepo har query me appId pehla key lagata hai.
+    _ensure_index(orders, [("appId", 1), ("_id", DESCENDING)])
+    _ensure_index(orders, [("appId", 1), ("created_at", DESCENDING)])
+    _ensure_index(
+        orders, [("appId", 1), ("ref", 1)],
+        partialFilterExpression={"ref": {"$type": "string"}},
+    )
+
+    # -------------------------------------------------------------- nonces
+    # Replay guard ka durable hissa. Process restart par bhi signature dobara
+    # use nahi ho sakta.
+    _ensure_ttl(app_nonces, "created_at", NONCE_TTL_SECONDS, ASCENDING)
+    _ensure_index(app_nonces, [("appId", 1), ("sig", 1), ("ts", 1)], unique=True)
+    _ensure_index(app_nonces, [("expires_at", 1)])
+
     _backfill_growth()
 
 
@@ -408,6 +506,34 @@ def _backfill_growth():
         log.warning("growth backfill: fingerprints skip", exc_info=True)
 
 
+def _backfill_builder():
+    """Builder collections ko purane data ke saath align karo.
+
+    Kuch bhi todne wala nahi — sirf missing fields set karta hai.
+    """
+    try:
+        apps.update_many(
+            {"secret_version": {"$exists": False}},
+            {"$set": {"secret_version": 1, "deleted": False}},
+        )
+        apps.update_many(
+            {"builds_total": {"$exists": False}},
+            {"$set": {"builds_total": 0}},
+        )
+    except PyMongoError:
+        log.warning("builder backfill: apps skip", exc_info=True)
+
+    # restart ke baad stuck "running" builds ko queue par wapas bhejo.
+    # Queue khud bhi recover() karta hai — ye belt-and-braces hai.
+    try:
+        builds.update_many(
+            {"status": "running", "updated_at": {"$lt": utc_now().replace(tzinfo=None)}},
+            {"$set": {"status": "queued", "error": "requeued after restart"}},
+        )
+    except PyMongoError:
+        log.warning("builder backfill: builds skip", exc_info=True)
+
+
 def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
     """Boot pe Mongo thoda late aaye (docker-compose) to app crash na ho.
 
@@ -422,6 +548,7 @@ def init_db_with_retry(attempts: int = 5, delay: float = 2.0):
             init_db()
             if i:
                 log.info("Mongo connect ho gaya (attempt %d/%d)", i + 1, attempts)
+            _backfill_builder()
             return
         except Exception as e:  # noqa: BLE001 — boot robustness
             last = e
@@ -443,6 +570,21 @@ def check_database():
         return {"status": "ok", "database": DB_NAME}
     except Exception as e:
         return {"status": "error", "database": DB_NAME, "detail": str(e)}
+
+
+def builder_stats():
+    """Builder ke liye halka stats — /health/builder me use hota hai."""
+    out = {"apps": 0, "builds": 0, "queued": 0, "running": 0, "success": 0, "failed": 0}
+    try:
+        out["apps"] = apps.count_documents({"deleted": {"$ne": True}})
+        out["builds"] = builds.count_documents({})
+        for row in builds.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]):
+            k = str(row.get("_id") or "")
+            if k in out:
+                out[k] = int(row.get("n") or 0)
+    except PyMongoError:
+        pass
+    return out
 
 
 def close_db():
