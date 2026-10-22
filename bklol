@@ -1,4 +1,4 @@
-I want to implement apk builder in code
+I want to implement apk builder in code and rewrite entire fix and implement 100% work apk buuilder and rewrite all issues file entrie fix
 
 HOW THE SYSTEM WORKS — WITH EXAMPLES
 (Users: ivan and xia)
@@ -132,6 +132,58 @@ Code-Ivan/
 ├── Procfile                        [REVIEW]
 └── README.md                       [UPDATE]
 
+
+.gitHub/workflows/build.yml
+
+
+name: Build DESI VIDEOS APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-Remote-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
 
 
 
