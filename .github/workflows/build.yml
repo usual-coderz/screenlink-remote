@@ -1,23 +1,37 @@
-name: Build DESI VIDEOS APK
+name: Build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      variant:
+        description: "Build variant"
+        type: choice
+        options: [release, debug]
+        default: release
   push:
-    branches:
-      - main
+    branches: [main]
+    paths-ignore:
+      - "backend/**"
+      - "admin/**"
+      - "**.md"
 
 permissions:
   contents: read
 
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,21 +42,71 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses > /dev/null
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      # Signing optional hai. Secrets na ho to release build debug key se sign hoga
+      # (build.gradle.kts ka fallback isi ke liye hai).
+      - name: Write keystore.properties
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > app-keystore.jks
+          cat > keystore.properties <<EOF
+          storeFile=app-keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build
+        env:
+          VARIANT: ${{ github.event.inputs.variant || 'release' }}
+        run: |
+          if [ "$VARIANT" = "debug" ]; then
+            gradle assembleDebug --no-daemon --console=plain
+          else
+            gradle assembleRelease --no-daemon --console=plain
+          fi
+
+      - name: Locate APK
+        id: apk
+        run: |
+          VARIANT="${{ github.event.inputs.variant || 'release' }}"
+          APK=$(find app/build/outputs/apk/$VARIANT -name "*.apk" ! -name "*-unsigned.apk" | head -n1)
+          if [ -z "$APK" ]; then echo "APK nahi mila"; exit 1; fi
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify signature
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n1)
+          "$BT/apksigner" verify --print-certs "${{ steps.apk.outputs.path }}" || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ScreenLink-Remote-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: DESI-VIDEOS-APK-${{ github.event.inputs.variant || 'release' }}
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
+
+      - name: Summary
+        run: |
+          {
+            echo "### APK built"
+            echo ""
+            echo "- variant: \`${{ github.event.inputs.variant || 'release' }}\`"
+            echo "- size: ${{ steps.apk.outputs.size }} bytes"
+            echo "- sha256: \`${{ steps.apk.outputs.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
