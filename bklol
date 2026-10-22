@@ -1,0 +1,133 @@
+I want to implement apk builder in code
+
+HOW THE SYSTEM WORKS — WITH EXAMPLES
+(Users: ivan and xia)
+
+SETUP
+- ivan logs in
+  JWT issued: { userId: "u_ivan" }
+- ivan creates app "IvanShop"
+  apps.controller.js -> secretService.js generates:
+    appId:     "a_ivan_8f3k2"
+    appSecret: "s3c_9Xq...(random 32 bytes)"  (stored encrypted)
+  saved via scopedRepo.js with userId "u_ivan"
+
+- xia logs in
+  JWT issued: { userId: "u_xia" }
+- xia creates app "XiaNotes"
+  generates:
+    appId:     "a_xia_2m7p9"
+    appSecret: "k7R_Lw2...(random 32 bytes)"  (stored encrypted)
+  saved via scopedRepo.js with userId "u_xia"
+
+BUILD
+- ivan clicks Build
+  POST /builds { appId: "a_ivan_8f3k2" }
+  builds.controller.js checks ivan's quota, inserts:
+    { buildId: "b_1", userId: "u_ivan", appId: "a_ivan_8f3k2", status: "queued" }
+- buildQueue.js -> buildWorker.js picks b_1
+  - copies template into workspace /tmp/b_1/
+  - writes strings.xml:
+      <string name="app_name">IvanShop</string>
+      <string name="api_app_id">a_ivan_8f3k2</string>
+      <string name="api_secret">s3c_9Xq...</string>
+  - build-apk.sh runs Gradle in Docker
+  - signed with worker/keystores/a_ivan_8f3k2.jks
+  - APK moved to storage/apks/a_ivan_8f3k2/app.apk
+  - Build b_1 -> status "success"
+  - socket event sent to room "u_ivan" only
+
+- xia builds her app the same way -> b_2
+  APK at storage/apks/a_xia_2m7p9/app.apk
+  socket event sent to room "u_xia" only
+
+DOWNLOAD
+- ivan requests GET /builds/b_1/download
+  builds.controller.js: build b_1 belongs to u_ivan -> OK
+  returns signed URL, expires in 5 minutes
+- xia requests GET /builds/b_1/download
+  build b_1 belongs to u_ivan -> 403 Forbidden
+  (xia cannot download ivan's APK)
+
+CONNECTIONS (THE ISOLATION PART)
+
+Ivan's APK sends a request:
+  POST /api/orders
+  headers:
+    X-App-Id: a_ivan_8f3k2
+    X-Timestamp: 1761...
+    X-Signature: HMAC(s3c_9Xq..., body + timestamp)
+
+- signedRequest.js:
+  looks up app a_ivan_8f3k2 -> found, owner u_ivan
+  verifies HMAC with ivan's secret -> valid
+  timestamp within window -> OK
+- scopedRepo.js runs:
+    orders.find({ appId: "a_ivan_8f3k2" })
+  -> returns only ivan's orders
+
+Xia's APK sends the same kind of request:
+  X-App-Id: a_xia_2m7p9
+  X-Signature: HMAC(k7R_Lw2..., body + timestamp)
+- signedRequest.js verifies with xia's secret -> valid
+- scopedRepo.js runs:
+    orders.find({ appId: "a_xia_2m7p9" })
+  -> returns only xia's orders
+
+ATTACK ATTEMPTS THAT FAIL
+
+1. Xia's APK sends X-App-Id: a_ivan_8f3k2 (spoofing ivan's app)
+   signedRequest.js verifies with ivan's secret
+   xia's APK does not have s3c_9Xq... -> signature mismatch -> 401
+
+2. Xia's APK replays an old request from ivan's APK
+   timestamp is outside the window -> 401
+
+3. Xia's APK sends a body containing another appId
+   { "appId": "a_ivan_8f3k2" } in body
+   appId is taken from the verified header only, body value ignored
+   -> xia still only reads a_xia_2m7p9 data
+
+ROTATION EXAMPLE
+- ivan regenerates his secret
+  secretService.js replaces s3c_9Xq... with new secret
+- ivan's old APK sends a request with the old signature
+  -> 401 (signature mismatch)
+- ivan rebuilds -> new APK contains the new secret -> works again
+
+REALTIME EXAMPLE
+- ivan's APK opens a socket with X-App-Id and signed handshake
+  sockets/index.js verifies -> joins room "app:a_ivan_8f3k2"
+- xia's socket is in room "app:a_xia_2m7p9"
+- when ivan's order updates, only room "app:a_ivan_8f3k2" receives it
+
+Code-Ivan/
+│
+├── admin/
+│   └── index.html                 [UPDATE]
+│
+├── backend/
+│   ├── app.py                     [UPDATE]
+│   ├── database.py                [UPDATE]
+│   └── apk_builder/
+│       ├── init.py            [NEW]
+│       ├── routes.py              [NEW]
+│       ├── service.py             [NEW]
+│       ├── queue.py               [NEW]
+│       ├── worker.py              [NEW]
+│       ├── storage.py             [NEW]
+│       ├── config.py              [NEW]
+│       └── validators.py          [NEW]
+│
+├── app/
+│   ├── build.gradle.kts            [REVIEW]
+│   └── src/main/
+│       ├── AndroidManifest.xml     [REVIEW]
+│       └── res/values/strings.xml  [REVIEW]
+│
+├── .github/workflows/
+│   └── build.yml                  [REVIEW/UPDATE]
+│
+├── requirements.txt               [REVIEW]
+├── Procfile                        [REVIEW]
+└── README.md                       [UPDATE]
