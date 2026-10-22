@@ -5,34 +5,51 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// release keystore optional — gradle.properties me na ho to debug signing use hoga
+// ---- builder.properties: APK builder isko per-app likhta hai ----
+val builderProps = Properties().apply {
+    val f = rootProject.file("builder.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+// ---- keystore.properties: builder per-app keystore deta hai ----
 val keystoreProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+val appIdOverride: String? = builderProps.getProperty("appId")
+val versionCodeOverride: Int = (builderProps.getProperty("versionCode") ?: "6").toIntOrNull() ?: 6
+val versionNameOverride: String = builderProps.getProperty("versionName") ?: "4.4"
+
 android {
+    // namespace kabhi nahi badalta (R class + manifest actions isi par hain)
     namespace = "com.screenlink.remote"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.screenlink.remote"
+        // applicationId builder se aata hai -> ek phone par kai APK coexist kar sakte hain
+        applicationId = appIdOverride ?: "com.screenlink.remote"
         minSdk = 23
         targetSdk = 35
-        versionCode = 6
-        versionName = "4.4"
+        versionCode = versionCodeOverride
+        versionName = versionNameOverride
 
         resourceConfigurations += listOf("en")
         vectorDrawables.useSupportLibrary = false
     }
 
     signingConfigs {
-        if (keystoreProps.getProperty("storeFile") != null) {
+        val storePath = keystoreProps.getProperty("storeFile")
+        if (storePath != null) {
             create("release") {
-                storeFile = file(keystoreProps.getProperty("storeFile"))
+                // rootProject relative — builder workspace root me keystore rakhta hai
+                storeFile = rootProject.file(storePath)
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
                 keyPassword = keystoreProps.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -49,9 +66,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (signingConfigs.findByName("release") != null) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            // release keystore na ho to debug signing par gir jao — build fail na ho
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -70,7 +87,8 @@ android {
     }
 
     buildFeatures {
-        buildConfig = false
+        // VERSION_NAME / APPLICATION_ID runtime par dikhane ke liye
+        buildConfig = true
     }
 
     packaging {
@@ -94,7 +112,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-
-    // OkHttp + R8 ke liye
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
 }
