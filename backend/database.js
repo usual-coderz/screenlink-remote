@@ -43,31 +43,58 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
   let lastErr;
 
   for (let i = 1; i <= tries; i++) {
+    let client = null;
+
     try {
-      _client = new MongoClient(uri, {
+      client = new MongoClient(uri, {
         serverSelectionTimeoutMS: 8000,
       });
 
-      await _client.connect();
+      await client.connect();
 
-      _db = _client.db(dbName);
+      const database = client.db(dbName);
+      const collections = {};
 
-      for (const collection of COLLECTIONS) {
-        _col[collection] = _db.collection(collection);
+      for (const name of COLLECTIONS) {
+        collections[name] = database.collection(name);
+      }
+
+      const previousClient = _client;
+
+      _client = client;
+      _db = database;
+
+      for (const name of COLLECTIONS) {
+        _col[name] = collections[name];
       }
 
       await ensureIndexes();
+
+      if (previousClient && previousClient !== client) {
+        await previousClient.close().catch(() => {});
+      }
 
       return _db;
     } catch (err) {
       lastErr = err;
 
+      if (_client === client) {
+        _client = null;
+        _db = null;
+
+        for (const name of COLLECTIONS) {
+          delete _col[name];
+        }
+      }
+
       try {
-        await _client?.close();
+        await client?.close();
       } catch (_) {}
 
-      _client = null;
-      _db = null;
+      console.error(
+        `[database] Initialization attempt ${i}/${tries} failed:`,
+        err.message
+      );
 
       if (i < tries) {
         await sleep(delayMs);
@@ -79,54 +106,55 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
 }
 
 async function ensureIndexes() {
-  const jobs = [
-    _col.devices.createIndex(
-      { registration_id_hash: 1 },
-      { unique: true, sparse: true }
-    ),
+  await _col.devices.createIndex(
+    { registration_id_hash: 1 },
+    { unique: true, sparse: true }
+  );
 
-    _col.messages.createIndex({
-      device_id: 1,
-      _id: -1,
-    }),
+  await _col.messages.createIndex({
+    device_id: 1,
+    _id: -1,
+  });
 
-    _col.messages.createIndex(
-      { dedupe_key: 1 },
-      { sparse: true }
-    ),
+  await _col.messages.createIndex(
+    { dedupe_key: 1 },
+    { sparse: true }
+  );
 
-    _col.outbox.createIndex({
-      device_id: 1,
-      status: 1,
-    }),
+  await _col.outbox.createIndex({
+    device_id: 1,
+    status: 1,
+  });
 
-    _col.panel_keys.createIndex(
-      { key_hash: 1 },
-      { unique: true, sparse: true }
-    ),
+  await _col.panel_keys.createIndex(
+    { key_hash: 1 },
+    { unique: true, sparse: true }
+  );
 
-    _col.install_fingerprints.createIndex(
-      { android_id: 1 },
-      {
-        unique: true,
-        partialFilterExpression: {
-          android_id: { $type: "string" },
-        },
-      }
-    ),
+  await _col.install_fingerprints.createIndex(
+    { android_id: 1 },
+    {
+      unique: true,
+      partialFilterExpression: {
+        android_id: { $type: "string" },
+      },
+    }
+  );
 
-    _col.device_events.createIndex({
-      created_at: -1,
-    }),
-  ];
-
-  for (const job of jobs) {
-    await job;
-  }
+  await _col.device_events.createIndex({
+    created_at: -1,
+  });
 }
 
 async function checkDatabase() {
   try {
+    if (!_db) {
+      return {
+        status: "error",
+        error: "Database is not initialized",
+      };
+    }
+
     await _db.command({ ping: 1 });
 
     return {
@@ -142,24 +170,36 @@ async function checkDatabase() {
 }
 
 async function builderStats() {
-  const out = {};
+  const result = {};
+
+  if (!_db) {
+    return result;
+  }
 
   try {
-    for (const collection of ["apps", "builds", "orders"]) {
-      out[collection] = await _col[collection].countDocuments({});
+    for (const name of ["apps", "builds", "orders"]) {
+      result[name] = await _col[name].countDocuments({});
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error("[database] Builder statistics failed:", err.message);
+  }
 
-  return out;
+  return result;
 }
 
 async function closeDb() {
-  try {
-    await _client?.close();
-  } catch (_) {}
+  const client = _client;
 
   _client = null;
   _db = null;
+
+  for (const name of COLLECTIONS) {
+    delete _col[name];
+  }
+
+  try {
+    await client?.close();
+  } catch (_) {}
 }
 
 module.exports = {
