@@ -298,7 +298,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
 
-app/app.gradle.kts
+app/build.gradle.kts
 
 import java.util.Properties
 
