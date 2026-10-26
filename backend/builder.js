@@ -233,14 +233,46 @@ class BuildQueue {
       await fsp.writeFile(path.join(ws, 'local.properties'), `sdk.dir=${sdk}\n`);
       this.logLine(build, '[4/7] builder.properties + keystore.properties written');
 
-      const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-      const useWrapper = fs.existsSync(path.join(ws, 'gradlew')) ||
-        (process.platform === 'win32' && fs.existsSync(path.join(ws, 'gradlew.bat')));
-      const cmd = useWrapper ? gradlew : 'gradle';
-      const task = build.variant === 'debug' ? 'assembleDebug' : 'assembleRelease';
+      const wrapperFile = path.join(ws, 'gradlew');
+const wrapperProperties = path.join(
+  ws,
+  'gradle',
+  'wrapper',
+  'gradle-wrapper.properties'
+);
 
-      this.logLine(build, `[5/7] ${cmd} ${task}`);
-      await this.execGradle(cmd, [task, '--no-daemon', '--console=plain', '--stacktrace'], ws, build);
+if (!fs.existsSync(wrapperFile)) {
+  throw new Error('Gradle wrapper missing: gradlew was not copied into build workspace');
+}
+
+if (!fs.existsSync(wrapperProperties)) {
+  throw new Error('Gradle wrapper config missing: gradle/wrapper/gradle-wrapper.properties');
+}
+
+if (process.platform !== 'win32') {
+  await fsp.chmod(wrapperFile, 0o755);
+}
+
+const task = build.variant === 'debug'
+  ? 'assembleDebug'
+  : 'assembleRelease';
+
+this.logLine(build, `[5/7] Gradle wrapper: ${wrapperFile}`);
+this.logLine(build, `Workspace: ${ws}`);
+this.logLine(build, `Task: ${task}`);
+
+await this.execGradle(
+  process.platform === 'win32' ? 'gradlew.bat' : './gradlew',
+  [
+    task,
+    '-PappIdBuild=true',
+    '--no-daemon',
+    '--console=plain',
+    '--stacktrace'
+  ],
+  ws,
+  build
+);
       this.logLine(build, 'BUILD SUCCESSFUL');
 
       const outDir = path.join(ws, 'app', 'build', 'outputs', 'apk', build.variant);
