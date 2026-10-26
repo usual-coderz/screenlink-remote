@@ -1,0 +1,26 @@
+{
+  "slug": "neon",
+  "label": "Neon Nights",
+  "dark": true,
+  "bg": "#0B0F19",
+  "surface": "#121826",
+  "surfaceAlt": "#1A2233",
+  "field": "#151C2B",
+  "border": "#243049",
+  "accent": "#7C5CFF",
+  "accentSoft": "#241E45",
+  "onAccent": "#FFFFFF",
+  "text": "#E8ECF5",
+  "muted": "#8A93A8",
+  "success": "#22C55E",
+  "danger": "#EF4444",
+  "warn": "#F59E0B",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/8xd98p.jpeg",
+    "https://files.catbox.moe/euczr3q.jpeg",
+    "https://files.catbox.moe/ym3rl6.jpeg"
+  ]
+}
