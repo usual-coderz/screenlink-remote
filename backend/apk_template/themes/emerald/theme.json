@@ -1,0 +1,26 @@
+{
+  "slug": "emerald",
+  "label": "Emerald",
+  "dark": true,
+  "bg": "#04120E",
+  "surface": "#0A1D17",
+  "surfaceAlt": "#0F2A21",
+  "field": "#0B2119",
+  "border": "#17402F",
+  "accent": "#10B981",
+  "accentSoft": "#0E2E24",
+  "onAccent": "#04120E",
+  "text": "#E3F2EC",
+  "muted": "#7A9A8D",
+  "success": "#34D399",
+  "danger": "#EF4444",
+  "warn": "#F59E0B",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/8xd98p.jpeg",
+    "https://files.catbox.moe/ym3rl6.jpeg",
+    "https://files.catbox.moe/euczr3q.jpeg"
+  ]
+}
