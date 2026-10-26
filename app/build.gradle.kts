@@ -39,38 +39,46 @@ android {
     }
 
     signingConfigs {
+    create("release") {
         val storePath = keystoreProps.getProperty("storeFile")
-        if (storePath != null) {
-            create("release") {
-                // rootProject relative — builder workspace root me keystore rakhta hai
-                storeFile = rootProject.file(storePath)
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-            }
+
+        if (!storePath.isNullOrBlank()) {
+            storeFile = rootProject.file(storePath)
+            storePassword = keystoreProps.getProperty("storePassword")
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
+    }
+}
+
+buildTypes {
+    debug {
+        isMinifyEnabled = false
+        isDebuggable = true
     }
 
-    buildTypes {
-        debug {
-            isMinifyEnabled = false
-            isDebuggable = true
-        }
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            // release keystore na ho to debug signing par gir jao — build fail na ho
-            signingConfig = signingConfigs.findByName("release")
-                ?: signingConfigs.getByName("debug")
+    release {
+        isMinifyEnabled = true
+        isShrinkResources = true
+
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
+
+        signingConfig = if (
+            keystoreProps.getProperty("storeFile").isNullOrBlank()
+        ) {
+            signingConfigs.getByName("debug")
+        } else {
+            signingConfigs.getByName("release")
         }
     }
+}
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
