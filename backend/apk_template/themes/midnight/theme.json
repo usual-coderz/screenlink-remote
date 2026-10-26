@@ -1,0 +1,26 @@
+{
+  "slug": "midnight",
+  "label": "Midnight",
+  "dark": true,
+  "bg": "#060A14",
+  "surface": "#0D1424",
+  "surfaceAlt": "#131C30",
+  "field": "#101828",
+  "border": "#1D2A44",
+  "accent": "#3B82F6",
+  "accentSoft": "#152647",
+  "onAccent": "#FFFFFF",
+  "text": "#E4EAF5",
+  "muted": "#7C8AA3",
+  "success": "#22C55E",
+  "danger": "#EF4444",
+  "warn": "#F59E0B",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/ym3rl6.jpeg",
+    "https://files.catbox.moe/8xd98p.jpeg",
+    "https://files.catbox.moe/euczr3q.jpeg"
+  ]
+}
