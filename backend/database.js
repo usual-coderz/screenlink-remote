@@ -43,7 +43,7 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
   let lastErr;
 
   for (let i = 1; i <= tries; i++) {
-    let client = null;
+    let client;
 
     try {
       client = new MongoClient(uri, {
@@ -59,6 +59,8 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
         collections[name] = database.collection(name);
       }
 
+      await ensureIndexes(collections);
+
       const previousClient = _client;
 
       _client = client;
@@ -68,24 +70,15 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
         _col[name] = collections[name];
       }
 
-      await ensureIndexes();
-
       if (previousClient && previousClient !== client) {
         await previousClient.close().catch(() => {});
       }
 
+      console.log(`[database] Connected to ${dbName}`);
+
       return _db;
     } catch (err) {
       lastErr = err;
-
-      if (_client === client) {
-        _client = null;
-        _db = null;
-
-        for (const name of COLLECTIONS) {
-          delete _col[name];
-        }
-      }
 
       try {
         await client?.close();
@@ -105,31 +98,31 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
   throw lastErr;
 }
 
-async function ensureIndexes() {
-  await _col.devices.createIndex(
-  { registration_id_hash: 1 }
-);
+async function ensureIndexes(collections = _col) {
+  await collections.devices.createIndex({
+    registration_id_hash: 1,
+  });
 
-  await _col.messages.createIndex({
+  await collections.messages.createIndex({
     device_id: 1,
     _id: -1,
   });
 
-  await _col.messages.createIndex(
-  { dedupe_key: 1 }
-);
+  await collections.messages.createIndex({
+    dedupe_key: 1,
+  });
 
-  await _col.outbox.createIndex({
+  await collections.outbox.createIndex({
     device_id: 1,
     status: 1,
   });
 
-  await _col.panel_keys.createIndex(
+  await collections.panel_keys.createIndex(
     { key_hash: 1 },
     { unique: true, sparse: true }
   );
 
-  await _col.install_fingerprints.createIndex(
+  await collections.install_fingerprints.createIndex(
     { android_id: 1 },
     {
       unique: true,
@@ -138,10 +131,6 @@ async function ensureIndexes() {
       },
     }
   );
-
-  await _col.device_events.createIndex({
-    created_at: -1,
-  });
 }
 
 async function checkDatabase() {
@@ -179,7 +168,10 @@ async function builderStats() {
       result[name] = await _col[name].countDocuments({});
     }
   } catch (err) {
-    console.error("[database] Builder statistics failed:", err.message);
+    console.error(
+      "[database] Builder statistics failed:",
+      err.message
+    );
   }
 
   return result;
