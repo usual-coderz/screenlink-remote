@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APK Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080B12; --panel:#0E131D; --panel2:#131A26; --line:#1E2836;
+    --text:#E8ECF4; --muted:#7E8A9E; --accent:#7C5CFF; --accent2:#22D3EE;
+    --ok:#22C55E; --warn:#F59E0B; --bad:#EF4444; --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1100px 600px at 12% -8%, #1B1440 0%, transparent 60%),
+      radial-gradient(900px 520px at 92% 4%, #052E3A 0%, transparent 55%),
+      var(--bg);
+    color:var(--text); font-family:Inter,system-ui,sans-serif; min-height:100vh;
+    padding:28px 22px 70px;
+  }
+  .wrap{max-width:1280px;margin:0 auto}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+  .mark{
+    width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+    background:linear-gradient(140deg,var(--accent),var(--accent2));
+    font-weight:800;font-size:18px;color:#07090F;letter-spacing:-.5px;
+    box-shadow:0 10px 30px -10px var(--accent);
+  }
+  h1{font-size:22px;font-weight:800;letter-spacing:-.4px}
+  h1 span{color:var(--muted);font-weight:500;font-size:13px;display:block;margin-top:3px;letter-spacing:0}
+  .pill{
+    margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted)
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .dot.ok{background:var(--ok);box-shadow:0 0 12px var(--ok)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 12px var(--bad)}
+  .grid{display:grid;grid-template-columns:1.35fr .95fr;gap:20px;align-items:start}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card h2{font-size:13px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+  .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+  .t{
+    border:1.5px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;
+    background:var(--panel2);transition:.16s;position:relative
+  }
+  .t:hover{transform:translateY(-3px);border-color:#33405A}
+  .t.on{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.18)}
+  .t .swatch{height:74px;display:flex;align-items:flex-end;padding:8px;gap:5px}
+  .t .chip{width:15px;height:15px;border-radius:5px;border:1px solid rgba(255,255,255,.18)}
+  .t .meta{padding:10px 11px 12px}
+  .t .nm{font-size:12.5px;font-weight:700}
+  .t .tg{font-size:10.5px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.7px}
+  .t .tick{position:absolute;top:8px;right:8px;width:19px;height:19px;border-radius:50%;
+    background:var(--accent);color:#fff;display:none;place-items:center;font-size:11px;font-weight:800}
+  .t.on .tick{display:grid}
+  label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:14px 0 6px;letter-spacing:.3px}
+  input,select{
+    width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--line);
+    background:#0A0F18;color:var(--text);font:inherit;font-size:13.5px;outline:none
+  }
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.14)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .btn{
+    width:100%;margin-top:20px;padding:14px;border:0;border-radius:12px;cursor:pointer;
+    background:linear-gradient(120deg,var(--accent),#5B7CFF);color:#fff;font:inherit;font-weight:700;font-size:14.5px;
+    box-shadow:0 14px 34px -14px var(--accent);transition:.15s
+  }
+  .btn:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+  .phone{
+    width:100%;max-width:262px;margin:0 auto;border-radius:28px;padding:11px;
+    border:1px solid var(--line);background:#05070C;box-shadow:0 26px 60px -30px #000
+  }
+  .screen{border-radius:20px;overflow:hidden;padding:22px 16px;min-height:392px;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .scr-logo{width:56px;height:56px;border-radius:17px;display:grid;place-items:center;font-weight:800;font-size:19px;margin-top:14px}
+  .scr-title{font-size:16.5px;font-weight:800;margin-top:12px}
+  .scr-sub{font-size:11px;margin-top:5px;line-height:1.5}
+  .scr-imgs{display:flex;gap:6px;margin-top:16px;width:100%}
+  .scr-img{flex:1;height:72px;border-radius:10px;background-size:cover;background-position:center}
+  .scr-field{margin-top:14px;width:100%;padding:11px;border-radius:10px;font-size:11px;text-align:left}
+  .scr-btn{margin-top:14px;width:100%;padding:12px;border-radius:10px;font-size:12px;font-weight:700}
+  .scr-chips{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px;width:100%}
+  .scr-chip{padding:12px 6px;border-radius:10px;font-size:11px;font-weight:600}
+  .list{margin-top:8px;display:flex;flex-direction:column;gap:10px;max-height:430px;overflow:auto;padding-right:4px}
+  .b{border:1px solid var(--line);border-radius:13px;background:var(--panel2);padding:13px}
+  .b .top{display:flex;align-items:center;gap:10px}
+  .b .nm{font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{font-size:10px;font-weight:700;padding:4px 9px;border-radius:999px;letter-spacing:.5px;text-transform:uppercase}
+  .tag.queued{background:rgba(245,158,11,.14);color:var(--warn)}
+  .tag.running{background:rgba(124,92,255,.16);color:#A78BFA}
+  .tag.success{background:rgba(34,197,94,.14);color:var(--ok)}
+  .tag.failed{background:rgba(239,68,68,.14);color:var(--bad)}
+  .tag.canceled{background:rgba(126,138,158,.14);color:var(--muted)}
+  .b .sub{font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:12px;flex-wrap:wrap}
+  .b .acts{display:flex;gap:8px;margin-top:11px}
+  .mini{
+    flex:1;padding:8px;border-radius:9px;border:1px solid var(--line);background:#0A0F18;color:var(--text);
+    font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;text-decoration:none;text-align:center
+  }
+  .mini:hover{border-color:#33405A}
+  pre.log{
+    margin-top:10px;background:#05080E;border:1px solid var(--line);border-radius:10px;padding:10px;
+    font:11px/1.55 ui-monospace,Menlo,monospace;color:#9FB0C8;max-height:190px;overflow:auto;white-space:pre-wrap
+  }
+  .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:26px 0}
+  .foot{margin-top:26px;text-align:center;font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">AF</div>
+    <h1>APK Forge<span>theme-driven android builder</span></h1>
+    <div class="pill"><span class="dot" id="dot"></span><span id="state">checking…</span></div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Themes</h2>
+        <div class="themes" id="themes"><div class="empty">loading…</div></div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h2>Build</h2>
+        <div class="row2">
+          <div>
+            <label>App name</label>
+            <input id="appName" placeholder="Desi Videos" value="Desi Videos">
+          </div>
+          <div>
+            <label>Package id</label>
+            <input id="pkg" placeholder="com.venice.desi">
+          </div>
+        </div>
+        <label>Panel base url</label>
+        <input id="baseUrl" placeholder="https://panel.example.com">
+        <div class="row2">
+          <div>
+            <label>Variant</label>
+            <select id="variant"><option value="prod">release</option><option value="debug">debug</option></select>
+          </div>
+          <div>
+            <label>Theme</label>
+            <select id="themeSel"></select>
+          </div>
+        </div>
+        <button class="btn" id="go">Build APK</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Preview</h2>
+        <div class="phone"><div class="screen" id="screen"></div></div>
+      </div>
+      <div class="card" style="margin-top:20px">
+        <h2>Builds</h2>
+        <div class="list" id="list"><div class="empty">koi build nahi</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">POST /api/builds · GET /api/builder/themes</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let THEMES = [];
+let PICK = null;
+let OPEN = null;
+
+const api = (p, o) => fetch(p, o).then(r => r.json());
+
+function css(t) {
+  return {
+    bg: t.bg, surface: t.surface, surfaceAlt: t.surfaceAlt, field: t.field,
+    border: t.border, accent: t.accent, accentSoft: t.accentSoft, onAccent: t.onAccent,
+    text: t.text, muted: t.muted
+  };
+}
+
+function render() {
+  const t = THEMES.find(x => x.slug === PICK) || THEMES[0];
+  if (!t) return;
+  const c = css(t);
+  $("screen").style.background = c.bg;
+  $("screen").innerHTML = `
+    <div class="scr-logo" style="background:${c.surface};border:2px solid ${c.accent};color:${c.text}">${t.logoText || "DV"}</div>
+    <div class="scr-title" style="color:${c.text}">${t.brand || "DESI VIDEOS"}</div>
+    <div class="scr-sub" style="color:${c.muted}">${t.tagline || ""}</div>
+    <div class="scr-imgs">
+      ${(t.hero || []).slice(0,3).map(u => `<div class="scr-img" style="background-image:url('${u}')"></div>`).join("")}
+    </div>
+    <div class="scr-field" style="background:${c.field};border:1px solid ${c.border};color:${c.muted}">10-digit mobile number</div>
+    <div class="scr-chips">
+      ${["GPay","Paytm","PhonePe","WhatsApp"].map(n =>
+        `<div class="scr-chip" style="background:${c.surfaceAlt};border:1px solid ${c.border};color:${c.text}">${n}</div>`).join("")}
+    </div>
+    <div class="scr-btn" style="background:${c.accent};color:${c.onAccent}">Pay ₹1</div>`;
+}
+
+function cards() {
+  $("themes").innerHTML = THEMES.map(t => `
+    <div class="t ${t.slug === PICK ? "on" : ""}" data-s="${t.slug}">
+      <div class="tick">✓</div>
+      <div class="swatch" style="background:${t.bg}">
+        ${[t.surface, t.accent, t.accentSoft, t.border].map(x =>
+          `<span class="chip" style="background:${x}"></span>`).join("")}
+      </div>
+      <div class="meta">
+        <div class="nm" style="color:${t.text}">${t.label}</div>
+        <div class="tg">${t.dark ? "dark" : "light"}</div>
+      </div>
+    </div>`).join("");
+
+  $("themes").querySelectorAll(".t").forEach(el => el.onclick = () => {
+    PICK = el.dataset.s;
+    $("themeSel").value = PICK;
+    cards(); render();
+  });
+
+  $("themeSel").innerHTML = THEMES.map(t =>
+    `<option value="${t.slug}">${t.label}</option>`).join("");
+  $("themeSel").value = PICK;
+}
+
+$("themeSel").onchange = (e) => { PICK = e.target.value; cards(); render(); };
+
+function tag(s) { return `<span class="tag ${s}">${s}</span>`; }
+
+async function poll() {
+  try {
+    const d = await api("/api/builds?limit=25");
+    const rows = d.builds || [];
+    if (!rows.length) { $("list").innerHTML = '<div class="empty">koi build nahi</div>'; return; }
+    $("list").innerHTML = rows.map(b => `
+      <div class="b" data-id="${b.buildId}">
+        <div class="top">${tag(b.status)}<div class="nm">${b.appName || b.buildId.slice(-6)}</div></div>
+        <div class="sub">
+          <span>${b.variant}</span>
+          <span>${b.apk_size ? (b.apk_size/1048576).toFixed(2)+" MB" : "—"}</span>
+          <span>${b.duration_ms ? (b.duration_ms/1000).toFixed(1)+"s" : "—"}</span>
+        </div>
+        <div class="acts">
+          ${b.status === "success" ? `<a class="mini" href="/api/builds/${b.buildId}/download">download</a>` : ""}
+          <button class="mini" data-log="${b.buildId}">log</button>
+          ${["queued","running"].includes(b.status) ? `<button class="mini" data-cancel="${b.buildId}">cancel</button>` : ""}
+        </div>
+        <div data-out="${b.buildId}"></div>
+      </div>`).join("");
+
+    $("list").querySelectorAll("[data-log]").forEach(b => b.onclick = () => toggle(b.dataset.log));
+    $("list").querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
+      await api(`/api/builds/${b.dataset.cancel}/cancel`, { method: "POST" });
+      poll();
+    });
+  } catch (_) {}
+}
+
+async function toggle(id) {
+  const box = document.querySelector(`[data-out="${id}"]`);
+  if (OPEN === id) { box.innerHTML = ""; OPEN = null; return; }
+  OPEN = id;
+  const d = await api(`/api/builds/${id}/log`);
+  box.innerHTML = `<pre class="log">${(d.log || "(empty)").replace(/</g,"&lt;")}</pre>`;
+}
+
+$("go").onclick = async () => {
+  const name = $("appName").value.trim() || "App";
+  const pkg = $("pkg").value.trim() || ("com.venice." + name.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12));
+  $("go").disabled = true;
+  try {
+    const r = await api("/api/builds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        appName: name,
+        package: pkg,
+        theme: PICK,
+        variant: $("variant").value,
+        baseUrl: $("baseUrl").value.trim(),
+        config: { applicationId: pkg, name }
+      })
+    });
+    if (r.status !== "ok") throw new Error(r.error || "fail");
+    poll();
+  } catch (e) {
+    alert("Build fail: " + e.message);
+  } finally {
+    $("go").disabled = false;
+  }
+};
+
+(async function boot() {
+  try {
+    const c = await api("/api/builder/config");
+    $("dot").className = "dot " + (c.template_ok ? "ok" : "bad");
+    $("state").textContent = c.template_ok ? `ready · ${c.engine}` : "template missing";
+    $("baseUrl").value = c.base_url || "";
+    THEMES = c.themes || [];
+    PICK = THEMES[0] ? THEMES[0].slug : null;
+    cards(); render();
+  } catch (_) {
+    $("dot").className = "dot bad";
+    $("state").textContent = "offline";
+  }
+  poll();
+  setInterval(poll, 2500);
+})();
+</script>
+</body>
+</html>
