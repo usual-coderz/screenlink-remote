@@ -288,6 +288,39 @@ function ensureKeystore(appId) {
   return { path: ks, ...creds };
 }
 
+function shapeApp(doc) {
+  if (!doc) return null;
+  const { _id, secret, secret_hash, ...rest } = doc;
+  return {
+    id: String(_id),
+    ...rest,
+  };
+}
+
+function shapeBuild(doc) {
+  if (!doc) return null;
+  const { _id, artifact, ...rest } = doc;
+  return {
+    id: String(_id),
+    buildId: String(_id),
+    ...rest,
+    has_artifact: !!(artifact && fs.existsSync(artifact)),
+    download_url: `/api/builds/${String(_id)}/download`,
+  };
+}
+
+async function quota() {
+  const limit = builderConfig.QUOTA_PER_DAY;
+  if (!limit || limit <= 0) {
+    return { unlimited: true, daily_limit: 0, used_today: 0 };
+  }
+  let used = 0;
+  try {
+    used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
+  } catch (_) {}
+  return { unlimited: false, daily_limit: limit, used_today: used };
+}
+
 class BuildQueue {
   constructor() {
     this.running = false;
@@ -591,6 +624,10 @@ class UserHub {
 
 const userHub = new UserHub();
 
+const jsonParser = express.json({
+  verify: (req, _res, buf) => { if (buf && buf.length) req.rawBody = buf.toString("utf8"); },
+});
+
 function rawBody(req) {
   if (typeof req.rawBody === "string") return req.rawBody;
   try { return req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : ""; } catch (_) { return ""; }
@@ -620,6 +657,8 @@ async function verifyApp(req, res, next) {
 }
 
 const router = express.Router();
+
+router.use(jsonParser);
 
 router.use((req, _res, next) => {
   if (req.rawBody === undefined) req.rawBody = rawBody(req);
