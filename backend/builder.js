@@ -15,10 +15,12 @@ const linker = require("./builder.link");
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const IS_WIN = process.platform === "win32";
 const WIN_EXT = (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean);
+const IS_WORKER_PROC = process.argv.includes("--worker");
 const SDK_ZIP_URL = "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip";
+const JDK_URL = "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse";
 
 const builderConfig = {
-  WORKER_MODE: process.env.BUILDER_WORKER_MODE || "inline",
+  WORKER_MODE: process.env.BUILDER_WORKER_MODE || (IS_WORKER_PROC ? "inline" : "api"),
   ENGINE: process.env.BUILDER_ENGINE || "node",
   MAX_CONCURRENT_BUILDS: parseInt(process.env.MAX_CONCURRENT_BUILDS || "2", 10),
   DEFAULT_VARIANT: process.env.DEFAULT_VARIANT || "prod",
@@ -38,6 +40,7 @@ const builderConfig = {
   REQUIRE_SIGNATURE: !["0", "false", "no"].includes(String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()),
   CLEAN_WORKDIR: ["1", "true", "yes"].includes(String(process.env.CLEAN_WORKDIR || "").toLowerCase()),
   AUTO_SDK: !["0", "false", "no"].includes(String(process.env.AUTO_SDK || "true").toLowerCase()),
+  AUTO_JDK: !["0", "false", "no"].includes(String(process.env.AUTO_JDK || "true").toLowerCase()),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
   MAX_LOG_LINES: 500,
@@ -89,6 +92,7 @@ function resolveAndroidSdk() {
 function resolveJavaHome() {
   const cands = [
     process.env.JAVA_HOME,
+    process.env.JDK_ROOT,
     "/usr/lib/jvm/java-17-openjdk-amd64",
     "/usr/lib/jvm/java-11-openjdk-amd64",
     "/usr/lib/jvm/default-java",
@@ -103,6 +107,15 @@ function resolveJavaHome() {
     try {
       const home = path.dirname(path.dirname(fs.realpathSync(j)));
       if (isFile(path.join(home, "bin", "java"))) return home;
+    } catch (_) {}
+  }
+  const root = process.env.JDK_ROOT || path.join(builderConfig.STORAGE_ROOT, "jdk");
+  if (isDir(root)) {
+    try {
+      for (const d of fs.readdirSync(root)) {
+        const cand = path.join(root, d);
+        if (isFile(path.join(cand, "bin", "java"))) return cand;
+      }
     } catch (_) {}
   }
   return null;
@@ -153,6 +166,16 @@ function ensureExec(p) {
   return p;
 }
 
+function applyJavaHome(javaHome) {
+  if (!javaHome) return null;
+  process.env.JAVA_HOME = javaHome;
+  const bin = path.join(javaHome, "bin");
+  if (!String(process.env.PATH || "").split(path.delimiter).includes(bin)) {
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH || ""}`;
+  }
+  return javaHome;
+}
+
 function resolveGradle(workDir) {
   const override = String(builderConfig.GRADLE_BIN || "").trim();
   if (override && override !== "gradle") {
@@ -184,7 +207,8 @@ function gradleHint() {
 function preflight() {
   const javaHome = resolveJavaHome();
   const tools = {
-    gradle: null, docker: null, java: javaHome ? path.join(javaHome, "bin", "java") : null,
+    gradle: null, docker: null,
+    java: javaHome ? path.join(javaHome, "bin", "java") : null,
     python: null, keytool: null,
     android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
     java_home: javaHome,
@@ -194,7 +218,8 @@ function preflight() {
   if (!tools.java) tools.java = whichSync("java");
   tools.docker = whichSync(builderConfig.DOCKER_BIN) || whichSync("docker");
   tools.python = whichSync(builderConfig.PY_BUILDER);
-  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN) || (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
+  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
+    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
 
   const g = resolveGradle(builderConfig.TEMPLATE_DIR);
   tools.gradle = g ? { path: g.bin, source: g.source } : null;
@@ -216,15 +241,18 @@ function preflight() {
   if (builderConfig.ENGINE === "node" && !tools.android_sdk && !builderConfig.USE_DOCKER && !builderConfig.AUTO_SDK) {
     problems.push("ANDROID_HOME/ANDROID_SDK_ROOT nahi mila.");
   }
-  if (builderConfig.REQUIRE_SIGNATURE && !tools.java) {
+  if (builderConfig.REQUIRE_SIGNATURE && !tools.java && !builderConfig.AUTO_JDK) {
     problems.push("java nahi mila — signing fail hoga.");
   }
 
   return {
     ok: problems.length === 0,
     platform: process.platform,
+    worker_mode: builderConfig.WORKER_MODE,
     engine: builderConfig.ENGINE,
     use_docker: builderConfig.USE_DOCKER,
+    auto_jdk: builderConfig.AUTO_JDK,
+    auto_sdk: builderConfig.AUTO_SDK,
     template_ok: templateOk,
     template_dir: builderConfig.TEMPLATE_DIR,
     themes: themeList.map((t) => ({ slug: t.slug, label: t.label, dark: !!t.dark })),
@@ -281,73 +309,46 @@ function findApk(root) {
   return fallback;
 }
 
-function keystoreCreds(appId) {
-  fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
-  const file = path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`);
-  if (fs.existsSync(file)) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) {} }
-  const creds = {
-    storePassword: crypto.randomBytes(12).toString("base64url"),
-    keyAlias: `app${String(appId).replace(/[^a-z0-9]/gi, "").slice(-6)}`,
-    keyPassword: crypto.randomBytes(12).toString("base64url"),
-  };
-  fs.writeFileSync(file, JSON.stringify(creds, null, 2), { mode: 0o600 });
-  return creds;
-}
+let _javaPromise = null;
+let _sdkPromise = null;
 
-function ensureKeystore(appId) {
-  if (!builderConfig.REQUIRE_SIGNATURE) return null;
-  const javaHome = resolveJavaHome();
-  const keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
-    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
-  if (!keytool) return null;
+async function ensureJavaRuntime(log) {
+  const existing = resolveJavaHome();
+  if (existing) { applyJavaHome(existing); return existing; }
 
-  fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
-  const ks = path.join(builderConfig.KEYSTORE_DIR, `${appId}.jks`);
-  const creds = keystoreCreds(appId);
+  const root = process.env.JDK_ROOT || path.join(builderConfig.STORAGE_ROOT, "jdk");
+  fs.mkdirSync(root, { recursive: true });
 
-  if (!fs.existsSync(ks)) {
-    const r = spawnSync(keytool, [
-      "-genkeypair", "-v", "-keystore", ks, "-alias", creds.keyAlias,
-      "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
-      "-storepass", creds.storePassword, "-keypass", creds.keyPassword,
-      "-dname", `CN=${appId}, OU=apps, O=venice, L=NA, ST=NA, C=IN`,
-    ], { encoding: "utf8", env: { ...process.env } });
-    if (r.status !== 0) return null;
+  const marker = path.join(root, ".home");
+  if (isFile(marker)) {
+    const saved = fs.readFileSync(marker, "utf8").trim();
+    if (isFile(path.join(saved, "bin", "java"))) { applyJavaHome(saved); return saved; }
   }
-  return { path: ks, ...creds };
-}
 
-function shapeApp(doc) {
-  if (!doc) return null;
-  const { _id, secret, secret_hash, ...rest } = doc;
-  return {
-    id: String(_id),
-    ...rest,
-  };
-}
-
-function shapeBuild(doc) {
-  if (!doc) return null;
-  const { _id, artifact, ...rest } = doc;
-  return {
-    id: String(_id),
-    buildId: String(_id),
-    ...rest,
-    has_artifact: !!(artifact && fs.existsSync(artifact)),
-    download_url: `/api/builds/${String(_id)}/download`,
-  };
-}
-
-async function quota() {
-  const limit = builderConfig.QUOTA_PER_DAY;
-  if (!limit || limit <= 0) {
-    return { unlimited: true, daily_limit: 0, used_today: 0 };
+  const tgz = path.join(root, "jdk.tar.gz");
+  if (!isFile(tgz)) {
+    log("downloading jdk 17 (temurin)…");
+    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", tgz, JDK_URL], { encoding: "utf8" });
+    if (d.status !== 0) throw new Error(`jdk download fail: ${d.stderr || d.status}`);
   }
-  let used = 0;
-  try {
-    used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
-  } catch (_) {}
-  return { unlimited: false, daily_limit: limit, used_today: used };
+
+  log("extracting jdk…");
+  const ex = spawnSync("tar", ["-xzf", tgz, "-C", root], { encoding: "utf8" });
+  if (ex.status !== 0) throw new Error(`jdk extract fail: ${ex.stderr || ex.status}`);
+
+  let home = null;
+  for (const d of fs.readdirSync(root)) {
+    const cand = path.join(root, d);
+    if (isFile(path.join(cand, "bin", "java"))) { home = cand; break; }
+  }
+  if (!home) throw new Error("jdk extract ke baad bin/java nahi mila");
+
+  try { fs.chmodSync(path.join(home, "bin", "java"), 0o755); } catch (_) {}
+  try { fs.chmodSync(path.join(home, "bin", "keytool"), 0o755); } catch (_) {}
+  fs.writeFileSync(marker, home);
+
+  applyJavaHome(home);
+  return home;
 }
 
 async function ensureAndroidSdkRuntime(log) {
@@ -358,8 +359,8 @@ async function ensureAndroidSdkRuntime(log) {
   fs.mkdirSync(root, { recursive: true });
   const zip = path.join(root, "cmdline-tools.zip");
   if (!isFile(zip)) {
-    log(`downloading android cmdline-tools → ${zip}`);
-    const d = spawnSync("curl", ["-fsSL", "-o", zip, SDK_ZIP_URL], { encoding: "utf8" });
+    log("downloading android cmdline-tools…");
+    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", zip, SDK_ZIP_URL], { encoding: "utf8" });
     if (d.status !== 0) throw new Error(`cmdline-tools download fail: ${d.stderr || d.status}`);
   }
 
@@ -380,10 +381,7 @@ async function ensureAndroidSdkRuntime(log) {
   try { fs.chmodSync(sdkmanager, 0o755); } catch (_) {}
 
   const env = { ...process.env };
-  if (!env.JAVA_HOME) {
-    const jh = resolveJavaHome();
-    if (jh) env.JAVA_HOME = jh;
-  }
+  if (!env.JAVA_HOME) applyJavaHome(resolveJavaHome());
 
   log("accepting android licenses…");
   spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], { encoding: "utf8", env });
@@ -397,7 +395,149 @@ async function ensureAndroidSdkRuntime(log) {
   ], { encoding: "utf8", env });
   if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
 
+  process.env.ANDROID_HOME = process.env.ANDROID_HOME || root;
+  process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || root;
+  builderConfig.ANDROID_SDK = root;
   return root;
+}
+
+function ensureJavaOnce(log) {
+  if (!_javaPromise) _javaPromise = ensureJavaRuntime(log).catch((e) => { _javaPromise = null; throw e; });
+  return _javaPromise;
+}
+
+function ensureSdkOnce(log) {
+  if (!_sdkPromise) _sdkPromise = ensureAndroidSdkRuntime(log).catch((e) => { _sdkPromise = null; throw e; });
+  return _sdkPromise;
+}
+
+function keystoreCreds(appId) {
+  fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
+  const file = path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`);
+  if (fs.existsSync(file)) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) {} }
+  const creds = {
+    storePassword: crypto.randomBytes(12).toString("base64url"),
+    keyAlias: `app${String(appId).replace(/[^a-z0-9]/gi, "").slice(-6)}`,
+    keyPassword: crypto.randomBytes(12).toString("base64url"),
+  };
+  fs.writeFileSync(file, JSON.stringify(creds, null, 2), { mode: 0o600 });
+  return creds;
+}
+
+async function loadKeystoreBlob(appId) {
+  try { return await db.keystores.findOne({ _id: appId }); } catch (_) { return null; }
+}
+
+async function saveKeystoreBlob(appId, jksPath, creds) {
+  try {
+    const jks = fs.readFileSync(jksPath).toString("base64");
+    await db.keystores.updateOne(
+      { _id: appId },
+      { $set: { jks, creds, updated_at: db.utcNow() } },
+      { upsert: true },
+    );
+  } catch (_) {}
+}
+
+async function ensureKeystore(appId) {
+  if (!builderConfig.REQUIRE_SIGNATURE) return null;
+  const javaHome = resolveJavaHome();
+  const keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
+    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
+  if (!keytool) return null;
+
+  fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
+  const ks = path.join(builderConfig.KEYSTORE_DIR, `${appId}.jks`);
+  const creds = keystoreCreds(appId);
+
+  if (!fs.existsSync(ks)) {
+    const blob = await loadKeystoreBlob(appId);
+    if (blob && blob.jks) {
+      try {
+        fs.writeFileSync(ks, Buffer.from(blob.jks, "base64"), { mode: 0o600 });
+        if (blob.creds) {
+          fs.writeFileSync(path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`), JSON.stringify(blob.creds, null, 2), { mode: 0o600 });
+          Object.assign(creds, blob.creds);
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (!fs.existsSync(ks)) {
+    const r = spawnSync(keytool, [
+      "-genkeypair", "-v", "-keystore", ks, "-alias", creds.keyAlias,
+      "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+      "-storepass", creds.storePassword, "-keypass", creds.keyPassword,
+      "-dname", `CN=${appId}, OU=apps, O=venice, L=NA, ST=NA, C=IN`,
+    ], { encoding: "utf8", env: { ...process.env } });
+    if (r.status !== 0) return null;
+    await saveKeystoreBlob(appId, ks, creds);
+  }
+
+  return { path: ks, ...creds };
+}
+
+let _s3 = null;
+function getS3() {
+  if (_s3 !== null) return _s3;
+  try {
+    const { S3Client } = require("@aws-sdk/client-s3");
+    _s3 = new S3Client({
+      region: process.env.S3_REGION || "auto",
+      endpoint: process.env.S3_ENDPOINT || undefined,
+      forcePathStyle: String(process.env.S3_FORCE_PATH_STYLE || "") === "1",
+      credentials: process.env.S3_ACCESS_KEY_ID ? {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      } : undefined,
+    });
+  } catch (_) { _s3 = false; }
+  return _s3;
+}
+
+async function uploadArtifact(file, key) {
+  const client = getS3();
+  const bucket = process.env.S3_BUCKET;
+  if (!client || !bucket) return null;
+  const { PutObjectCommand } = require("@aws-sdk/client-s3");
+  const prefix = String(process.env.S3_PREFIX || "apks").replace(/^\/|\/$/g, "");
+  const objKey = `${prefix}/${key}.apk`;
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: objKey,
+    Body: fs.readFileSync(file),
+    ContentType: "application/vnd.android.package-archive",
+  }));
+  const base = String(process.env.S3_PUBLIC_BASE || "").replace(/\/$/, "");
+  return base ? `${base}/${objKey}` : null;
+}
+
+function shapeApp(doc) {
+  if (!doc) return null;
+  const { _id, secret, secret_hash, ...rest } = doc;
+  return { id: String(_id), ...rest };
+}
+
+function shapeBuild(doc) {
+  if (!doc) return null;
+  const { _id, artifact, ...rest } = doc;
+  return {
+    id: String(_id),
+    buildId: String(_id),
+    ...rest,
+    has_artifact: !!((artifact && fs.existsSync(artifact)) || rest.artifact_url),
+    download_url: `/api/builds/${String(_id)}/download`,
+  };
+}
+
+async function quota() {
+  const limit = builderConfig.QUOTA_PER_DAY;
+  if (!limit || limit <= 0) return { unlimited: true, daily_limit: 0, used_today: 0 };
+  let used = 0;
+  try {
+    used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
+  } catch (_) {}
+  return { unlimited: false, daily_limit: limit, used_today: used };
 }
 
 class BuildQueue {
@@ -481,10 +621,31 @@ let _queue = null;
 function initQueue() { if (!_queue) _queue = new BuildQueue(); return _queue; }
 function getQueue() { return initQueue(); }
 
+async function warmup() {
+  if (builderConfig.AUTO_JDK) {
+    try {
+      const jh = await ensureJavaOnce((m) => console.log("[builder] %s", m));
+      console.log("[builder] java ready: %s", jh);
+    } catch (e) { console.warn("[builder] java warmup fail: %s", e.message || e); }
+  } else {
+    applyJavaHome(resolveJavaHome());
+  }
+
+  if (builderConfig.AUTO_SDK && !builderConfig.USE_DOCKER) {
+    try {
+      const sdk = await ensureSdkOnce((m) => console.log("[builder] %s", m));
+      console.log("[builder] android sdk ready: %s", sdk);
+    } catch (e) { console.warn("[builder] sdk warmup fail: %s", e.message || e); }
+  }
+}
+
 function bindLoop() {
   const pf = preflight();
-  if (pf.ok) console.log("[builder] preflight ok — engine=%s themes=%d", builderConfig.ENGINE, pf.themes.length);
+  if (pf.ok) console.log("[builder] preflight ok — mode=%s engine=%s themes=%d", builderConfig.WORKER_MODE, builderConfig.ENGINE, pf.themes.length);
   else for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
+
+  if (builderConfig.WORKER_MODE === "inline") getQueue().start();
+  warmup().catch(() => {});
   return pf;
 }
 
@@ -531,10 +692,12 @@ async function runBuild(job) {
   log(`build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT} theme=${job.theme || builderConfig.DEFAULT_THEME}`);
 
   try {
-    const javaHome = resolveJavaHome();
+    let javaHome = resolveJavaHome();
+    if (!javaHome && builderConfig.AUTO_JDK) {
+      try { javaHome = await ensureJavaOnce(log); } catch (e) { log(`jdk bootstrap fail: ${e.message || e}`); }
+    }
     if (javaHome) {
-      process.env.JAVA_HOME = javaHome;
-      process.env.PATH = `${path.join(javaHome, "bin")}${path.delimiter}${process.env.PATH || ""}`;
+      applyJavaHome(javaHome);
       log(`java home: ${javaHome}`);
     } else {
       log("warning: JAVA_HOME nahi mila");
@@ -564,7 +727,7 @@ async function runBuild(job) {
 
       let sdk = builderConfig.ANDROID_SDK || resolveAndroidSdk();
       if (!sdk && builderConfig.AUTO_SDK) {
-        sdk = await ensureAndroidSdkRuntime(log);
+        sdk = await ensureSdkOnce(log);
         builderConfig.ANDROID_SDK = sdk;
       }
 
@@ -586,9 +749,10 @@ async function runBuild(job) {
       linker.writeAppName(workDir, props.appName);
       log(`app: ${props.appName || "(unnamed)"} · id=${props.appId || "(default)"}`);
 
-      const ks = ensureKeystore(props.appId || buildId);
+      const ks = await ensureKeystore(props.appId || buildId);
       linker.writeKeystoreProps(workDir, ks);
       if (ks) log(`keystore: ${path.basename(ks.path)}`);
+      else log("warning: keystore skip — unsigned apk");
 
       const variant = String(job.variant || builderConfig.DEFAULT_VARIANT).toLowerCase();
       const task = variant === "debug" ? "assembleDebug" : "assembleRelease";
@@ -613,7 +777,7 @@ async function runBuild(job) {
         const g = resolveGradle(workDir);
         if (!g) throw new Error(gradleHint());
         bin = g.bin;
-        args = [...(g.prefixArgs || []), "--no-daemon", task];
+        args = [...(g.prefixArgs || []), "--no-daemon", "--console=plain", task];
         opts = { cwd: workDir, env: { ...process.env }, shell: g.shell };
         log(`gradle source=${g.source}`);
       }
@@ -644,6 +808,13 @@ async function runBuild(job) {
         patch.apk_size = buf.length;
         patch.apk_sha256 = sha256hex(buf);
         log(`artifact: ${path.basename(artifact)} (${buf.length} bytes) sha256=${patch.apk_sha256.slice(0, 16)}…`);
+
+        try {
+          const url = await uploadArtifact(stable, buildId);
+          if (url) { patch.artifact_url = url; log(`uploaded: ${url}`); }
+        } catch (e) {
+          log(`upload fail: ${e.message || e}`);
+        }
       } catch (e) {
         log(`artifact read fail: ${e.message || e}`);
       }
@@ -659,7 +830,7 @@ async function runBuild(job) {
 
     userHub.broadcast(String(job.userId || ""), {
       type: "build",
-      data: { buildId, status: "success", apk_size: patch.apk_size || 0, duration_ms: patch.duration_ms },
+      data: { buildId, status: "success", apk_size: patch.apk_size || 0, duration_ms: patch.duration_ms, artifact_url: patch.artifact_url || null },
     });
     log("done");
   } finally {
@@ -930,11 +1101,15 @@ router.get("/api/builds/:id/download", ah(async (req, res) => {
   if (!id) throw new u.HttpError(400, "Bad buildId");
   const doc = await db.builds.findOne({ _id: id });
   if (!doc) throw new u.HttpError(404, "Build not found");
-  if (!doc.artifact || !fs.existsSync(doc.artifact)) throw new u.HttpError(404, "APK not ready");
 
   const name = doc.apk_name || `${(doc.appName || "app").replace(/\s+/g, "-")}-${String(doc._id)}.apk`;
-  res.setHeader("Cache-Control", "no-store");
-  res.download(doc.artifact, name);
+
+  if (doc.artifact && fs.existsSync(doc.artifact)) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.download(doc.artifact, name);
+  }
+  if (doc.artifact_url) return res.redirect(302, doc.artifact_url);
+  throw new u.HttpError(404, "APK not ready");
 }));
 
 router.post("/api/orders", verifyApp, ah(async (req, res) => {
@@ -962,6 +1137,7 @@ module.exports = {
   config: builderConfig,
   ensureDirs,
   bindLoop,
+  warmup,
   initQueue,
   getQueue,
   stats: () => getQueue().stats(),
@@ -969,6 +1145,7 @@ module.exports = {
   resolveGradle,
   resolveJavaHome,
   resolveAndroidSdk,
+  ensureJavaRuntime,
   ensureAndroidSdkRuntime,
   whichSync,
   themes,
