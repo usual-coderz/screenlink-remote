@@ -116,9 +116,8 @@ async function ensureIndexes() {
   });
 
   await _col.messages.createIndex(
-    { dedupe_key: 1 },
-    { sparse: true }
-  );
+  { dedupe_key: 1 }
+);
 
   await _col.outbox.createIndex({
     device_id: 1,
