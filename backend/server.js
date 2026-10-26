@@ -13,7 +13,7 @@ const relay = require("./relay");
 const builder = require("./builder");
 
 const devicesRoutes = require("./routes/devices");
-const adminRoutes = require("./routes/admin");
+const adminRoutes = require("./admin/admin");
 const wsRoutes = require("./routes/ws");
 
 const app = express();
