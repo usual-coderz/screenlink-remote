@@ -43,16 +43,19 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
+      - name: Configure Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Install Android SDK packages
+      - name: Verify Android SDK
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Accept Android SDK licenses
-        run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --list_installed
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -66,9 +69,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -e
+
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "No release keystore configured."
-            echo "Using the signing configuration defined in build.gradle.kts."
+            echo "Using signing configuration from the project."
             exit 0
           fi
 
@@ -82,7 +87,7 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app-keystore.jks
 
           if [ ! -s app-keystore.jks ]; then
-            echo "Error: Keystore file is empty or invalid."
+            echo "Error: Keystore file is empty."
             exit 1
           fi
 
@@ -97,7 +102,7 @@ jobs:
 
       - name: Build APK
         env:
-          VARIANT: ${{ github.event.inputs.variant || 'release' }}
+          VARIANT: ${{ inputs.variant || 'release' }}
         run: |
           set -e
 
@@ -109,7 +114,7 @@ jobs:
               gradle assembleRelease --no-daemon --console=plain
               ;;
             *)
-              echo "Error: Unsupported build variant: $VARIANT"
+              echo "Unsupported build variant: $VARIANT"
               exit 1
               ;;
           esac
@@ -117,15 +122,15 @@ jobs:
       - name: Locate APK
         id: apk
         env:
-          VARIANT: ${{ github.event.inputs.variant || 'release' }}
+          VARIANT: ${{ inputs.variant || 'release' }}
         run: |
           set -e
 
           APK_DIR="app/build/outputs/apk/$VARIANT"
 
           if [ ! -d "$APK_DIR" ]; then
-            echo "Error: APK output directory not found: $APK_DIR"
-            find app/build/outputs -maxdepth 4 -type f 2>/dev/null || true
+            echo "APK output directory not found: $APK_DIR"
+            find app/build/outputs -type f 2>/dev/null || true
             exit 1
           fi
 
@@ -133,7 +138,7 @@ jobs:
             ! -name "*-unsigned.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "Error: No signed APK found."
+            echo "No signed APK found."
             find "$APK_DIR" -type f 2>/dev/null || true
             exit 1
           fi
@@ -152,33 +157,28 @@ jobs:
 
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
-          if [ ! -x "$APKSIGNER" ]; then
-            echo "Error: apksigner not found."
-            exit 1
-          fi
-
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DESI-VIDEOS-APK-${{ github.event.inputs.variant || 'release' }}
+          name: DESI-VIDEOS-APK-${{ inputs.variant || 'release' }}
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
           retention-days: 14
 
       - name: Build summary
         env:
-          VARIANT: ${{ github.event.inputs.variant || 'release' }}
+          VARIANT: ${{ inputs.variant || 'release' }}
           APK_SIZE: ${{ steps.apk.outputs.size }}
           APK_SHA: ${{ steps.apk.outputs.sha }}
         run: |
           {
             echo "## APK Build Successful"
             echo ""
-            echo "- Variant: \`$VARIANT\`"
+            echo "- Variant: $VARIANT"
             echo "- Size: $APK_SIZE bytes"
-            echo "- SHA-256: \`$APK_SHA\`"
+            echo "- SHA-256: $APK_SHA"
             echo ""
             echo "Download the APK from the workflow run's Artifacts section."
           } >> "$GITHUB_STEP_SUMMARY"
