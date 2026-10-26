@@ -152,7 +152,7 @@ async function start() {
   hub.spawn(hub.pruneEventsLoop());
 
   try {
-    builder.config.ensureDirs();
+    builder.ensureDirs();
     builder.bindLoop();
     builder.initQueue();
     if (builder.config.WORKER_MODE === "inline") await builder.getQueue().start();
