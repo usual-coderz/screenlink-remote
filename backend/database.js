@@ -107,9 +107,8 @@ async function initDbWithRetry(tries = 30, delayMs = 2000) {
 
 async function ensureIndexes() {
   await _col.devices.createIndex(
-    { registration_id_hash: 1 },
-    { unique: true, sparse: true }
-  );
+  { registration_id_hash: 1 }
+);
 
   await _col.messages.createIndex({
     device_id: 1,
