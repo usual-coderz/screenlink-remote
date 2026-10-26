@@ -1,0 +1,26 @@
+{
+  "slug": "sakura",
+  "label": "Sakura",
+  "dark": false,
+  "bg": "#FFF7FA",
+  "surface": "#FFFFFF",
+  "surfaceAlt": "#FDEEF4",
+  "field": "#FCEFF5",
+  "border": "#F3D7E3",
+  "accent": "#EC4899",
+  "accentSoft": "#FCE7F1",
+  "onAccent": "#FFFFFF",
+  "text": "#3B1F2B",
+  "muted": "#8A6A78",
+  "success": "#16A34A",
+  "danger": "#DC2626",
+  "warn": "#B45309",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/euczr3q.jpeg",
+    "https://files.catbox.moe/ym3rl6.jpeg",
+    "https://files.catbox.moe/8xd98p.jpeg"
+  ]
+}
