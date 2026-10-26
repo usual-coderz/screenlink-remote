@@ -1,0 +1,26 @@
+{
+  "slug": "mono",
+  "label": "Mono",
+  "dark": false,
+  "bg": "#FFFFFF",
+  "surface": "#FFFFFF",
+  "surfaceAlt": "#F7F8FA",
+  "field": "#F4F5F7",
+  "border": "#E3E5E8",
+  "accent": "#111827",
+  "accentSoft": "#EDEFF2",
+  "onAccent": "#FFFFFF",
+  "text": "#111827",
+  "muted": "#6B7280",
+  "success": "#16A34A",
+  "danger": "#DC2626",
+  "warn": "#B45309",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/8xd98p.jpeg",
+    "https://files.catbox.moe/euczr3q.jpeg",
+    "https://files.catbox.moe/ym3rl6.jpeg"
+  ]
+}
