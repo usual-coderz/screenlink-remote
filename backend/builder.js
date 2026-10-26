@@ -15,6 +15,7 @@ const linker = require("./builder.link");
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const IS_WIN = process.platform === "win32";
 const WIN_EXT = (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean);
+const SDK_ZIP_URL = "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip";
 
 const builderConfig = {
   WORKER_MODE: process.env.BUILDER_WORKER_MODE || "inline",
@@ -36,6 +37,7 @@ const builderConfig = {
   USE_DOCKER: ["1", "true", "yes"].includes(String(process.env.USE_DOCKER || "").toLowerCase()),
   REQUIRE_SIGNATURE: !["0", "false", "no"].includes(String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()),
   CLEAN_WORKDIR: ["1", "true", "yes"].includes(String(process.env.CLEAN_WORKDIR || "").toLowerCase()),
+  AUTO_SDK: !["0", "false", "no"].includes(String(process.env.AUTO_SDK || "true").toLowerCase()),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
   MAX_LOG_LINES: 500,
@@ -80,6 +82,28 @@ function resolveAndroidSdk() {
     if (!c) continue;
     const abs = path.resolve(c);
     if (isDir(abs) && (isDir(path.join(abs, "platforms")) || isDir(path.join(abs, "cmdline-tools")) || isDir(path.join(abs, "build-tools")))) return abs;
+  }
+  return null;
+}
+
+function resolveJavaHome() {
+  const cands = [
+    process.env.JAVA_HOME,
+    "/usr/lib/jvm/java-17-openjdk-amd64",
+    "/usr/lib/jvm/java-11-openjdk-amd64",
+    "/usr/lib/jvm/default-java",
+    "/opt/java/openjdk",
+    path.join(process.env.HOME || "", ".jdk"),
+  ].filter(Boolean);
+  for (const c of cands) {
+    if (isFile(path.join(c, "bin", "java"))) return c;
+  }
+  const j = whichSync("java");
+  if (j) {
+    try {
+      const home = path.dirname(path.dirname(fs.realpathSync(j)));
+      if (isFile(path.join(home, "bin", "java"))) return home;
+    } catch (_) {}
   }
   return null;
 }
@@ -158,16 +182,19 @@ function gradleHint() {
 }
 
 function preflight() {
+  const javaHome = resolveJavaHome();
   const tools = {
-    gradle: null, docker: null, java: null, python: null,
-    keytool: null, android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
+    gradle: null, docker: null, java: javaHome ? path.join(javaHome, "bin", "java") : null,
+    python: null, keytool: null,
+    android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
+    java_home: javaHome,
   };
   const problems = [];
 
-  tools.java = whichSync("java");
+  if (!tools.java) tools.java = whichSync("java");
   tools.docker = whichSync(builderConfig.DOCKER_BIN) || whichSync("docker");
   tools.python = whichSync(builderConfig.PY_BUILDER);
-  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN);
+  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN) || (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
 
   const g = resolveGradle(builderConfig.TEMPLATE_DIR);
   tools.gradle = g ? { path: g.bin, source: g.source } : null;
@@ -186,7 +213,7 @@ function preflight() {
     problems.push(gradleHint());
   }
 
-  if (builderConfig.ENGINE === "node" && !tools.android_sdk && !builderConfig.USE_DOCKER) {
+  if (builderConfig.ENGINE === "node" && !tools.android_sdk && !builderConfig.USE_DOCKER && !builderConfig.AUTO_SDK) {
     problems.push("ANDROID_HOME/ANDROID_SDK_ROOT nahi mila.");
   }
   if (builderConfig.REQUIRE_SIGNATURE && !tools.java) {
@@ -269,7 +296,9 @@ function keystoreCreds(appId) {
 
 function ensureKeystore(appId) {
   if (!builderConfig.REQUIRE_SIGNATURE) return null;
-  const keytool = whichSync(builderConfig.KEYTOOL_BIN);
+  const javaHome = resolveJavaHome();
+  const keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
+    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
   if (!keytool) return null;
 
   fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
@@ -282,7 +311,7 @@ function ensureKeystore(appId) {
       "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
       "-storepass", creds.storePassword, "-keypass", creds.keyPassword,
       "-dname", `CN=${appId}, OU=apps, O=venice, L=NA, ST=NA, C=IN`,
-    ], { encoding: "utf8" });
+    ], { encoding: "utf8", env: { ...process.env } });
     if (r.status !== 0) return null;
   }
   return { path: ks, ...creds };
@@ -319,6 +348,56 @@ async function quota() {
     used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
   } catch (_) {}
   return { unlimited: false, daily_limit: limit, used_today: used };
+}
+
+async function ensureAndroidSdkRuntime(log) {
+  const root = process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME ||
+    path.join(builderConfig.STORAGE_ROOT, "android-sdk");
+  if (isDir(path.join(root, "platforms")) && isDir(path.join(root, "build-tools"))) return root;
+
+  fs.mkdirSync(root, { recursive: true });
+  const zip = path.join(root, "cmdline-tools.zip");
+  if (!isFile(zip)) {
+    log(`downloading android cmdline-tools → ${zip}`);
+    const d = spawnSync("curl", ["-fsSL", "-o", zip, SDK_ZIP_URL], { encoding: "utf8" });
+    if (d.status !== 0) throw new Error(`cmdline-tools download fail: ${d.stderr || d.status}`);
+  }
+
+  const tmp = path.join(root, "tmp");
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.mkdirSync(tmp, { recursive: true });
+
+  const un = spawnSync("unzip", ["-q", "-o", zip, "-d", tmp], { encoding: "utf8" });
+  if (un.status !== 0) throw new Error(`unzip fail: ${un.stderr || un.status}`);
+
+  const cmdline = path.join(root, "cmdline-tools", "latest");
+  fs.rmSync(cmdline, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(cmdline), { recursive: true });
+  fs.renameSync(path.join(tmp, "cmdline-tools"), cmdline);
+  fs.rmSync(tmp, { recursive: true, force: true });
+
+  const sdkmanager = path.join(cmdline, "bin", "sdkmanager");
+  try { fs.chmodSync(sdkmanager, 0o755); } catch (_) {}
+
+  const env = { ...process.env };
+  if (!env.JAVA_HOME) {
+    const jh = resolveJavaHome();
+    if (jh) env.JAVA_HOME = jh;
+  }
+
+  log("accepting android licenses…");
+  spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], { encoding: "utf8", env });
+
+  log("installing platform-tools, platforms;android-34, build-tools;34.0.0…");
+  const inst = spawnSync(sdkmanager, [
+    `--sdk_root=${root}`,
+    "platform-tools",
+    "platforms;android-34",
+    "build-tools;34.0.0",
+  ], { encoding: "utf8", env });
+  if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
+
+  return root;
 }
 
 class BuildQueue {
@@ -452,6 +531,15 @@ async function runBuild(job) {
   log(`build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT} theme=${job.theme || builderConfig.DEFAULT_THEME}`);
 
   try {
+    const javaHome = resolveJavaHome();
+    if (javaHome) {
+      process.env.JAVA_HOME = javaHome;
+      process.env.PATH = `${path.join(javaHome, "bin")}${path.delimiter}${process.env.PATH || ""}`;
+      log(`java home: ${javaHome}`);
+    } else {
+      log("warning: JAVA_HOME nahi mila");
+    }
+
     if (builderConfig.ENGINE === "python") {
       const pyBin = whichSync(builderConfig.PY_BUILDER) || builderConfig.PY_BUILDER;
       log(`$ ${pyBin} -m backend.apk_builder.worker ${buildId}`);
@@ -474,7 +562,12 @@ async function runBuild(job) {
         throw new Error(`Template nahi mila: ${tmpl}`);
       }
 
-      const sdk = builderConfig.ANDROID_SDK || resolveAndroidSdk();
+      let sdk = builderConfig.ANDROID_SDK || resolveAndroidSdk();
+      if (!sdk && builderConfig.AUTO_SDK) {
+        sdk = await ensureAndroidSdkRuntime(log);
+        builderConfig.ANDROID_SDK = sdk;
+      }
+
       if (sdk) {
         process.env.ANDROID_HOME = process.env.ANDROID_HOME || sdk;
         process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || sdk;
@@ -520,7 +613,7 @@ async function runBuild(job) {
         const g = resolveGradle(workDir);
         if (!g) throw new Error(gradleHint());
         bin = g.bin;
-        args = [...(g.prefixArgs || []), task];
+        args = [...(g.prefixArgs || []), "--no-daemon", task];
         opts = { cwd: workDir, env: { ...process.env }, shell: g.shell };
         log(`gradle source=${g.source}`);
       }
@@ -874,6 +967,9 @@ module.exports = {
   stats: () => getQueue().stats(),
   preflight,
   resolveGradle,
+  resolveJavaHome,
+  resolveAndroidSdk,
+  ensureAndroidSdkRuntime,
   whichSync,
   themes,
   router,
