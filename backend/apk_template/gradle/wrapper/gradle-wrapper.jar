@@ -1,0 +1,8 @@
+# A) agar system par gradle installed hai (ek hi baar)
+cd backend/apk_template && gradle wrapper --gradle-version 8.7
+
+# B) gradle nahi hai to jar seedha download karo
+mkdir -p backend/apk_template/gradle/wrapper
+curl -L -o backend/apk_template/gradle/wrapper/gradle-wrapper.jar \
+  https://raw.githubusercontent.com/gradle/gradle/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+chmod +x backend/apk_template/gradlew
