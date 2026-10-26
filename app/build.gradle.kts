@@ -5,89 +5,126 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// ---- builder.properties: APK builder isko per-app likhta hai ----
+// Load builder.properties from the project root.
 val builderProps = Properties().apply {
-    val f = rootProject.file("builder.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    val file = rootProject.file("builder.properties")
+    if (file.isFile) {
+        file.inputStream().use { load(it) }
+    }
 }
 
-// ---- keystore.properties: builder per-app keystore deta hai ----
+// Load keystore.properties from the project root.
 val keystoreProps = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) {
+        file.inputStream().use { load(it) }
+    }
 }
 
-val appIdOverride: String? = builderProps.getProperty("appId")
-val versionCodeOverride: Int = (builderProps.getProperty("versionCode") ?: "6").toIntOrNull() ?: 6
-val versionNameOverride: String = builderProps.getProperty("versionName") ?: "4.4"
+// Builder overrides.
+val appIdOverride: String? =
+    builderProps.getProperty("appId")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+val versionCodeOverride: Int =
+    builderProps.getProperty("versionCode")
+        ?.toIntOrNull()
+        ?.takeIf { it > 0 }
+        ?: 6
+
+val versionNameOverride: String =
+    builderProps.getProperty("versionName")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: "4.4"
+
+// Release signing properties.
+val releaseStorePath: String? =
+    keystoreProps.getProperty("storeFile")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+val hasReleaseKeystore = releaseStorePath != null
 
 android {
-    // namespace kabhi nahi badalta (R class + manifest actions isi par hain)
+    // Keep namespace stable for R references and application code.
     namespace = "com.screenlink.remote"
+
     compileSdk = 35
 
     defaultConfig {
-        // applicationId builder se aata hai -> ek phone par kai APK coexist kar sakte hain
         applicationId = appIdOverride ?: "com.screenlink.remote"
+
         minSdk = 23
         targetSdk = 35
+
         versionCode = versionCodeOverride
         versionName = versionNameOverride
 
         resourceConfigurations += listOf("en")
-        vectorDrawables.useSupportLibrary = false
+
+        vectorDrawables {
+            useSupportLibrary = false
+        }
     }
 
     signingConfigs {
-    create("release") {
-        val storePath = keystoreProps.getProperty("storeFile")
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = rootProject.file(releaseStorePath!!)
 
-        if (!storePath.isNullOrBlank()) {
-            storeFile = rootProject.file(storePath)
-            storePassword = keystoreProps.getProperty("storePassword")
-            keyAlias = keystoreProps.getProperty("keyAlias")
-            keyPassword = keystoreProps.getProperty("keyPassword")
+                storePassword =
+                    keystoreProps.getProperty("storePassword")
 
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
+                keyAlias =
+                    keystoreProps.getProperty("keyAlias")
+
+                keyPassword =
+                    keystoreProps.getProperty("keyPassword")
+
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
-}
 
-buildTypes {
-    debug {
-        isMinifyEnabled = false
-        isDebuggable = true
-    }
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+        }
 
-    release {
-        isMinifyEnabled = true
-        isShrinkResources = true
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
 
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro"
-        )
+            proguardFiles(
+                getDefaultProguardFile(
+                    "proguard-android-optimize.txt"
+                ),
+                "proguard-rules.pro"
+            )
 
-        signingConfig = if (
-            keystoreProps.getProperty("storeFile").isNullOrBlank()
-        ) {
-            signingConfigs.getByName("debug")
-        } else {
-            signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
-}
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
         isCoreLibraryDesugaringEnabled = false
     }
 
     kotlinOptions {
         jvmTarget = "17"
+
         freeCompilerArgs += listOf(
             "-Xjvm-default=all",
             "-opt-in=kotlin.RequiresOptIn"
@@ -95,7 +132,6 @@ buildTypes {
     }
 
     buildFeatures {
-        // VERSION_NAME / APPLICATION_ID runtime par dikhane ke liye
         buildConfig = true
     }
 
@@ -118,7 +154,14 @@ buildTypes {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
+
+    implementation(
+        "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"
+    )
+
+    implementation(
+        "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
+    )
 }
