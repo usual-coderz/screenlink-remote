@@ -4,13 +4,14 @@
  * APK builder bridge.
  *
  * server.js isko import karke:
- *   - builder.router        -> app.use(builder.router)
- *   - builder.userHub.*     -> /ws/user, /ws/app upgrade handlers
- *   - builder.config        -> /health/builder
- *   - builder.getQueue()    -> lifespan start/stop + stats
+ *   builder.router      -> app.use(builder.router)
+ *   builder.userHub.*   -> /ws/user, /ws/app upgrade handlers
+ *   builder.config      -> /health/builder
+ *   builder.getQueue()  -> lifespan start/stop + stats
+ *   builder.preflight() -> startup par tool check
  *
  * ENGINE=python ho to original backend/apk_builder package child_process se chalta hai.
- * ENGINE=node  ho to yahin gradle/docker chalata hai.
+ * ENGINE=node   ho to yahin gradle (wrapper / docker) chalata hai.
  */
 
 const fs = require("fs");
@@ -25,11 +26,14 @@ const u = require("./utils");
 
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+const IS_WIN = process.platform === "win32";
+const WIN_EXT = (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean);
+
 // ------------------------------------------------------------------ config
 
 const builderConfig = {
-  WORKER_MODE: process.env.BUILDER_WORKER_MODE || "inline",      // inline | external
-  ENGINE: process.env.BUILDER_ENGINE || "node",                  // node | python
+  WORKER_MODE: process.env.BUILDER_WORKER_MODE || "inline", // inline | external
+  ENGINE: process.env.BUILDER_ENGINE || "node", // node | python
   MAX_CONCURRENT_BUILDS: parseInt(process.env.MAX_CONCURRENT_BUILDS || "2", 10),
   DEFAULT_VARIANT: process.env.DEFAULT_VARIANT || "prod",
 
@@ -47,6 +51,7 @@ const builderConfig = {
 
   USE_DOCKER: ["1", "true", "yes"].includes(String(process.env.USE_DOCKER || "").toLowerCase()),
   REQUIRE_SIGNATURE: !["0", "false", "no"].includes(String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()),
+  CLEAN_WORKDIR: ["1", "true", "yes"].includes(String(process.env.CLEAN_WORKDIR || "").toLowerCase()),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
   MAX_LOG_LINES: 500,
@@ -63,7 +68,12 @@ function ensureDirs() {
 
 const sha256hex = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const genSecret = () => crypto.randomBytes(24).toString("base64url");
-const oid = (v) => { try { return new db.ObjectId(String(v)); } catch (_) { return null; } };
+const oid = (v) => {
+  try { return new db.ObjectId(String(v)); } catch (_) { return null; }
+};
+
+// driver v4/v5/v6 dono ke saath chale
+const unwrap = (r) => (r && Object.prototype.hasOwnProperty.call(r, "value") ? r.value : r);
 
 function safeEq(a, b) {
   try {
@@ -110,6 +120,169 @@ async function quota() {
   return { unlimited: false, daily_limit: builderConfig.QUOTA_PER_DAY, used_today: used };
 }
 
+// ------------------------------------------------------------- tool lookup
+
+function isFile(p) {
+  try { return fs.statSync(p).isFile(); } catch (_) { return false; }
+}
+
+function whichSync(cmd) {
+  if (!cmd) return null;
+  cmd = String(cmd).trim();
+  if (!cmd) return null;
+  if (cmd.includes("/") || cmd.includes("\\")) return isFile(cmd) ? cmd : null;
+
+  const dirs = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const exts = IS_WIN ? WIN_EXT : [""];
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const full = path.join(dir, cmd + ext);
+      if (isFile(full)) return full;
+    }
+  }
+  return null;
+}
+
+function ensureExec(p) {
+  if (!p || IS_WIN) return p;
+  try { fs.chmodSync(p, 0o755); } catch (_) {}
+  return p;
+}
+
+/**
+ * gradle resolve order:
+ *   1. GRADLE_BIN (jab explicit path diya ho)
+ *   2. build workDir / template ka gradle wrapper (gradlew | gradlew.bat)
+ *   3. PATH par gradle
+ * Wapas: { bin, source, shell } ya null
+ */
+function resolveGradle(workDir) {
+  const override = String(builderConfig.GRADLE_BIN || "").trim();
+
+  if (override && override !== "gradle") {
+    const abs = whichSync(override);
+    if (abs) return { bin: ensureExec(abs), source: "GRADLE_BIN", shell: IS_WIN };
+  }
+
+  const wrapperName = IS_WIN ? "gradlew.bat" : "gradlew";
+  for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
+    const p = path.join(dir, wrapperName);
+    if (isFile(p)) return { bin: ensureExec(p), source: "gradle-wrapper", shell: IS_WIN };
+  }
+
+  const onPath = whichSync("gradle");
+  if (onPath) return { bin: onPath, source: "PATH", shell: IS_WIN };
+
+  return null;
+}
+
+function gradleHint() {
+  return (
+    "gradle nahi mila. Fix options: " +
+    "(a) backend/apk_template mein gradle wrapper daalo (gradlew + gradle/wrapper/gradle-wrapper.jar), " +
+    "(b) system par Gradle install karo (apt/sdkman/brew), " +
+    "(c) GRADLE_BIN=/abs/path/to/gradle set karo, ya " +
+    "(d) USE_DOCKER=1 karke docker gradle:8 image use karo."
+  );
+}
+
+function preflight() {
+  const tools = { gradle: null, docker: null, java: null, python: null, keytool: null, apksigner: null, zipalign: null };
+  const problems = [];
+
+  tools.java = whichSync("java");
+  tools.docker = whichSync(builderConfig.DOCKER_BIN) || whichSync("docker");
+  tools.python = whichSync(builderConfig.PY_BUILDER);
+  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN);
+  tools.apksigner = whichSync(builderConfig.APKSIGNER_BIN);
+  tools.zipalign = whichSync(builderConfig.ZIPALIGN_BIN);
+
+  const g = resolveGradle(builderConfig.TEMPLATE_DIR);
+  tools.gradle = g ? { path: g.bin, source: g.source } : null;
+
+  const templateOk = fs.existsSync(builderConfig.TEMPLATE_DIR);
+  if (!templateOk) problems.push(`TEMPLATE_DIR missing: ${builderConfig.TEMPLATE_DIR}`);
+
+  if (builderConfig.ENGINE === "python") {
+    if (!tools.python) problems.push(`PY_BUILDER "${builderConfig.PY_BUILDER}" PATH par nahi mila.`);
+  } else if (builderConfig.USE_DOCKER) {
+    if (!tools.docker) problems.push(`USE_DOCKER=1 hai par docker binary nahi mila (DOCKER_BIN=${builderConfig.DOCKER_BIN}).`);
+  } else if (!g) {
+    problems.push(gradleHint());
+  }
+
+  if (builderConfig.REQUIRE_SIGNATURE && !tools.java) {
+    problems.push("java nahi mila — signing / zipalign fail hoga (JDK 17 install karo).");
+  }
+
+  return {
+    ok: problems.length === 0,
+    platform: process.platform,
+    engine: builderConfig.ENGINE,
+    use_docker: builderConfig.USE_DOCKER,
+    template_ok: templateOk,
+    tools,
+    problems,
+  };
+}
+
+// ---------------------------------------------------------- process runner
+
+function runProcess(bin, args, opts, onData, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let p;
+    try {
+      p = spawnProc(bin, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, ...opts });
+    } catch (e) {
+      return reject(e);
+    }
+
+    let spawnFailed = false;
+    const killTimer = setTimeout(() => {
+      try { p.kill("SIGKILL"); } catch (_) {}
+    }, timeoutMs);
+
+    p.stdout.on("data", onData);
+    p.stderr.on("data", onData);
+
+    p.on("error", (e) => {
+      spawnFailed = true;
+      clearTimeout(killTimer);
+      if (e.code === "ENOENT") {
+        reject(new Error(`spawn ${bin} ENOENT — binary nahi mila (resolved path: ${bin}). ${gradleHint()}`));
+      } else {
+        reject(e);
+      }
+    });
+
+    p.on("close", (code, signal) => {
+      if (spawnFailed) return;
+      clearTimeout(killTimer);
+      if (code === 0) resolve();
+      else reject(new Error(`${path.basename(bin)} exit ${code}${signal ? ` signal=${signal}` : ""}`));
+    });
+  });
+}
+
+function findApk(root) {
+  const stack = [root];
+  let fallback = null;
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { continue; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else if (e.isFile() && e.name.endsWith(".apk")) {
+        if (/release/i.test(e.name)) return full;
+        fallback = fallback || full;
+      }
+    }
+  }
+  return fallback;
+}
+
 // -------------------------------------------------------------- build queue
 
 class BuildQueue {
@@ -133,10 +306,7 @@ class BuildQueue {
 
   _loop() {
     if (!this.running) return;
-    this._timer = setTimeout(
-      () => this._tick().catch(() => {}).finally(() => this._loop()),
-      1500,
-    );
+    this._timer = setTimeout(() => this._tick().catch(() => {}).finally(() => this._loop()), 1500);
   }
 
   async _tick() {
@@ -144,14 +314,15 @@ class BuildQueue {
 
     let job = null;
     try {
-      job = await db.builds.findOneAndUpdate(
+      job = unwrap(await db.builds.findOneAndUpdate(
         { status: "queued" },
         { $set: { status: "running", started_at: db.utcNow() } },
         { sort: { _id: 1 }, returnDocument: "after" },
-      );
+      ));
     } catch (_) { return; }
     if (!job) return;
 
+    this.counts.queued = Math.max(0, this.counts.queued - 1);
     this.active += 1;
     this.counts.running = this.active;
 
@@ -169,7 +340,8 @@ class BuildQueue {
           });
         } catch (_) {}
         userHub.broadcast(String(job.userId || ""), {
-          type: "build", data: { buildId: String(job._id), status: "failed", error: String(e.message || e) },
+          type: "build",
+          data: { buildId: String(job._id), status: "failed", error: String(e.message || e) },
         });
       })
       .finally(() => { this.active = Math.max(0, this.active - 1); });
@@ -198,9 +370,17 @@ class BuildQueue {
 }
 
 let _queue = null;
-function initQueue() { if (!_queue) _queue = new BuildQueue(); return _queue; }
+function initQueue() {
+  if (!_queue) _queue = new BuildQueue();
+  return _queue;
+}
 function getQueue() { return initQueue(); }
-function bindLoop() { /* node me loop global hai — parity ke liye noop */ }
+function bindLoop() {
+  const pf = preflight();
+  if (pf.ok) console.log("[builder] preflight ok — engine=%s", builderConfig.ENGINE);
+  else for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
+  return pf;
+}
 
 // ------------------------------------------------------------ actual build
 
@@ -247,100 +427,104 @@ async function runBuild(job) {
 
   log(`build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT}`);
 
-  // ---- python engine -> original apk_builder ko call karo ----
-  if (builderConfig.ENGINE === "python") {
-    await new Promise((resolve, reject) => {
-      const p = spawnProc(
-        builderConfig.PY_BUILDER,
+  try {
+    if (builderConfig.ENGINE === "python") {
+      // ---- python engine -> original apk_builder ko call karo ----
+      const pyBin = whichSync(builderConfig.PY_BUILDER) || builderConfig.PY_BUILDER;
+      log(`$ ${pyBin} -m backend.apk_builder.worker ${buildId}`);
+      await runProcess(
+        pyBin,
         ["-m", "backend.apk_builder.worker", buildId],
         { cwd: config.BASE_DIR, env: { ...process.env, BUILD_DIR: workDir } },
+        pushLog,
+        builderConfig.BUILD_TIMEOUT_MS,
       );
-      const killTimer = setTimeout(() => { try { p.kill("SIGKILL"); } catch (_) {} }, builderConfig.BUILD_TIMEOUT_MS);
-      p.stdout.on("data", pushLog);
-      p.stderr.on("data", pushLog);
-      p.on("error", (e) => { clearTimeout(killTimer); reject(e); });
-      p.on("exit", (code) => {
-        clearTimeout(killTimer);
-        code === 0 ? resolve() : reject(new Error(`python builder exit ${code}`));
-      });
-    });
-  } else {
-    // ---- node engine -> template copy + gradle/docker ----
-    if (fs.existsSync(builderConfig.TEMPLATE_DIR)) {
-      log("copying template…");
-      fs.cpSync(builderConfig.TEMPLATE_DIR, workDir, { recursive: true });
     } else {
-      log(`template missing at ${builderConfig.TEMPLATE_DIR} (build continues)`);
-    }
+      // ---- node engine -> template copy + gradle / docker ----
+      if (fs.existsSync(builderConfig.TEMPLATE_DIR)) {
+        log("copying template…");
+        fs.cpSync(builderConfig.TEMPLATE_DIR, workDir, { recursive: true });
+      } else {
+        log(`template missing at ${builderConfig.TEMPLATE_DIR} (build continues)`);
+      }
 
-    const variant = String(job.variant || builderConfig.DEFAULT_VARIANT).toLowerCase();
-    const task = variant === "debug" ? "assembleDebug" : "assembleRelease";
-    const args = builderConfig.USE_DOCKER
-      ? ["run", "--rm", "-v", `${workDir}:/w`, "-w", "/w", "gradle:8", task]
-      : [task];
+      const variant = String(job.variant || builderConfig.DEFAULT_VARIANT).toLowerCase();
+      const task = variant === "debug" ? "assembleDebug" : "assembleRelease";
 
-    await new Promise((resolve, reject) => {
-      const bin = builderConfig.USE_DOCKER ? builderConfig.DOCKER_BIN : builderConfig.GRADLE_BIN;
+      let bin, args, opts;
+
+      if (builderConfig.USE_DOCKER) {
+        const dockerBin = whichSync(builderConfig.DOCKER_BIN) || whichSync("docker");
+        if (!dockerBin) throw new Error(`docker nahi mila (USE_DOCKER=1). DOCKER_BIN=${builderConfig.DOCKER_BIN}`);
+
+        const mount = IS_WIN ? path.resolve(workDir).replace(/\\/g, "/") : workDir;
+        bin = dockerBin;
+        args = ["run", "--rm", "-v", `${mount}:/w`, "-w", "/w", "gradle:8", task];
+        opts = { cwd: workDir, env: { ...process.env } };
+      } else {
+        const g = resolveGradle(workDir);
+        if (!g) throw new Error(gradleHint());
+
+        bin = g.bin;
+        args = [task];
+        opts = { cwd: workDir, env: { ...process.env }, shell: g.shell };
+        log(`gradle source=${g.source}`);
+      }
+
       log(`$ ${bin} ${args.join(" ")}`);
-      const p = spawnProc(bin, args, { cwd: workDir, env: { ...process.env } });
-      const killTimer = setTimeout(() => { try { p.kill("SIGKILL"); } catch (_) {} }, builderConfig.BUILD_TIMEOUT_MS);
-      p.stdout.on("data", pushLog);
-      p.stderr.on("data", pushLog);
-      p.on("error", (e) => { clearTimeout(killTimer); reject(e); });
-      p.on("exit", (code) => {
-        clearTimeout(killTimer);
-        code === 0 ? resolve() : reject(new Error(`gradle exit ${code}`));
-      });
+      await runProcess(bin, args, opts, pushLog, builderConfig.BUILD_TIMEOUT_MS);
+    }
+
+    if (await canceled()) {
+      log("canceled — artifact skipped");
+      return;
+    }
+
+    // ---- artifact dhoondo ----
+    const outRoot = path.join(workDir, "app", "build", "outputs", "apk");
+    const artifact = fs.existsSync(outRoot) ? findApk(outRoot) : null;
+
+    const patch = {
+      status: "success",
+      finished_at: db.utcNow(),
+      duration_ms: Date.now() - t0,
+      log_tail: logs.slice(-builderConfig.MAX_LOG_LINES),
+    };
+
+    if (artifact && fs.existsSync(artifact)) {
+      try {
+        const stable = path.join(builderConfig.BUILD_ROOT, `${buildId}.apk`);
+        fs.copyFileSync(artifact, stable);
+        const buf = fs.readFileSync(stable);
+        patch.artifact = stable;
+        patch.apk_name = path.basename(artifact);
+        patch.apk_size = buf.length;
+        patch.apk_sha256 = sha256hex(buf);
+        log(`artifact: ${path.basename(artifact)} (${buf.length} bytes) sha256=${patch.apk_sha256.slice(0, 16)}…`);
+      } catch (e) {
+        log(`artifact read fail: ${e.message || e}`);
+      }
+    } else {
+      log("warning: koi .apk output nahi mila");
+    }
+
+    await db.builds.updateOne({ _id: job._id }, { $set: patch });
+
+    if (job.appId) {
+      try { await db.apps.updateOne({ _id: oid(job.appId) }, { $inc: { builds_total: 1 } }); } catch (_) {}
+    }
+
+    userHub.broadcast(String(job.userId || ""), {
+      type: "build",
+      data: { buildId, status: "success", apk_size: patch.apk_size || 0, duration_ms: patch.duration_ms },
     });
-  }
-
-  if (await canceled()) { log("canceled — artifact skipped"); return; }
-
-  // ---- artifact dhoondo ----
-  const outDir = path.join(workDir, "app", "build", "outputs", "apk");
-  let artifact = null;
-  try {
-    for (const sub of ["release", "debug", ""]) {
-      const dir = sub ? path.join(outDir, sub) : outDir;
-      if (!fs.existsSync(dir)) continue;
-      const hit = fs.readdirSync(dir).find((f) => f.endsWith(".apk"));
-      if (hit) { artifact = path.join(dir, hit); break; }
+    log("done");
+  } finally {
+    await flush(true).catch(() => {});
+    if (builderConfig.CLEAN_WORKDIR) {
+      try { fs.rmSync(workDir, { recursive: true, force: true }); } catch (_) {}
     }
-  } catch (_) {}
-
-  const patch = {
-    status: "success",
-    finished_at: db.utcNow(),
-    duration_ms: Date.now() - t0,
-    log_tail: logs.slice(-builderConfig.MAX_LOG_LINES),
-  };
-
-  if (artifact && fs.existsSync(artifact)) {
-    try {
-      const buf = fs.readFileSync(artifact);
-      patch.artifact = artifact;
-      patch.apk_name = path.basename(artifact);
-      patch.apk_size = buf.length;
-      patch.apk_sha256 = sha256hex(buf);
-      log(`artifact: ${path.basename(artifact)} (${buf.length} bytes) sha256=${patch.apk_sha256.slice(0, 16)}…`);
-    } catch (e) {
-      log(`artifact read fail: ${e.message || e}`);
-    }
-  } else {
-    log("warning: koi .apk output nahi mila");
   }
-
-  await db.builds.updateOne({ _id: job._id }, { $set: patch });
-
-  if (job.appId) {
-    try { await db.apps.updateOne({ _id: oid(job.appId) }, { $inc: { builds_total: 1 } }); } catch (_) {}
-  }
-
-  userHub.broadcast(String(job.userId || ""), {
-    type: "build",
-    data: { buildId, status: "success", apk_size: patch.apk_size || 0, duration_ms: patch.duration_ms },
-  });
-  log("done");
 }
 
 // -------------------------------------------------------------- user rooms
@@ -363,34 +547,28 @@ class UserHub {
     for (const ws of s) { try { ws.send(data); } catch (_) {} }
   }
 
-  _common(ws, req, userId) {
+  common(ws, req, userId) {
     ws.on("message", (raw) => {
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch (_) { return; }
       const type = String(msg.type || "").toLowerCase();
       if (type === "ping") { try { ws.send(JSON.stringify({ type: "pong" })); } catch (_) {} return; }
-      if (type === "subscribe" && msg.buildId) {
-        ws._buildId = String(msg.buildId);
-      }
+      if (type === "subscribe" && msg.buildId) ws._buildId = String(msg.buildId);
     });
   }
 
   userSocket(ws, req) {
     const userId = new URL(req.url, "http://x").searchParams.get("userId") || "anon";
     this.join(userId, ws);
-    this._common(ws, req, userId);
+    this.common(ws, req, userId);
     ws.on("close", () => this.leave(userId, ws));
     ws.on("error", () => this.leave(userId, ws));
-    try {
-      ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() }));
-    } catch (_) {}
+    try { ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() })); } catch (_) {}
   }
 
   appSocket(ws, req) {
-    this._common(ws, req, "app");
-    try {
-      ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() }));
-    } catch (_) {}
+    this.common(ws, req, "app");
+    try { ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() })); } catch (_) {}
   }
 }
 
@@ -400,8 +578,7 @@ const userHub = new UserHub();
 
 function rawBody(req) {
   if (typeof req.rawBody === "string") return req.rawBody;
-  try { return req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : ""; }
-  catch (_) { return ""; }
+  try { return req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : ""; } catch (_) { return ""; }
 }
 
 async function verifyApp(req, res, next) {
@@ -431,7 +608,7 @@ async function verifyApp(req, res, next) {
 
 const router = express.Router();
 
-// raw body capture (agar server.js ke json parser ne verify hook se set kiya hai to wahi use hoga)
+// raw body capture
 router.use((req, _res, next) => {
   if (req.rawBody === undefined) req.rawBody = rawBody(req);
   next();
@@ -440,6 +617,8 @@ router.use((req, _res, next) => {
 // ---- config / health ----
 
 router.get("/api/builder/config", ah(async (req, res) => {
+  let counts = null;
+  try { counts = await db.builderStats(); } catch (_) {}
   res.json({
     status: "ok",
     version: config.VERSION,
@@ -449,9 +628,11 @@ router.get("/api/builder/config", ah(async (req, res) => {
     template_ok: fs.existsSync(builderConfig.TEMPLATE_DIR),
     queue: getQueue().stats(),
     quota: await quota(),
-    counts: await db.builderStats(),
+    counts,
   });
 }));
+
+router.get("/api/builder/preflight", ah(async (req, res) => res.json(preflight())));
 
 // ---- apps ----
 
@@ -491,16 +672,11 @@ router.post("/api/apps/:appId/secret/rotate", ah(async (req, res) => {
   if (!id) throw new u.HttpError(400, "Bad appId");
 
   const secret = genSecret();
-  const app = await db.apps.findOneAndUpdate(
+  const app = unwrap(await db.apps.findOneAndUpdate(
     { _id: id },
-    { $set: {
-      secret,
-      secret_last4: secret.slice(-4),
-      secret_hash: sha256hex(secret),
-      secret_rotated_at: db.utcNow(),
-    } },
+    { $set: { secret, secret_last4: secret.slice(-4), secret_hash: sha256hex(secret), secret_rotated_at: db.utcNow() } },
     { returnDocument: "after" },
-  );
+  ));
   if (!app) throw new u.HttpError(404, "App not found");
 
   u.logEvent("app_secret_rotated", { appId: String(id) });
@@ -552,10 +728,7 @@ router.post("/api/builds", ah(async (req, res) => {
     baseUrl: b.baseUrl || null,
   });
 
-  if (builderConfig.WORKER_MODE === "inline") {
-    // queue loop already running — turant tick karwa do
-    getQueue()._tick().catch(() => {});
-  }
+  if (builderConfig.WORKER_MODE === "inline") getQueue()._tick().catch(() => {});
 
   u.logEvent("build_queued", { buildId: String(id), appId });
   res.json({ status: "ok", build: { buildId: String(id), status: "queued" } });
@@ -620,7 +793,7 @@ router.get("/api/builds/:id/download", ah(async (req, res) => {
 
 router.post("/api/orders", verifyApp, ah(async (req, res) => {
   const doc = {
-    appId: String(req.app._id),          // body ka appId ignore — sirf header
+    appId: String(req.app._id), // body ka appId ignore — sirf header
     userId: req.app.userId || "anon",
     payload: req.body || {},
     created_at: db.utcNow(),
@@ -648,6 +821,9 @@ module.exports = {
   initQueue,
   getQueue,
   stats: () => getQueue().stats(),
+  preflight,
+  resolveGradle,
+  whichSync,
   router,
   userHub,
   verifyApp,
