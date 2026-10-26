@@ -33,6 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,88 +47,164 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      # Do not use android-actions/setup-android@v3 here.
+      # Configure the SDK directly to avoid its legacy "sdkmanager tools" call.
+      - name: Locate Android SDK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          if [ ! -d "$ANDROID_HOME" ]; then
+            echo "::error::Android SDK directory not found: $ANDROID_HOME"
+            exit 1
+          fi
+
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -path "*/bin/sdkmanager" 2>/dev/null \
+            | sort -V | tail -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::Android sdkmanager was not found."
+            find "$ANDROID_HOME" -maxdepth 4 -type f \
+              -name sdkmanager 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+
+          echo "SDK manager: $SDKMANAGER"
+          "$SDKMANAGER" --version
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          set -euo pipefail
 
-      - name: Verify Android SDK
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -path "*/bin/sdkmanager" 2>/dev/null \
+            | sort -V | tail -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found."
+            exit 1
+          fi
+
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          LICENSE_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+
+          if [ "$LICENSE_STATUS" -ne 0 ]; then
+            echo "::error::Unable to accept Android SDK licenses."
+            exit 1
+          fi
+
+      - name: Install Android SDK packages
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -path "*/bin/sdkmanager" 2>/dev/null \
+            | sort -V | tail -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found."
+            exit 1
+          fi
+
+          "$SDKMANAGER" --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
           echo "Android SDK packages installed successfully."
 
-      - name: Verify Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --list_installed
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
+      - name: Validate Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "settings.gradle" ] && \
+             [ ! -f "settings.gradle.kts" ]; then
+            echo "::error::Project settings.gradle or settings.gradle.kts not found."
+            exit 1
+          fi
+
+          if [ ! -f "app/build.gradle" ] && \
+             [ ! -f "app/build.gradle.kts" ]; then
+            echo "::error::app/build.gradle or app/build.gradle.kts not found."
+            exit 1
+          fi
+
+          echo "Android project structure verified."
+
       - name: Prepare release signing
+        if: ${{ inputs.variant != 'debug' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "No release keystore configured."
-            echo "Using signing configuration from the project."
+            echo "No external keystore configured."
+            echo "The Gradle project must provide its own release signing configuration."
             exit 0
           fi
 
           if [ -z "$STORE_PASSWORD" ] || \
              [ -z "$KEY_ALIAS" ] || \
              [ -z "$KEY_PASSWORD" ]; then
-            echo "Error: Signing secrets are incomplete."
+            echo "::error::Release signing secrets are incomplete."
             exit 1
           fi
 
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app-keystore.jks
 
           if [ ! -s app-keystore.jks ]; then
-            echo "Error: Keystore file is empty."
+            echo "::error::Decoded keystore is empty."
             exit 1
           fi
 
-          cat > keystore.properties <<EOF
-          storeFile=app-keystore.jks
-          storePassword=$STORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
+          python3 - <<'PY'
+          import os
+
+          values = {
+              "storeFile": "app-keystore.jks",
+              "storePassword": os.environ["STORE_PASSWORD"],
+              "keyAlias": os.environ["KEY_ALIAS"],
+              "keyPassword": os.environ["KEY_PASSWORD"],
+          }
+
+          with open("keystore.properties", "w", encoding="utf-8") as f:
+              for key, value in values.items():
+                  escaped = value.replace("\\", "\\\\").replace(":", "\\:")
+                  f.write(f"{key}={escaped}\n")
+          PY
 
           echo "Release signing configuration prepared."
 
       - name: Build APK
+        id: build
         env:
           VARIANT: ${{ inputs.variant || 'release' }}
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           case "$VARIANT" in
             debug)
@@ -134,7 +214,7 @@ jobs:
               gradle assembleRelease --no-daemon --console=plain
               ;;
             *)
-              echo "Unsupported build variant: $VARIANT"
+              echo "::error::Unsupported build variant: $VARIANT"
               exit 1
               ;;
           esac
@@ -143,22 +223,23 @@ jobs:
         id: apk
         env:
           VARIANT: ${{ inputs.variant || 'release' }}
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           APK_DIR="app/build/outputs/apk/$VARIANT"
 
           if [ ! -d "$APK_DIR" ]; then
-            echo "APK output directory not found: $APK_DIR"
+            echo "::error::APK output directory not found: $APK_DIR"
             find app/build/outputs -type f 2>/dev/null || true
             exit 1
           fi
 
           APK=$(find "$APK_DIR" -type f -name "*.apk" \
-            ! -name "*-unsigned.apk" | head -n 1)
+            ! -name "*-unsigned.apk" | sort | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "No signed APK found."
+            echo "::error::No signed APK found."
             find "$APK_DIR" -type f 2>/dev/null || true
             exit 1
           fi
@@ -167,15 +248,21 @@ jobs:
           echo "sha=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
 
-          echo "APK found: $APK"
+          echo "APK: $APK"
 
       - name: Verify APK signature
         env:
           APK_PATH: ${{ steps.apk.outputs.path }}
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner not found."
+            exit 1
+          fi
 
           "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
 
@@ -188,17 +275,19 @@ jobs:
           retention-days: 14
 
       - name: Build summary
+        if: success()
         env:
           VARIANT: ${{ inputs.variant || 'release' }}
           APK_SIZE: ${{ steps.apk.outputs.size }}
           APK_SHA: ${{ steps.apk.outputs.sha }}
+        shell: bash
         run: |
           {
             echo "## APK Build Successful"
             echo ""
             echo "- Variant: $VARIANT"
             echo "- Size: $APK_SIZE bytes"
-            echo "- SHA-256: $APK_SHA"
+            echo "- SHA-256: \`$APK_SHA\`"
             echo ""
             echo "Download the APK from the workflow run's Artifacts section."
           } >> "$GITHUB_STEP_SUMMARY"
