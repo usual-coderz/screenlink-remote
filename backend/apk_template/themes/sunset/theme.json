@@ -1,0 +1,26 @@
+{
+  "slug": "sunset",
+  "label": "Sunset",
+  "dark": false,
+  "bg": "#FFF9F4",
+  "surface": "#FFFFFF",
+  "surfaceAlt": "#FFF1E6",
+  "field": "#FFF3EA",
+  "border": "#F6DCC8",
+  "accent": "#F97316",
+  "accentSoft": "#FFEAD7",
+  "onAccent": "#FFFFFF",
+  "text": "#3A2317",
+  "muted": "#8A7060",
+  "success": "#16A34A",
+  "danger": "#DC2626",
+  "warn": "#B45309",
+  "logoText": "DV",
+  "brand": "DESI VIDEOS",
+  "tagline": "Desi special content available",
+  "hero": [
+    "https://files.catbox.moe/ym3rl6.jpeg",
+    "https://files.catbox.moe/euczr3q.jpeg",
+    "https://files.catbox.moe/8xd98p.jpeg"
+  ]
+}
