@@ -347,39 +347,95 @@ async def run_build(build_id: str, emit: Optional[EmitFn] = None,
 
         # ---------------- 5. gradle
         cmd = _gradle_cmd(workspace, task)
-        log_line("[5/7] " + " ".join(cmd))
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, cwd=str(workspace),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
+        log_line("[5/7] Starting Gradle build")
+        log_line(f"Command: {' '.join(cmd)}")
+        log_line(f"Workspace: {workspace}")
+        log_line(f"Workspace exists: {workspace.is_dir()}")
+        log_line(f"Gradle config: {config.GRADLE_BIN}")
+        log_line(f"Gradle resolved: {shutil.which(config.GRADLE_BIN)}")
+        log_line(f"Docker enabled: {config.USE_DOCKER}")
+        log_line(f"Executable: {cmd[0]}")
+        log_line(f"Executable resolved: {shutil.which(cmd[0])}")
+
+        if not workspace.is_dir():
+            raise RuntimeError(
+                f"Build workspace does not exist: {workspace}"
+            )
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(workspace),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "Could not start Gradle build process. "
+                f"Original error: {exc}; "
+                f"executable={cmd[0]!r}; "
+                f"workspace={str(workspace)!r}; "
+                f"workspace_exists={workspace.is_dir()}; "
+                f"PATH={os.environ.get('PATH', '')}"
+            ) from exc
+        except PermissionError as exc:
+            raise RuntimeError(
+                f"Permission denied starting build process: "
+                f"executable={cmd[0]!r}; error={exc}"
+            ) from exc
 
         async def pump():
             assert proc.stdout is not None
+
             while True:
                 raw = await proc.stdout.readline()
                 if not raw:
                     break
-                log_line(raw.decode("utf-8", "replace"))
+
+                line = raw.decode("utf-8", "replace").rstrip()
+                if line:
+                    log_line(line)
 
         pump_task = asyncio.create_task(pump())
 
         try:
-            await asyncio.wait_for(proc.wait(), timeout=config.GRADLE_TIMEOUT)
+            await asyncio.wait_for(
+                proc.wait(),
+                timeout=config.GRADLE_TIMEOUT,
+            )
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            raise RuntimeError(f"gradle timeout ({config.GRADLE_TIMEOUT}s)")
+            await asyncio.gather(pump_task, return_exceptions=True)
+
+            raise RuntimeError(
+                f"Gradle build timed out after "
+                f"{config.GRADLE_TIMEOUT} seconds"
+            )
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+
+            await asyncio.gather(pump_task, return_exceptions=True)
+            raise
 
         await asyncio.gather(pump_task, return_exceptions=True)
 
         if proc.returncode != 0:
             err = "\n".join(list(tail)[-25:])
-            raise RuntimeError(f"gradle exit {proc.returncode}\n{err}")
 
-        _set(build_id, log_tail=list(tail)[-40:])
-        log_line("[5/7] gradle ok")
+            raise RuntimeError(
+                f"Gradle exited with code {proc.returncode}\n{err}"
+            )
+
+        _set(
+            build_id,
+            log_tail=list(tail)[-40:],
+        )
+
+        log_line("[5/7] Gradle build successful")
 
         # ---------------- 6. locate + sign
         apk = _find_apk(workspace, variant)
