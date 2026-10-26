@@ -1,321 +1,262 @@
-'use strict';
+"use strict";
 
-const fs = require('node:fs');
-const fsp = require('node:fs/promises');
-const path = require('node:path');
-const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+/**
+ * APK builder bridge.
+ * server.js isko import karke `router` mount karta hai aur `initUserSockets` se
+ * /ws/user + /ws/app handle karta hai.
+ * Agar aapka original python `backend/apk_builder` hi chalana hai to
+ * BUILDER_ENGINE=python set karo — tab ye module python ko child_process se call karega.
+ */
 
-const ROOT = path.resolve(__dirname, '..');
-const WORK_ROOT = path.join(ROOT, 'builds');
-const ARTIFACT_DIR = path.join(ROOT, 'artifacts');
-const KEYSTORE_DIR = path.join(ROOT, 'data', 'keystores');
+const fs = require("fs");
+const path = require("path");
+const { spawn: spawnProc } = require("child_process");
+const express = require("express");
+const config = require("./config");
+const db = require("./database");
+const u = require("./utils");
 
-const SKIP_TOP = new Set([
-  '.git', '.github', '.gradle', '.idea',
-  'builds', 'artifacts', 'data',
-  'backend', 'admin', 'node_modules'
-]);
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-function shouldSkip(rel) {
-  const seg = rel.split(path.sep);
-  if (SKIP_TOP.has(seg[0])) return true;
-  if (seg[0] === 'app' && seg[1] === 'build') return true;
-  if (seg[0] === 'app' && seg[1] === '.cxx') return true;
-  return false;
-}
+// ------------------------------------------------------------------ config
 
-async function copyTree(src, dest, base) {
-  await fsp.mkdir(dest, { recursive: true });
-  const entries = await fsp.readdir(src, { withFileTypes: true });
-  for (const e of entries) {
-    const rel = base ? path.join(base, e.name) : e.name;
-    if (shouldSkip(rel)) continue;
-    const s = path.join(src, e.name);
-    const d = path.join(dest, e.name);
-    if (e.isDirectory()) {
-      await copyTree(s, d, rel);
-    } else if (e.isSymbolicLink()) {
-      try { await fsp.symlink(await fsp.readlink(s), d); } catch { /* ignore */ }
-    } else {
-      await fsp.copyFile(s, d);
-    }
+const builderConfig = {
+  WORKER_MODE: process.env.BUILDER_WORKER_MODE || "inline",     // inline | external
+  ENGINE: process.env.BUILDER_ENGINE || "node",                 // node | python
+  MAX_CONCURRENT_BUILDS: parseInt(process.env.MAX_CONCURRENT_BUILDS || "2", 10),
+  DEFAULT_VARIANT: process.env.DEFAULT_VARIANT || "prod",
+
+  STORAGE_ROOT: process.env.STORAGE_ROOT || path.join(config.BASE_DIR, "storage"),
+  BUILD_ROOT: process.env.BUILD_ROOT || path.join(config.BASE_DIR, "storage", "builds"),
+  KEYSTORE_DIR: process.env.KEYSTORE_DIR || path.join(config.BASE_DIR, "storage", "keystores"),
+  TEMPLATE_DIR: process.env.TEMPLATE_DIR || path.join(config.BASE_DIR, "apk_template"),
+  PY_BUILDER: process.env.PY_BUILDER || "python3",
+
+  GRADLE_BIN: process.env.GRADLE_BIN || "gradle",
+  KEYTOOL_BIN: process.env.KEYTOOL_BIN || "keytool",
+  APKSIGNER_BIN: process.env.APKSIGNER_BIN || "apksigner",
+  ZIPALIGN_BIN: process.env.ZIPALIGN_BIN || "zipalign",
+  DOCKER_BIN: process.env.DOCKER_BIN || "docker",
+
+  USE_DOCKER: ["1", "true", "yes"].includes(String(process.env.USE_DOCKER || "").toLowerCase()),
+  REQUIRE_SIGNATURE: !["0", "false", "no"].includes(String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()),
+};
+
+function ensureDirs() {
+  for (const d of [builderConfig.STORAGE_ROOT, builderConfig.BUILD_ROOT, builderConfig.KEYSTORE_DIR]) {
+    fs.mkdirSync(d, { recursive: true });
   }
 }
 
-function sha256File(file) {
-  return new Promise((resolve, reject) => {
-    const h = crypto.createHash('sha256');
-    const st = fs.createReadStream(file);
-    st.on('data', (d) => h.update(d));
-    st.on('end', () => resolve(h.digest('hex')));
-    st.on('error', reject);
-  });
-}
-
-function run(cmd, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, {
-      cwd,
-      env: process.env,
-      shell: process.platform === 'win32'
-    });
-    let out = '';
-    const pipe = (b) => { out += b.toString(); };
-    child.stdout.on('data', pipe);
-    child.stderr.on('data', pipe);
-    child.on('error', reject);
-    child.on('close', (code) => {
-      code === 0 ? resolve(out) : reject(new Error(`${cmd} exited ${code}\n${out.slice(-2000)}`));
-    });
-  });
-}
-
-function toolPath(name) {
-  const ext = process.platform === 'win32' ? '.exe' : '';
-  const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || '';
-  if (name === 'apksigner' && sdk) {
-    const p = path.join(sdk, 'build-tools', process.env.BUILD_TOOLS_VERSION || '35.0.0', 'apksigner' + (process.platform === 'win32' ? '.bat' : ''));
-    if (fs.existsSync(p)) return p;
-  }
-  return name;
-}
-
-async function ensureKeystore(app) {
-  await fsp.mkdir(KEYSTORE_DIR, { recursive: true });
-  const file = path.join(KEYSTORE_DIR, `${app.appId}.jks`);
-  if (fs.existsSync(file)) return file;
-
-  const alias = app.keystoreAlias || 'release';
-  await run('keytool', [
-    '-genkeypair',
-    '-keystore', file,
-    '-storetype', 'JKS',
-    '-alias', alias,
-    '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
-    '-storepass', app.keystorePassword,
-    '-keypass', app.keystorePassword,
-    '-dname', `CN=TPC-${app.appId},OU=Mobile,O=TPC,L=NA,ST=NA,C=IN`,
-    '-noprompt'
-  ], ROOT);
-
-  return file;
-}
+// -------------------------------------------------------------- build queue
 
 class BuildQueue {
-  constructor(opts = {}) {
-    this.concurrency = Number(opts.concurrency) || 1;
-    this.onEvent = opts.onEvent || (() => {});
-    this.pending = [];
-    this.running = 0;
-    this.active = new Map();
+  constructor() {
+    this.running = false;
+    this.active = 0;
+    this._timer = null;
+    this.stats_data = { queued: 0, running: 0, done: 0, failed: 0 };
+  }
+
+  async start() {
+    if (this.running) return;
+    this.running = true;
+    this._loop();
+  }
+
+  async stop() {
+    this.running = false;
+    if (this._timer) clearTimeout(this._timer);
+  }
+
+  _loop() {
+    if (!this.running) return;
+    this._timer = setTimeout(() => this._tick().catch(() => {}).finally(() => this._loop()), 1500);
+  }
+
+  async _tick() {
+    if (this.active >= builderConfig.MAX_CONCURRENT_BUILDS) return;
+    const job = await db.builds.findOneAndUpdate(
+      { status: "queued" },
+      { $set: { status: "running", started_at: db.utcNow() } },
+      { sort: { _id: 1 }, returnDocument: "after" },
+    );
+    if (!job) return;
+    this.active += 1;
+    runBuild(job)
+      .catch((e) => db.builds.updateOne({ _id: job._id }, {
+        $set: { status: "failed", error: String(e.message || e), finished_at: db.utcNow() },
+      }).catch(() => {}))
+      .finally(() => { this.active -= 1; });
+  }
+
+  async add(doc) {
+    const res = await db.builds.insertOne({ ...doc, status: "queued", created_at: db.utcNow() });
+    return res.insertedId;
   }
 
   stats() {
-    return { queued: this.pending.length, running: this.running, concurrency: this.concurrency };
+    return { ...this.stats_data, active: this.active, mode: builderConfig.WORKER_MODE };
   }
+}
 
-  enqueue(build, app) {
-    build.status = 'queued';
-    build.queued_at = Date.now();
-    this.pending.push({ build, app });
-    this.pump();
-    this.onEvent({ type: 'build', data: { buildId: build.buildId, status: 'queued' } });
-  }
+let _queue = null;
+function initQueue() { if (!_queue) _queue = new BuildQueue(); return _queue; }
+function getQueue() { return initQueue(); }
+function bindLoop() { /* node me loop global hai — noop for parity */ }
 
-  pump() {
-    while (this.running < this.concurrency && this.pending.length) {
-      const job = this.pending.shift();
-      this.running++;
-      this.active.set(job.build.buildId, job.build);
-      this.run(job)
-        .catch(() => {})
-        .finally(() => {
-          this.running--;
-          this.active.delete(job.build.buildId);
-          this.pump();
-        });
-    }
-  }
+// ------------------------------------------------------------ actual build
 
-  cancel(buildId) {
-    const live = this.active.get(buildId);
-    if (live) {
-      live.canceled = true;
-      try { live._proc && live._proc.kill('SIGTERM'); } catch { /* ignore */ }
-      return live;
-    }
-    const i = this.pending.findIndex((j) => j.build.buildId === buildId);
-    if (i >= 0) {
-      const job = this.pending.splice(i, 1)[0];
-      job.build.status = 'canceled';
-      job.build.finished_at = Date.now();
-      this.onEvent({ type: 'build', data: { buildId, status: 'canceled' } });
-      return job.build;
-    }
-    return null;
-  }
+async function runBuild(job) {
+  const workDir = path.join(builderConfig.BUILD_ROOT, String(job._id));
+  fs.mkdirSync(workDir, { recursive: true });
 
-  logLine(build, text) {
-    String(text).split(/\r?\n/).forEach((raw) => {
-      const line = raw.replace(/\s+$/, '');
-      if (!line) return;
-      build.log_tail.push(line);
-      if (build.log_tail.length > 500) build.log_tail.splice(0, build.log_tail.length - 500);
-      this.onEvent({ type: 'build_log', data: { buildId: build.buildId, line } });
-    });
-  }
-
-  execGradle(cmd, args, cwd, build) {
+  // python engine -> original apk_builder ko call karo
+  if (builderConfig.ENGINE === "python") {
     return new Promise((resolve, reject) => {
-      const child = spawn(cmd, args, {
-        cwd,
-        env: {
-          ...process.env,
-          ANDROID_HOME: process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || '',
-          ANDROID_SDK_ROOT: process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME || '',
-          GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g'
-        },
-        shell: process.platform === 'win32'
+      const p = spawnProc(builderConfig.PY_BUILDER, ["-m", "backend.apk_builder.worker", String(job._id)], {
+        cwd: config.BASE_DIR, stdio: "inherit",
       });
-      build._proc = child;
-      child.stdout.on('data', (b) => this.logLine(build, b.toString()));
-      child.stderr.on('data', (b) => this.logLine(build, b.toString()));
-      child.on('error', (e) => { build._proc = null; reject(e); });
-      child.on('close', (code) => {
-        build._proc = null;
-        if (build.canceled) return reject(new Error('canceled'));
-        code === 0 ? resolve() : reject(new Error(`gradle exit ${code}`));
-      });
+      p.on("error", reject);
+      p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`python builder exit ${code}`))));
     });
   }
 
-  async run(job) {
-    const { build, app } = job;
-    const ws = path.join(WORK_ROOT, build.buildId);
-    const started = Date.now();
+  // node engine -> template copy + gradle
+  if (fs.existsSync(builderConfig.TEMPLATE_DIR)) {
+    fs.cpSync(builderConfig.TEMPLATE_DIR, workDir, { recursive: true });
+  }
+  const artifact = path.join(workDir, "app", "build", "outputs", "apk", "release", "app-release.apk");
 
-    build.status = 'running';
-    build.started_at = started;
-    build.log_tail = [];
-    this.onEvent({ type: 'build', data: { buildId: build.buildId, status: 'running' } });
+  const args = builderConfig.USE_DOCKER
+    ? ["run", "--rm", "-v", `${workDir}:/w`, "-w", "/w", "gradle:8", "assembleRelease"]
+    : ["assembleRelease"];
 
-    try {
-      this.logLine(build, `[1/7] workspace ${ws}`);
-      await fsp.rm(ws, { recursive: true, force: true });
-      await copyTree(ROOT, ws, '');
-      this.logLine(build, '[2/7] template copied');
+  await new Promise((resolve, reject) => {
+    const p = spawnProc(builderConfig.USE_DOCKER ? builderConfig.DOCKER_BIN : builderConfig.GRADLE_BIN, args, {
+      cwd: workDir, stdio: "inherit",
+    });
+    p.on("error", reject);
+    p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`build exit ${code}`))));
+  });
 
-      const keystoreFile = await ensureKeystore(app);
-      this.logLine(build, '[3/7] keystore ready');
-
-      await fsp.writeFile(path.join(ws, 'builder.properties'), [
-        `appId=${app.appId}`,
-        `appName=${app.name}`,
-        `package=${app.package}`,
-        `versionCode=${build.versionCode}`,
-        `versionName=${build.versionName}`,
-        `baseUrl=${build.baseUrl || ''}`,
-        `buildId=${build.buildId}`,
-        ''
-      ].join('\n'));
-
-      await fsp.writeFile(path.join(ws, 'keystore.properties'), [
-        `storeFile=${keystoreFile}`,
-        'storeType=JKS',
-        `storePassword=${app.keystorePassword}`,
-        `keyAlias=${app.keystoreAlias || 'release'}`,
-        `keyPassword=${app.keystorePassword}`,
-        ''
-      ].join('\n'));
-
-      const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || '';
-      await fsp.writeFile(path.join(ws, 'local.properties'), `sdk.dir=${sdk}\n`);
-      this.logLine(build, '[4/7] builder.properties + keystore.properties written');
-
-      const wrapperFile = path.join(ws, 'gradlew');
-const wrapperProperties = path.join(
-  ws,
-  'gradle',
-  'wrapper',
-  'gradle-wrapper.properties'
-);
-
-if (!fs.existsSync(wrapperFile)) {
-  throw new Error('Gradle wrapper missing: gradlew was not copied into build workspace');
+  await db.builds.updateOne({ _id: job._id }, {
+    $set: { status: "done", artifact, finished_at: db.utcNow() },
+  });
+  userHub.broadcast(String(job.userId || ""), { type: "build", status: "done", buildId: String(job._id), artifact });
 }
 
-if (!fs.existsSync(wrapperProperties)) {
-  throw new Error('Gradle wrapper config missing: gradle/wrapper/gradle-wrapper.properties');
-}
+// -------------------------------------------------------------- user rooms
 
-if (process.platform !== 'win32') {
-  await fsp.chmod(wrapperFile, 0o755);
-}
-
-const task = build.variant === 'debug'
-  ? 'assembleDebug'
-  : 'assembleRelease';
-
-this.logLine(build, `[5/7] Gradle wrapper: ${wrapperFile}`);
-this.logLine(build, `Workspace: ${ws}`);
-this.logLine(build, `Task: ${task}`);
-
-await this.execGradle(
-  process.platform === 'win32' ? 'gradlew.bat' : './gradlew',
-  [
-    task,
-    '-PappIdBuild=true',
-    '--no-daemon',
-    '--console=plain',
-    '--stacktrace'
-  ],
-  ws,
-  build
-);
-      this.logLine(build, 'BUILD SUCCESSFUL');
-
-      const outDir = path.join(ws, 'app', 'build', 'outputs', 'apk', build.variant);
-      const files = await fsp.readdir(outDir).catch(() => []);
-      const apkName = files.find((f) => f.endsWith('.apk') && !f.endsWith('-unsigned.apk'));
-      if (!apkName) throw new Error(`koi signed APK nahi mila: ${outDir}`);
-
-      const srcApk = path.join(outDir, apkName);
-      await fsp.mkdir(ARTIFACT_DIR, { recursive: true });
-      const outApk = path.join(ARTIFACT_DIR, `${build.buildId}.apk`);
-      await fsp.copyFile(srcApk, outApk);
-
+class UserHub {
+  constructor() { this.rooms = new Map(); }
+  join(userId, ws) {
+    if (!this.rooms.has(userId)) this.rooms.set(userId, new Set());
+    this.rooms.get(userId).add(ws);
+  }
+  leave(userId, ws) {
+    const s = this.rooms.get(userId);
+    if (s) { s.delete(ws); if (!s.size) this.rooms.delete(userId); }
+  }
+  broadcast(userId, payload) {
+    const s = this.rooms.get(userId);
+    if (!s) return;
+    const data = JSON.stringify(payload);
+    for (const ws of s) { try { ws.send(data); } catch (_) {} }
+  }
+  userSocket(ws, req) {
+    const userId = new URL(req.url, "http://x").searchParams.get("userId") || "anon";
+    this.join(userId, ws);
+    ws.on("message", (raw) => {
       try {
-        await run(toolPath('apksigner'), ['verify', '--verbose', outApk], ROOT);
-        build.signed = true;
-        this.logLine(build, '[6/7] apksigner verify ok');
-      } catch {
-        build.signed = false;
-        this.logLine(build, '[6/7] apksigner verify SKIPPED');
-      }
-
-      build.apk_size = (await fsp.stat(outApk)).size;
-      build.apk_sha256 = await sha256File(outApk);
-      build.duration_ms = Date.now() - started;
-      build.finished_at = Date.now();
-      build.download_ready = true;
-      build.status = 'success';
-      this.logLine(build, `[7/7] published ${build.buildId}.apk`);
-
-      if (process.env.KEEP_WORKSPACES !== '1') {
-        await fsp.rm(ws, { recursive: true, force: true });
-      }
-    } catch (err) {
-      build.finished_at = Date.now();
-      build.duration_ms = Date.now() - started;
-      build.error = err.message;
-      build.status = build.canceled ? 'canceled' : 'failed';
-      this.logLine(build, `ERROR: ${err.message}`);
-    } finally {
-      build.log_tail = build.log_tail.slice(-300);
-      this.onEvent({ type: 'build', data: { buildId: build.buildId, status: build.status } });
-    }
+        const msg = JSON.parse(raw.toString());
+        if (String(msg.type || "").toLowerCase() === "ping") ws.send(JSON.stringify({ type: "pong" }));
+      } catch (_) {}
+    });
+    ws.on("close", () => this.leave(userId, ws));
+    ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() }));
+  }
+  appSocket(ws) {
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (String(msg.type || "").toLowerCase() === "ping") ws.send(JSON.stringify({ type: "pong" }));
+      } catch (_) {}
+    });
   }
 }
 
-module.exports = { BuildQueue, ensureKeystore, ARTIFACT_DIR, KEYSTORE_DIR, ROOT, toolPath };
+const userHub = new UserHub();
+
+// ------------------------------------------------------------------- router
+
+const router = express.Router();
+
+router.get("/api/apps", ah(async (req, res) => {
+  const userId = req.query.userId || null;
+  const q = userId ? { userId } : {};
+  res.json({ apps: await db.apps.find(q).sort({ _id: -1 }).limit(100).toArray() });
+}));
+
+router.post("/api/apps", ah(async (req, res) => {
+  const b = req.body || {};
+  const doc = {
+    userId: b.userId || "anon",
+    name: b.name || "My App",
+    package: b.package || "",
+    variant: b.variant || builderConfig.DEFAULT_VARIANT,
+    config: b.config || {},
+    created_at: db.utcNow(),
+  };
+  const r = await db.apps.insertOne(doc);
+  res.json({ status: "ok", id: String(r.insertedId) });
+}));
+
+router.get("/api/builds", ah(async (req, res) => {
+  const userId = req.query.userId || null;
+  const q = userId ? { userId } : {};
+  res.json({ builds: await db.builds.find(q).sort({ _id: -1 }).limit(100).toArray() });
+}));
+
+router.post("/api/builds", ah(async (req, res) => {
+  const b = req.body || {};
+  const id = await getQueue().add({
+    userId: b.userId || "anon",
+    appId: b.appId || null,
+    variant: b.variant || builderConfig.DEFAULT_VARIANT,
+    config: b.config || {},
+  });
+  res.json({ status: "ok", buildId: String(id) });
+}));
+
+router.get("/api/builds/:id", ah(async (req, res) => {
+  const doc = await db.builds.findOne({ _id: new db.ObjectId(req.params.id) });
+  if (!doc) throw new u.HttpError(404, "Build not found");
+  res.json(u.serializeDocument(doc));
+}));
+
+router.get("/api/builds/:id/download", ah(async (req, res) => {
+  const doc = await db.builds.findOne({ _id: new db.ObjectId(req.params.id) });
+  if (!doc || !doc.artifact || !fs.existsSync(doc.artifact)) throw new u.HttpError(404, "APK not ready");
+  res.download(doc.artifact);
+}));
+
+router.get("/api/orders", ah(async (req, res) => {
+  res.json({ orders: await db.orders.find().sort({ _id: -1 }).limit(100).toArray() });
+}));
+
+router.post("/api/orders", ah(async (req, res) => {
+  const r = await db.orders.insertOne({ ...(req.body || {}), created_at: db.utcNow() });
+  res.json({ status: "ok", id: String(r.insertedId) });
+}));
+
+module.exports = {
+  config: builderConfig,
+  ensureDirs,
+  bindLoop,
+  initQueue,
+  getQueue,
+  stats: () => getQueue().stats(),
+  router,
+  userHub,
+};
