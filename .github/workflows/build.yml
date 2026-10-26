@@ -52,15 +52,20 @@ jobs:
 
       # Signing optional hai. Secrets na ho to release build debug key se sign hoga
       # (build.gradle.kts ka fallback isi ke liye hai).
-      - name: Write keystore.properties
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+            - name: Write keystore.properties
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No release keystore configured; skipping."
+            exit 0
+          fi
+
           echo "$KEYSTORE_BASE64" | base64 -d > app-keystore.jks
+
           cat > keystore.properties <<EOF
           storeFile=app-keystore.jks
           storePassword=$STORE_PASSWORD
