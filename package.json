@@ -1,17 +1,20 @@
 {
-  "name": "tpc-panel",
-  "version": "5.5.0",
-  "private": true,
-  "main": "backend/server.js",
-  "scripts": {
-    "start": "node backend/server.js"
-  },
-  "dependencies": {
-    "cookie-session": "^2.1.0",
-    "express": "^4.19.2",
-    "html-escaper": "^3.0.3",
-    "mongodb": "^6.5.0",
-    "telegram": "^2.19.10",
-    "ws": "^8.16.0"
-  }
+"name": "tpc-panel",
+"version": "5.5.0",
+"private": true,
+"main": "backend/server.js",
+"scripts": {
+"start": "node backend/server.js"
+},
+"engines": {
+"node": "24.x"
+},
+"dependencies": {
+"cookie-session": "^2.1.0",
+"express": "^4.19.2",
+"html-escaper": "^3.0.3",
+"mongodb": "^6.5.0",
+"telegram": "^2.19.10",
+"ws": "^8.16.0"
+}
 }
