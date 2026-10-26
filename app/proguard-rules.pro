@@ -1,5 +1,0 @@
--keep class com.screenlink.remote.** { *; }
--keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
--dontwarn okhttp3.**
--dontwarn okio.**
--keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }

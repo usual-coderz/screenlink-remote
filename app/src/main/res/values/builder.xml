@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- builder base_url https ho to false kar deta hai -->
-    <bool name="allow_cleartext">false</bool>
-</resources>
