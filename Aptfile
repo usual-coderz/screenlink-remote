@@ -1,1 +1,3 @@
-openjdk-17-jdk
+openjdk-17-jdk-headless
+unzip
+curl
