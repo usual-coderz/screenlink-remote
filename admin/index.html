@@ -161,6 +161,7 @@ font-size:11px;font-weight:600;letter-spacing:.4px;white-space:nowrap}
 .badge.id{color:#7dd3fc;border-color:#38bdf833;background:#38bdf80f}
 .badge.auto{color:var(--green);border-color:#34d39940;background:#34d39912}
 .badge.sim{color:#7dd3fc;border-color:#38bdf833;background:#38bdf810}
+.badge.violet{color:#c4b5fd;border-color:#8b5cf640;background:#8b5cf614}
 .badge.key{color:#fde68a;border-color:#fbbf2433;background:#fbbf240f;font-family:var(--mono);letter-spacing:1px}
 
 .table-wrap{width:100%;overflow-x:auto}
@@ -452,7 +453,7 @@ main{padding:18px 13px}
 
 <div class="login-foot">
 <span>Backend: <span class="mono" id="apiHint">/</span></span>
-<a class="apk" id="apkLogin" href="#" target="_blank" rel="noopener">
+<a class="apk" id="apkLogin" href="#builder" rel="noopener">
 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
 <span>APK</span>
 </a>
@@ -481,7 +482,7 @@ main{padding:18px 13px}
 <div class="top-right">
 <span class="pill"><span class="dot"></span><span id="linkLabel">Connecting</span></span>
 <span class="badge" id="roleBadge">—</span>
-<a class="apk" id="apkBtn" href="#" target="_blank" rel="noopener" title="Download APK">
+<a class="apk" id="apkBtn" href="#builder" rel="noopener" title="APK Builder">
 <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
 <span>APK</span>
 </a>
@@ -1171,7 +1172,7 @@ const PHONE_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" s
 const BOLT_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2 5 13h5.5L9.5 22 19 10.5h-5.9z"/></svg>';
 const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h6.8L19 7.7V20a1 1 0 0 1-1 1H7.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><rect x="9.4" y="12.4" width="6.2" height="5.2" rx="1.1"/><path d="M9.4 9.4h3.4"/></svg>';
 
-const APK_URL = "/api/builds";
+const BUILDER_HEALTH = "/health/builder";
 const TKEY = "tpc.token.v11";
 const SKEY = "tpc.session.v11";
 
@@ -1286,7 +1287,7 @@ frag.appendChild(m); i=idx+n.length;
 return frag;
 }
 
-/* ---------- null-safe device helpers (yahi crash kar rahe the) ---------- */
+/* ---------- null-safe device helpers ---------- */
 function tel(d){ return (d&&d.telemetry&&typeof d.telemetry==="object")?d.telemetry:{}; }
 function devId(d){ return (d&&(d.id||d._id))||null; }
 function devName(d){ return (d&&(d.device_name||d.name))||"Unnamed device"; }
@@ -1760,6 +1761,40 @@ body.appendChild(row);
 });
 }
 
+/* ---- builder response normalizers (backend shape alag ho to bhi chale) ---- */
+function pickId(o){ return o ? (o.appId||o.app_id||o.id||(o._id!=null?String(o._id):null)) : null; }
+function listOf(d,k){ if(Array.isArray(d))return d; if(d&&Array.isArray(d[k]))return d[k]; return []; }
+
+function normApp(a){
+a=a||{};
+return {
+appId: pickId(a)||"—",
+name: a.name||"Untitled app",
+package: a.package||a.packageName||"—",
+secret: a.secret||null,
+secret_last4: a.secret_last4||a.secretLast4||(a.secret?String(a.secret).slice(-4):""),
+builds_total: Number(a.builds_total||a.builds||0),
+variant: a.variant||"release"
+};
+}
+
+function normBuild(b){
+b=b||{};
+return {
+buildId: b.buildId||b.build_id||b.id||(b._id!=null?String(b._id):"—"),
+appId: b.appId||b.app_id||"",
+appName: b.appName||b.app_name||b.appId||b.app_id||"—",
+status: b.status||"unknown",
+variant: b.variant||"release",
+duration_ms: Number(b.duration_ms||b.durationMs||0),
+apk_size: Number(b.apk_size||b.apkSize||b.size||0),
+apk_sha256: b.apk_sha256||b.sha256||"",
+log_tail: Array.isArray(b.log_tail)?b.log_tail:(Array.isArray(b.logs)?b.logs:[]),
+error: b.error||null,
+created_at: b.created_at||b.createdAt||null
+};
+}
+
 /* ============================ APK BUILDER ============================ */
 
 function updateBuilderMode(){
@@ -1771,7 +1806,7 @@ if(!ok)builderNotice("Backend reachable nahi — APK Builder band hai. server.js
 
 async function loadBuilderConfig(){
 try{
-state.buildCfg=await api("/api/builder/config");
+state.buildCfg=await api(BUILDER_HEALTH);
 const q=state.buildCfg.queue||{};
 badge($("#bQueueBadge"),(q.queued||0)+" queued · "+(q.running||0)+" running",(q.running?"warn":""));
 }catch(e){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
@@ -1781,8 +1816,8 @@ updateBuilderMode();
 async function loadApps(){
 try{
 const d=await api("/api/apps");
-state.apps=d.apps||[];
-state.quota=d.quota||null;
+state.apps=listOf(d,"apps").map(normApp);
+state.quota=(d&&d.quota)?d.quota:null;
 builderNotice("");
 }catch(e){
 state.apps=[];
@@ -1792,7 +1827,7 @@ renderApps();
 }
 
 async function loadBuilds(){
-try{ const d=await api("/api/builds?limit=60"); state.builds=d.builds||[]; }
+try{ const d=await api("/api/builds?limit=60"); state.builds=listOf(d,"builds").map(normBuild); }
 catch(e){ state.builds=[]; }
 renderBuilds();
 }
@@ -1874,24 +1909,31 @@ const name=$("#appName").value.trim();
 if(!name){ toast("app name daalo"); return; }
 const btn=$("#appCreate"); btn.disabled=true;
 try{
-const r=await api("/api/apps",{method:"POST",body:JSON.stringify({name:name})});
-showSecret(r.app);
+const r=await api("/api/apps",{method:"POST",body:JSON.stringify({
+name:name,
+package:$("#appBase").value.trim()||null,
+variant:$("#appVariant")?$("#appVariant").value:"release"
+})});
+const app=(r&&r.app)?r.app:(r||{});
+showSecret(app);
 $("#appName").value="";
-toast("app ban gaya: "+r.app.appId);
+toast("app ban gaya: "+(pickId(app)||name));
 await loadApps(); await loadBuilds();
 }catch(e){ toast(e.message); } finally{ btn.disabled=false; }
 }
 
 function showSecret(app){
-if(!app||!app.secret){ return; }
-$("#secretValue").textContent=app.secret;
+app=app||{};
+const appId=pickId(app)||"—";
+const secret=app.secret||"";
+$("#secretValue").textContent=secret||"(secret save karo — sirf create par poora dikhta hai)";
 const base=$("#appBase").value.trim()||location.origin;
 $("#secretSnippet").textContent=
-"appId   = "+app.appId+"\n"+
-"secret  = "+app.secret+"\n"+
+"appId   = "+appId+"\n"+
+"secret  = "+(secret||"<rotate karke lo>")+"\n"+
 "base    = "+base+"\n\n"+
 "POST "+base+"/api/orders\n"+
-"  X-App-Id: "+app.appId+"\n"+
+"  X-App-Id: "+appId+"\n"+
 "  X-Timestamp: <epoch seconds>\n"+
 "  X-Signature: HMAC_SHA256(secret, raw_body + timestamp)  // hex\n";
 $("#secretOut").hidden=false;
@@ -1904,10 +1946,11 @@ try{
 const r=await api("/api/builds",{method:"POST",body:JSON.stringify({
 appId:app.appId,variant:variant,baseUrl:base
 })});
-toast("build queued: "+r.build.buildId);
+const b=(r&&r.build)?r.build:(r||{});
+const bid=b.buildId||b.build_id||pickId(b)||"—";
+toast("build queued: "+bid);
 await loadBuilds();
-subscribeBuild(r.build.buildId);
-showBuildLog(r.build.buildId);
+if(bid!=="—"){ subscribeBuild(bid); showBuildLog(bid); }
 }catch(e){ toast(e.message); }
 }
 
@@ -1919,7 +1962,10 @@ toast("canceled"); await loadBuilds(); }catch(e){ toast(e.message); }
 async function retryBuild(b){
 try{
 const r=await api("/api/builds/"+b.buildId+"/retry",{method:"POST"});
-toast("requeued: "+r.build.buildId); await loadBuilds(); subscribeBuild(r.build.buildId);
+const nb=(r&&r.build)?r.build:(r||{});
+const bid=nb.buildId||nb.build_id||"—";
+toast("requeued: "+bid); await loadBuilds();
+if(bid!=="—")subscribeBuild(bid);
 }catch(e){ toast(e.message); }
 }
 
@@ -1927,7 +1973,7 @@ async function rotateSecret(appId){
 if(!confirm("Secret rotate karein? Purana secret turant 401 dega, APK rebuild karna padega."))return;
 try{
 const r=await api("/api/apps/"+appId+"/secret/rotate",{method:"POST"});
-showSecret(r.app);
+showSecret((r&&r.app)?r.app:(r||{}));
 toast("secret rotated — APK rebuild karo");
 await loadApps();
 }catch(e){ toast(e.message); }
@@ -1939,15 +1985,12 @@ try{ await api("/api/apps/"+a.appId,{method:"DELETE"});
 toast("deleted"); await loadApps(); await loadBuilds(); }catch(e){ toast(e.message); }
 }
 
-async function downloadBuild(b){
-try{
-const r=await api("/api/builds/"+b.buildId+"/download");
-toast("download start");
+function downloadBuild(b){
 const a=document.createElement("a");
-a.href=r.url;
-a.download=(b.appName||b.appId)+"-"+b.buildId+".apk";
+a.href="/api/builds/"+b.buildId+"/download";
+a.download=(b.appName||b.appId||"app")+"-"+b.buildId+".apk";
 document.body.appendChild(a); a.click(); a.remove();
-}catch(e){ toast(e.message); }
+toast("download start");
 }
 
 async function showBuildLog(buildId){
@@ -1962,7 +2005,7 @@ async function fetchBuildLog(){
 const id=state.logBuild; if(!id)return;
 try{
 const r=await api("/api/builds/"+id);
-const b=r.build||{};
+const b=normBuild((r&&r.build)?r.build:r);
 let txt=(b.log_tail||[]).join("\n")||"(log khali)";
 if(b.error)txt+="\n\nERROR:\n"+b.error;
 $("#buildLog").textContent=txt;
@@ -1990,7 +2033,7 @@ try{
 const m=JSON.parse(ev.data);
 if(String(m.type)==="build"){
 const d=m.data||{};
-toast("build "+d.buildId+" → "+d.status);
+toast("build "+(d.buildId||"")+" → "+d.status);
 loadBuilds().catch(()=>{});
 if(state.logBuild===d.buildId)fetchBuildLog();
 }
@@ -2399,7 +2442,7 @@ catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); 
 try{ await api("/health/database"); badge($("#dbBadge"),"Connected","ok"); }
 catch(e){ badge($("#dbBadge"),"Down","bad"); }
 try{
-const b=await api("/health/builder");
+const b=await api(BUILDER_HEALTH);
 const ok=b.status==="ok";
 badge($("#builderBadge"),ok?"Ready":"Degraded",ok?"ok":"warn");
 const tools=b.tools||{};
@@ -2610,8 +2653,9 @@ if(page==="builder")refreshSection("builder");
 
 /* ------------------------------ wiring ------------------------------ */
 
-$("#apkBtn").href=APK_URL;
-$("#apkLogin").href=APK_URL;
+function gotoBuilder(ev){ if(ev)ev.preventDefault(); if(state.auth)navigate("builder"); else $("#username").focus(); }
+$("#apkBtn").addEventListener("click",gotoBuilder);
+$("#apkLogin").addEventListener("click",gotoBuilder);
 $("#apiHint").textContent=location.host||"/";
 $("#apiBase").textContent=location.origin||"/";
 
