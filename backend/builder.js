@@ -29,10 +29,12 @@ const builderConfig = {
   STORAGE_ROOT: process.env.STORAGE_ROOT || path.join(config.BASE_DIR, "storage"),
   BUILD_ROOT: process.env.BUILD_ROOT || path.join(config.BASE_DIR, "storage", "builds"),
   KEYSTORE_DIR: process.env.KEYSTORE_DIR || path.join(config.BASE_DIR, "storage", "keystores"),
+  GRADLE_ROOT: process.env.GRADLE_ROOT || path.join(config.BASE_DIR, "storage", "gradle"),
   TEMPLATE_DIR: process.env.TEMPLATE_DIR || "",
   PY_BUILDER: process.env.PY_BUILDER || "python3",
 
   GRADLE_BIN: process.env.GRADLE_BIN || "gradle",
+  GRADLE_VERSION: process.env.GRADLE_VERSION || "8.7",
   KEYTOOL_BIN: process.env.KEYTOOL_BIN || "keytool",
   DOCKER_BIN: process.env.DOCKER_BIN || "docker",
 
@@ -41,6 +43,7 @@ const builderConfig = {
   CLEAN_WORKDIR: ["1", "true", "yes"].includes(String(process.env.CLEAN_WORKDIR || "").toLowerCase()),
   AUTO_SDK: !["0", "false", "no"].includes(String(process.env.AUTO_SDK || "true").toLowerCase()),
   AUTO_JDK: !["0", "false", "no"].includes(String(process.env.AUTO_JDK || "true").toLowerCase()),
+  AUTO_GRADLE: !["0", "false", "no"].includes(String(process.env.AUTO_GRADLE || "true").toLowerCase()),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
   MAX_LOG_LINES: 500,
@@ -125,9 +128,11 @@ builderConfig.TEMPLATE_DIR = resolveTemplateDir() || path.join(config.BASE_DIR, 
 builderConfig.ANDROID_SDK = resolveAndroidSdk();
 
 function ensureDirs() {
-  for (const d of [builderConfig.STORAGE_ROOT, builderConfig.BUILD_ROOT, builderConfig.KEYSTORE_DIR]) {
+  for (const d of [builderConfig.STORAGE_ROOT, builderConfig.BUILD_ROOT, builderConfig.KEYSTORE_DIR, builderConfig.GRADLE_ROOT]) {
     fs.mkdirSync(d, { recursive: true });
   }
+  if (!process.env.GRADLE_USER_HOME) process.env.GRADLE_USER_HOME = path.join(builderConfig.STORAGE_ROOT, ".gradle");
+  fs.mkdirSync(process.env.GRADLE_USER_HOME, { recursive: true });
 }
 
 const sha256hex = (s) => crypto.createHash("sha256").update(s).digest("hex");
@@ -176,6 +181,23 @@ function applyJavaHome(javaHome) {
   return javaHome;
 }
 
+function wrapperJar(dir) { return path.join(dir, "gradle", "wrapper", "gradle-wrapper.jar"); }
+
+function wrapperDistUrl(workDir) {
+  for (const f of [
+    workDir && path.join(workDir, "gradle", "wrapper", "gradle-wrapper.properties"),
+    path.join(builderConfig.TEMPLATE_DIR, "gradle", "wrapper", "gradle-wrapper.properties"),
+  ]) {
+    if (!f || !isFile(f)) continue;
+    try {
+      const txt = fs.readFileSync(f, "utf8");
+      const m = txt.match(/^\s*distributionUrl\s*=\s*(.+?)\s*$/m);
+      if (m) return m[1].replace(/\\:/g, ":").replace(/\\/g, "").trim();
+    } catch (_) {}
+  }
+  return null;
+}
+
 function resolveGradle(workDir) {
   const override = String(builderConfig.GRADLE_BIN || "").trim();
   if (override && override !== "gradle") {
@@ -184,15 +206,16 @@ function resolveGradle(workDir) {
   }
   const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
   for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
-    const p = path.join(dir, wrapper);
-    if (isFile(p)) return { bin: ensureExec(p), prefixArgs: [], source: "gradle-wrapper", shell: IS_WIN };
+    if (isFile(path.join(dir, wrapper)) && isFile(wrapperJar(dir))) {
+      return { bin: ensureExec(path.join(dir, wrapper)), prefixArgs: [], source: "gradle-wrapper", shell: IS_WIN };
+    }
   }
   const onPath = whichSync("gradle");
   if (onPath) return { bin: onPath, prefixArgs: [], source: "PATH", shell: IS_WIN };
   const java = whichSync("java");
   if (java) {
     for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
-      const jar = path.join(dir, "gradle", "wrapper", "gradle-wrapper.jar");
+      const jar = wrapperJar(dir);
       if (isFile(jar)) return { bin: java, prefixArgs: ["-jar", jar], source: "wrapper-jar", shell: false };
     }
   }
@@ -212,6 +235,8 @@ function preflight() {
     python: null, keytool: null,
     android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
     java_home: javaHome,
+    wrapper_jar: isFile(wrapperJar(builderConfig.TEMPLATE_DIR)),
+    wrapper_jar_path: wrapperJar(builderConfig.TEMPLATE_DIR),
   };
   const problems = [];
 
@@ -234,7 +259,7 @@ function preflight() {
     if (!tools.python) problems.push(`PY_BUILDER "${builderConfig.PY_BUILDER}" PATH par nahi mila.`);
   } else if (builderConfig.USE_DOCKER) {
     if (!tools.docker) problems.push("USE_DOCKER=1 par docker nahi mila.");
-  } else if (!g) {
+  } else if (!g && !builderConfig.AUTO_GRADLE) {
     problems.push(gradleHint());
   }
 
@@ -253,6 +278,7 @@ function preflight() {
     use_docker: builderConfig.USE_DOCKER,
     auto_jdk: builderConfig.AUTO_JDK,
     auto_sdk: builderConfig.AUTO_SDK,
+    auto_gradle: builderConfig.AUTO_GRADLE,
     template_ok: templateOk,
     template_dir: builderConfig.TEMPLATE_DIR,
     themes: themeList.map((t) => ({ slug: t.slug, label: t.label, dark: !!t.dark })),
@@ -311,6 +337,7 @@ function findApk(root) {
 
 let _javaPromise = null;
 let _sdkPromise = null;
+const _gradlePromises = new Map();
 
 async function ensureJavaRuntime(log) {
   const existing = resolveJavaHome();
@@ -401,6 +428,32 @@ async function ensureAndroidSdkRuntime(log) {
   return root;
 }
 
+async function ensureGradleRuntime(log, workDir) {
+  const url = wrapperDistUrl(workDir) ||
+    `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
+  const file = (url.split("/").pop() || "").replace(/\.zip$/i, "");
+  const name = file.replace(/-(bin|all)$/i, "") || `gradle-${builderConfig.GRADLE_VERSION}`;
+  const root = builderConfig.GRADLE_ROOT;
+  const home = path.join(root, name);
+  const bin = path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
+  if (isFile(bin)) return ensureExec(bin);
+
+  fs.mkdirSync(root, { recursive: true });
+  const zip = path.join(root, `${name}.zip`);
+  if (!isFile(zip)) {
+    log(`downloading ${name}…`);
+    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", zip, url], { encoding: "utf8" });
+    if (d.status !== 0) throw new Error(`gradle download fail: ${d.stderr || d.status}`);
+  }
+
+  log(`extracting ${name}…`);
+  const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], { encoding: "utf8" });
+  if (un.status !== 0) throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
+
+  if (!isFile(bin)) throw new Error(`gradle bin nahi mila: ${bin}`);
+  return ensureExec(bin);
+}
+
 function ensureJavaOnce(log) {
   if (!_javaPromise) _javaPromise = ensureJavaRuntime(log).catch((e) => { _javaPromise = null; throw e; });
   return _javaPromise;
@@ -409,6 +462,15 @@ function ensureJavaOnce(log) {
 function ensureSdkOnce(log) {
   if (!_sdkPromise) _sdkPromise = ensureAndroidSdkRuntime(log).catch((e) => { _sdkPromise = null; throw e; });
   return _sdkPromise;
+}
+
+function ensureGradleOnce(log, workDir) {
+  const url = wrapperDistUrl(workDir) ||
+    `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
+  if (!_gradlePromises.has(url)) {
+    _gradlePromises.set(url, ensureGradleRuntime(log, workDir).catch((e) => { _gradlePromises.delete(url); throw e; }));
+  }
+  return _gradlePromises.get(url);
 }
 
 function keystoreCreds(appId) {
@@ -637,6 +699,13 @@ async function warmup() {
       console.log("[builder] android sdk ready: %s", sdk);
     } catch (e) { console.warn("[builder] sdk warmup fail: %s", e.message || e); }
   }
+
+  if (builderConfig.AUTO_GRADLE && !builderConfig.USE_DOCKER) {
+    try {
+      const gb = await ensureGradleOnce((m) => console.log("[builder] %s", m), builderConfig.TEMPLATE_DIR);
+      console.log("[builder] gradle ready: %s", gb);
+    } catch (e) { console.warn("[builder] gradle warmup fail: %s", e.message || e); }
+  }
 }
 
 function bindLoop() {
@@ -725,6 +794,11 @@ async function runBuild(job) {
         throw new Error(`Template nahi mila: ${tmpl}`);
       }
 
+      const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
+      if (isFile(path.join(workDir, wrapper)) && !isFile(wrapperJar(workDir))) {
+        log("warning: gradle-wrapper.jar missing — runtime gradle use hoga");
+      }
+
       let sdk = builderConfig.ANDROID_SDK || resolveAndroidSdk();
       if (!sdk && builderConfig.AUTO_SDK) {
         sdk = await ensureSdkOnce(log);
@@ -774,7 +848,11 @@ async function runBuild(job) {
         bin = dockerBin;
         opts = { cwd: workDir, env: { ...process.env } };
       } else {
-        const g = resolveGradle(workDir);
+        let g = resolveGradle(workDir);
+        if (!g && builderConfig.AUTO_GRADLE) {
+          const gb = await ensureGradleOnce(log, workDir);
+          g = { bin: gb, prefixArgs: [], source: "runtime", shell: IS_WIN };
+        }
         if (!g) throw new Error(gradleHint());
         bin = g.bin;
         args = [...(g.prefixArgs || []), "--no-daemon", "--console=plain", task];
@@ -1147,6 +1225,7 @@ module.exports = {
   resolveAndroidSdk,
   ensureJavaRuntime,
   ensureAndroidSdkRuntime,
+  ensureGradleRuntime,
   whichSync,
   themes,
   router,
