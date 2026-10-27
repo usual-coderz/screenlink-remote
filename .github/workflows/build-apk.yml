@@ -468,30 +468,61 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-
-      - name: Compile backend
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m compileall -q backend
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
+        working-directory: backend
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -f requirements.txt ]; then
-            python -m pip install -r requirements.txt
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
           else
-            echo "No root requirements.txt; skipping dependency installation."
+            echo "::error::backend/package.json not found"
+            exit 1
           fi
 
-      - name: Import backend
+      - name: Validate JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
-          python -c "import backend.app; print('backend.app import ok')"
+
+          echo "Checking JavaScript syntax..."
+
+          find backend -type f -name "*.js" \
+            ! -path "*/node_modules/*" \
+            -print0 |
+          while IFS= read -r -d '' file; do
+            echo "Checking: $file"
+            node --check "$file"
+          done
+
+          echo "JavaScript syntax check passed."
+
+      - name: Validate backend entry point
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node -e "
+            const fs = require('fs');
+            const p = require('./package.json');
+
+            console.log('Backend package:', p.name || 'unnamed');
+
+            if (!fs.existsSync('server.js')) {
+              console.error('server.js not found in backend/');
+              process.exit(1);
+            }
+
+            console.log('Backend entry point found.');
+          "
