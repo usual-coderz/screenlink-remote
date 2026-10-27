@@ -13,19 +13,19 @@ on:
         required: true
 
       app_id:
-        description: "applicationId (blank = builder.properties se)"
+        description: "applicationId (blank = builder.properties)"
         type: string
         default: ""
         required: false
 
       app_name:
-        description: "App label (blank = builder.properties se)"
+        description: "App label (blank = builder.properties)"
         type: string
         default: ""
         required: false
 
       base_url:
-        description: "API base URL (blank = builder.properties se)"
+        description: "API base URL (blank = builder.properties)"
         type: string
         default: ""
         required: false
@@ -81,22 +81,25 @@ jobs:
           VARIANT="${INPUT_VARIANT:-release}"
 
           case "$VARIANT" in
-            release|debug) ;;
-            *) VARIANT="release" ;;
+            debug|release) ;;
+            *)
+              echo "::error::Unsupported variant: $VARIANT"
+              exit 1
+              ;;
           esac
 
           echo "VARIANT=$VARIANT" >> "$GITHUB_ENV"
-          echo "Resolved variant: $VARIANT"
+          echo "Building variant: $VARIANT"
 
       - name: Locate Android SDK
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ ! -d "$ANDROID_HOME" ]; then
-            echo "::error::Android SDK not found at $ANDROID_HOME"
+          test -d "$ANDROID_HOME" || {
+            echo "::error::Android SDK not found"
             exit 1
-          fi
+          }
 
           SDKMANAGER="$(
             find "$ANDROID_HOME/cmdline-tools" \
@@ -127,10 +130,10 @@ jobs:
               tail -n 1
           )"
 
-          if [ -z "$SDKMANAGER" ]; then
+          test -n "$SDKMANAGER" || {
             echo "::error::sdkmanager not found"
             exit 1
-          fi
+          }
 
           set +e
           yes | "$SDKMANAGER" --licenses >/dev/null
@@ -155,10 +158,10 @@ jobs:
               tail -n 1
           )"
 
-          if [ -z "$SDKMANAGER" ]; then
+          test -n "$SDKMANAGER" || {
             echo "::error::sdkmanager not found"
             exit 1
-          fi
+          }
 
           "$SDKMANAGER" --install \
             "platform-tools" \
@@ -168,54 +171,42 @@ jobs:
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
-      # Temporary workaround for the unrecognized wrapper JAR.
-      # Re-enable validation after verifying and repairing the template wrapper.
+      # Temporary workaround only.
+      # Verify and repair every wrapper JAR before re-enabling validation.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
           validate-wrappers: false
 
-      - name: Validate project structure
+      - name: Validate Android project
         shell: bash
         run: |
           set -euo pipefail
 
-          fail=0
+          test -f builder.properties || {
+            echo "::error::builder.properties missing"
+            exit 1
+          }
 
-          for f in settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
-            if [ -f "$f" ]; then
-              echo "ok: $f"
-            fi
-          done
+          test -f app/src/main/AndroidManifest.xml || {
+            echo "::error::AndroidManifest.xml missing"
+            exit 1
+          }
 
           if [ ! -f settings.gradle ] && [ ! -f settings.gradle.kts ]; then
             echo "::error::settings.gradle(.kts) missing"
-            fail=1
+            exit 1
           fi
 
           if [ ! -f app/build.gradle ] && [ ! -f app/build.gradle.kts ]; then
             echo "::error::app/build.gradle(.kts) missing"
-            fail=1
-          fi
-
-          if [ ! -f app/src/main/AndroidManifest.xml ]; then
-            echo "::error::AndroidManifest.xml missing"
-            fail=1
-          fi
-
-          if [ ! -f builder.properties ]; then
-            echo "::error::builder.properties missing"
-            fail=1
-          fi
-
-          if [ "$fail" -ne 0 ]; then
             exit 1
           fi
 
-          echo "Project structure verified"
+          echo "Android project structure verified"
 
-      - name: Apply workflow inputs to builder.properties
+      - name: Apply workflow inputs
         shell: bash
         env:
           INPUT_APP_ID: ${{ inputs.app_id }}
@@ -224,52 +215,44 @@ jobs:
         run: |
           set -euo pipefail
 
-          patch() {
-            local key="$1"
-            local value="$2"
-            local escaped
-
-            [ -n "$value" ] || return 0
-
-            escaped=$(printf '%s' "$value" |
-              sed -e 's/\\/\\\\/g' -e 's/:/\\:/g')
-
-            if grep -qE "^${key}=" builder.properties; then
-              KEY="$key" VALUE="$escaped" python3 - <<'PY'
+          python3 - <<'PY'
           import os
           from pathlib import Path
 
           path = Path("builder.properties")
-          key = os.environ["KEY"]
-          value = os.environ["VALUE"]
-
           lines = path.read_text().splitlines()
-          replaced = False
-          output = []
 
-          for line in lines:
-              if line.startswith(key + "="):
-                  output.append(f"{key}={value}")
-                  replaced = True
-              else:
-                  output.append(line)
-
-          if not replaced:
-              output.append(f"{key}={value}")
-
-          path.write_text("\n".join(output) + "\n")
-          PY
-            else
-              printf '%s=%s\n' "$key" "$escaped" >> builder.properties
-            fi
+          updates = {
+              "appId": os.environ.get("INPUT_APP_ID", ""),
+              "appName": os.environ.get("INPUT_APP_NAME", ""),
+              "baseUrl": os.environ.get("INPUT_BASE_URL", ""),
           }
 
-          patch appId "$INPUT_APP_ID"
-          patch appName "$INPUT_APP_NAME"
-          patch baseUrl "$INPUT_BASE_URL"
+          for key, value in updates.items():
+              if not value:
+                  continue
 
-          echo "Builder properties updated"
-          echo "Sensitive values, if any, are not printed."
+              value = value.replace("\\", "\\\\").replace(":", "\\:")
+              prefix = key + "="
+              found = False
+              output = []
+
+              for line in lines:
+                  if line.startswith(prefix):
+                      if not found:
+                          output.append(prefix + value)
+                          found = True
+                  else:
+                      output.append(line)
+
+              if not found:
+                  output.append(prefix + value)
+
+              lines = output
+
+          path.write_text("\n".join(lines) + "\n")
+          print("Builder properties updated.")
+          PY
 
       - name: Prepare Gradle environment
         shell: bash
@@ -309,7 +292,7 @@ jobs:
             printf '%s' "$KEYSTORE_BASE64" |
               base64 --decode > app-keystore.jks
 
-            [ -s app-keystore.jks ] || {
+            test -s app-keystore.jks || {
               echo "::error::Keystore is empty"
               exit 1
             }
@@ -358,34 +341,28 @@ jobs:
           fi
 
           case "$VARIANT" in
-            debug)
-              TASK="assembleDebug"
-              ;;
-            release)
-              TASK="assembleRelease"
-              ;;
-            *)
-              echo "::error::Unsupported build variant: $VARIANT"
-              exit 1
-              ;;
+            debug) TASK="assembleDebug" ;;
+            release) TASK="assembleRelease" ;;
           esac
-
-          echo "Running: $GRADLE $TASK"
 
           "$GRADLE" "$TASK" \
             --no-daemon \
             --console=plain \
             --stacktrace
 
-      - name: Dump outputs on failure
+      - name: Dump build diagnostics
         if: failure()
         shell: bash
         run: |
           echo "APK outputs:"
           find app/build/outputs -type f 2>/dev/null || true
 
-          echo "Gradle reports:"
+          echo "Build reports:"
           find app/build/reports -type f 2>/dev/null || true
+
+          echo "Gradle wrapper files:"
+          find gradle backend/apk_template/gradle \
+            -maxdepth 3 -type f 2>/dev/null || true
 
       - name: Locate APK
         id: apk
@@ -420,7 +397,7 @@ jobs:
           echo "sha=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
 
-          echo "APK: $APK"
+          echo "APK found: $APK"
 
       - name: Verify APK signature
         env:
@@ -443,12 +420,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Summary
+      - name: Build summary
         if: always()
-        shell: bash
         env:
           APK_SIZE: ${{ steps.apk.outputs.size }}
           APK_SHA: ${{ steps.apk.outputs.sha }}
+        shell: bash
         run: |
           {
             echo "## APK Build"
@@ -460,7 +437,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   backend:
-    name: Backend sanity check
+    name: Node.js backend sanity check
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -472,8 +449,26 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
+
+      - name: Validate backend structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -d backend ]; then
+            echo "::error::backend directory not found"
+            exit 1
+          fi
+
+          if [ ! -f backend/package.json ]; then
+            echo "::error::backend/package.json not found"
+            exit 1
+          fi
+
+          node -e "
+            const p = require('./backend/package.json');
+            console.log('Backend package:', p.name || 'unnamed');
+          "
 
       - name: Install backend dependencies
         working-directory: backend
@@ -482,12 +477,10 @@ jobs:
           set -euo pipefail
 
           if [ -f package-lock.json ]; then
-            npm ci
-          elif [ -f package.json ]; then
-            npm install
+            npm ci --no-audit --no-fund
           else
-            echo "::error::backend/package.json not found"
-            exit 1
+            echo "package-lock.json not found; using npm install."
+            npm install --no-audit --no-fund
           fi
 
       - name: Validate JavaScript syntax
@@ -495,34 +488,43 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Checking JavaScript syntax..."
+          COUNT=0
 
-          find backend -type f -name "*.js" \
-            ! -path "*/node_modules/*" \
-            -print0 |
-          while IFS= read -r -d '' file; do
-            echo "Checking: $file"
-            node --check "$file"
-          done
+          while IFS= read -r -d '' FILE; do
+            echo "Checking: $FILE"
+            node --check "$FILE"
+            COUNT=$((COUNT + 1))
+          done < <(
+            find backend \
+              -type f \
+              -name "*.js" \
+              ! -path "*/node_modules/*" \
+              -print0
+          )
 
-          echo "JavaScript syntax check passed."
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No JavaScript files found in backend"
+            exit 1
+          fi
+
+          echo "Validated $COUNT JavaScript files."
 
       - name: Validate backend entry point
-        working-directory: backend
         shell: bash
         run: |
           set -euo pipefail
 
-          node -e "
-            const fs = require('fs');
-            const p = require('./package.json');
+          if [ -f backend/server.js ]; then
+            echo "Backend entry point found: backend/server.js"
+          elif [ -f backend/index.js ]; then
+            echo "Backend entry point found: backend/index.js"
+          else
+            echo "::error::Neither backend/server.js nor backend/index.js exists"
+            find backend -maxdepth 2 -type f -name "*.js" -print
+            exit 1
+          fi
 
-            console.log('Backend package:', p.name || 'unnamed');
-
-            if (!fs.existsSync('server.js')) {
-              console.error('server.js not found in backend/');
-              process.exit(1);
-            }
-
-            console.log('Backend entry point found.');
-          "
+      - name: Backend summary
+        if: always()
+        run: |
+          echo "Node.js backend sanity check completed."
