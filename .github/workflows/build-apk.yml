@@ -6,19 +6,24 @@ on:
       variant:
         description: "Build variant"
         type: choice
-        options: [release, debug]
+        options:
+          - release
+          - debug
         default: release
         required: true
+
       app_id:
         description: "applicationId (blank = builder.properties se)"
         type: string
         default: ""
         required: false
+
       app_name:
         description: "App label (blank = builder.properties se)"
         type: string
         default: ""
         required: false
+
       base_url:
         description: "API base URL (blank = builder.properties se)"
         type: string
@@ -26,7 +31,9 @@ on:
         required: false
 
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
     paths-ignore:
       - "backend/**"
       - "admin/**"
@@ -66,14 +73,18 @@ jobs:
 
       - name: Resolve build variant
         shell: bash
+        env:
+          INPUT_VARIANT: ${{ inputs.variant }}
         run: |
           set -euo pipefail
-          VARIANT="${{ inputs.variant }}"
-          [ -n "$VARIANT" ] || VARIANT="release"
+
+          VARIANT="${INPUT_VARIANT:-release}"
+
           case "$VARIANT" in
             release|debug) ;;
             *) VARIANT="release" ;;
           esac
+
           echo "VARIANT=$VARIANT" >> "$GITHUB_ENV"
           echo "Resolved variant: $VARIANT"
 
@@ -87,12 +98,16 @@ jobs:
             exit 1
           fi
 
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -path "*/bin/sdkmanager" 2>/dev/null | sort -V | tail -n 1)
+          SDKMANAGER="$(
+            find "$ANDROID_HOME/cmdline-tools" \
+              -type f \
+              -path "*/bin/sdkmanager" 2>/dev/null |
+              sort -V |
+              tail -n 1
+          )"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager not found."
-            find "$ANDROID_HOME" -maxdepth 4 -type f -name sdkmanager 2>/dev/null || true
+            echo "::error::sdkmanager not found"
             exit 1
           fi
 
@@ -103,20 +118,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" 2>/dev/null | sort -V | tail -n 1)
-          [ -n "$SDKMANAGER" ] || { echo "::error::sdkmanager not found."; exit 1; }
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses > /dev/null
+
+          SDKMANAGER="$(
+            find "$ANDROID_HOME/cmdline-tools" \
+              -type f \
+              -path "*/bin/sdkmanager" 2>/dev/null |
+              sort -V |
+              tail -n 1
+          )"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found"
+            exit 1
+          fi
+
+          set +e
+          yes | "$SDKMANAGER" --licenses >/dev/null
           STATUS=${PIPESTATUS[1]}
-          set -o pipefail
-          [ "$STATUS" -eq 0 ] || { echo "::error::license accept fail"; exit 1; }
+          set -e
+
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::Android SDK license acceptance failed"
+            exit 1
+          fi
 
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" 2>/dev/null | sort -V | tail -n 1)
-          [ -n "$SDKMANAGER" ] || { echo "::error::sdkmanager not found."; exit 1; }
+
+          SDKMANAGER="$(
+            find "$ANDROID_HOME/cmdline-tools" \
+              -type f \
+              -path "*/bin/sdkmanager" 2>/dev/null |
+              sort -V |
+              tail -n 1
+          )"
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager not found"
+            exit 1
+          fi
 
           "$SDKMANAGER" --install \
             "platform-tools" \
@@ -126,75 +168,125 @@ jobs:
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
+      # Temporary workaround for the unrecognized wrapper JAR.
+      # Re-enable validation after verifying and repairing the template wrapper.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+          validate-wrappers: false
 
       - name: Validate project structure
         shell: bash
         run: |
           set -euo pipefail
+
           fail=0
 
           for f in settings.gradle settings.gradle.kts build.gradle build.gradle.kts; do
-            [ -f "$f" ] && echo "ok: $f"
+            if [ -f "$f" ]; then
+              echo "ok: $f"
+            fi
           done
 
-          { [ -f settings.gradle ] || [ -f settings.gradle.kts ]; } \
-            || { echo "::error::settings.gradle(.kts) missing"; fail=1; }
+          if [ ! -f settings.gradle ] && [ ! -f settings.gradle.kts ]; then
+            echo "::error::settings.gradle(.kts) missing"
+            fail=1
+          fi
 
-          { [ -f app/build.gradle ] || [ -f app/build.gradle.kts ]; } \
-            || { echo "::error::app/build.gradle(.kts) missing"; fail=1; }
+          if [ ! -f app/build.gradle ] && [ ! -f app/build.gradle.kts ]; then
+            echo "::error::app/build.gradle(.kts) missing"
+            fail=1
+          fi
 
-          [ -f app/src/main/AndroidManifest.xml ] \
-            || { echo "::error::app/src/main/AndroidManifest.xml missing"; fail=1; }
+          if [ ! -f app/src/main/AndroidManifest.xml ]; then
+            echo "::error::AndroidManifest.xml missing"
+            fail=1
+          fi
 
-          [ -f builder.properties ] \
-            || { echo "::error::builder.properties missing"; fail=1; }
+          if [ ! -f builder.properties ]; then
+            echo "::error::builder.properties missing"
+            fail=1
+          fi
 
-          [ "$fail" -eq 0 ] || exit 1
-          echo "structure verified"
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Project structure verified"
 
       - name: Apply workflow inputs to builder.properties
         shell: bash
+        env:
+          INPUT_APP_ID: ${{ inputs.app_id }}
+          INPUT_APP_NAME: ${{ inputs.app_name }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
         run: |
           set -euo pipefail
 
           patch() {
-            local key="$1" value="$2"
+            local key="$1"
+            local value="$2"
+            local escaped
+
             [ -n "$value" ] || return 0
-            local esc
-            esc=$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/:/\\:/g')
+
+            escaped=$(printf '%s' "$value" |
+              sed -e 's/\\/\\\\/g' -e 's/:/\\:/g')
+
             if grep -qE "^${key}=" builder.properties; then
-              sed -i "s|^${key}=.*|${key}=${esc}|" builder.properties
+              KEY="$key" VALUE="$escaped" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path("builder.properties")
+          key = os.environ["KEY"]
+          value = os.environ["VALUE"]
+
+          lines = path.read_text().splitlines()
+          replaced = False
+          output = []
+
+          for line in lines:
+              if line.startswith(key + "="):
+                  output.append(f"{key}={value}")
+                  replaced = True
+              else:
+                  output.append(line)
+
+          if not replaced:
+              output.append(f"{key}={value}")
+
+          path.write_text("\n".join(output) + "\n")
+          PY
             else
-              printf '%s=%s\n' "$key" "$esc" >> builder.properties
+              printf '%s=%s\n' "$key" "$escaped" >> builder.properties
             fi
           }
 
-          patch appId    "${{ inputs.app_id }}"
-          patch appName  "${{ inputs.app_name }}"
-          patch baseUrl  "${{ inputs.base_url }}"
+          patch appId "$INPUT_APP_ID"
+          patch appName "$INPUT_APP_NAME"
+          patch baseUrl "$INPUT_BASE_URL"
 
-          echo "--- builder.properties ---"
-          cat builder.properties
+          echo "Builder properties updated"
+          echo "Sensitive values, if any, are not printed."
 
       - name: Prepare Gradle environment
         shell: bash
         run: |
           set -euo pipefail
+
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
           if [ ! -f gradle.properties ]; then
-            {
-              echo "org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8"
-              echo "org.gradle.parallel=true"
-              echo "org.gradle.caching=true"
-              echo "android.useAndroidX=true"
-              echo "android.nonTransitiveRClass=true"
-              echo "kotlin.code.style=official"
-            } > gradle.properties
+            cat > gradle.properties <<'PROPERTIES'
+          org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          PROPERTIES
           fi
 
       - name: Prepare release signing
@@ -207,25 +299,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          umask 077
 
           ALIAS="${KEY_ALIAS:-tpc-release}"
           STOREPASS="${STORE_PASSWORD:-tpcbuild123}"
           KEYPASS="${KEY_PASSWORD:-$STOREPASS}"
 
           if [ -n "${KEYSTORE_BASE64:-}" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app-keystore.jks
-            [ -s app-keystore.jks ] || { echo "::error::keystore empty"; exit 1; }
+            printf '%s' "$KEYSTORE_BASE64" |
+              base64 --decode > app-keystore.jks
+
+            [ -s app-keystore.jks ] || {
+              echo "::error::Keystore is empty"
+              exit 1
+            }
+
+            keytool -list \
+              -keystore app-keystore.jks \
+              -storepass "$STOREPASS" >/dev/null
+
             MODE="secrets"
           else
-            # secrets nahi hain to bhi signed + installable APK bane
             keytool -genkeypair \
               -keystore app-keystore.jks \
               -storetype JKS \
               -alias "$ALIAS" \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "$STOREPASS" -keypass "$KEYPASS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$STOREPASS" \
+              -keypass "$KEYPASS" \
               -dname "CN=TPC Release,OU=Mobile,O=TPC,L=NA,ST=NA,C=IN" \
               -noprompt
+
             MODE="generated"
           fi
 
@@ -238,27 +344,48 @@ jobs:
           } > keystore.properties
 
           echo "SIGN_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "Release signing prepared: $MODE"
 
       - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -x ./gradlew ]; then GRADLE="./gradlew"; else GRADLE="gradle"; fi
+          if [ -x ./gradlew ]; then
+            GRADLE="./gradlew"
+          else
+            GRADLE="gradle"
+          fi
+
           case "$VARIANT" in
-            debug)   TASK="assembleDebug" ;;
-            release) TASK="assembleRelease" ;;
+            debug)
+              TASK="assembleDebug"
+              ;;
+            release)
+              TASK="assembleRelease"
+              ;;
+            *)
+              echo "::error::Unsupported build variant: $VARIANT"
+              exit 1
+              ;;
           esac
 
           echo "Running: $GRADLE $TASK"
-          "$GRADLE" "$TASK" --no-daemon --console=plain --stacktrace
+
+          "$GRADLE" "$TASK" \
+            --no-daemon \
+            --console=plain \
+            --stacktrace
 
       - name: Dump outputs on failure
         if: failure()
         shell: bash
         run: |
+          echo "APK outputs:"
           find app/build/outputs -type f 2>/dev/null || true
-          find . -maxdepth 2 -name "keystore.properties" 2>/dev/null || true
+
+          echo "Gradle reports:"
+          find app/build/reports -type f 2>/dev/null || true
 
       - name: Locate APK
         id: apk
@@ -267,14 +394,33 @@ jobs:
           set -euo pipefail
 
           APK_DIR="app/build/outputs/apk/$VARIANT"
-          [ -d "$APK_DIR" ] || { echo "::error::no $APK_DIR"; find app/build/outputs -type f 2>/dev/null || true; exit 1; }
 
-          APK=$(find "$APK_DIR" -type f -name "*.apk" ! -name "*-unsigned.apk" | sort | head -n 1)
-          [ -n "$APK" ] || { echo "::error::no signed APK"; find "$APK_DIR" -type f 2>/dev/null || true; exit 1; }
+          if [ ! -d "$APK_DIR" ]; then
+            echo "::error::APK output directory not found: $APK_DIR"
+            find app/build/outputs -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          APK="$(
+            find "$APK_DIR" \
+              -type f \
+              -name "*.apk" \
+              ! -name "*-unsigned.apk" |
+              sort |
+              head -n 1
+          )"
+
+          if [ -z "$APK" ]; then
+            echo "::error::No installable APK found"
+            find "$APK_DIR" -type f 2>/dev/null || true
+            exit 1
+          fi
 
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           echo "sha=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
+
+          echo "APK: $APK"
 
       - name: Verify APK signature
         env:
@@ -282,7 +428,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            verify \
+            --verbose \
+            --print-certs \
+            "$APK_PATH"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -295,14 +446,17 @@ jobs:
       - name: Summary
         if: always()
         shell: bash
+        env:
+          APK_SIZE: ${{ steps.apk.outputs.size }}
+          APK_SHA: ${{ steps.apk.outputs.sha }}
         run: |
           {
             echo "## APK Build"
-            echo ""
-            echo "- Variant: $VARIANT"
+            echo
+            echo "- Variant: ${VARIANT:-unknown}"
             echo "- Signing: ${SIGN_MODE:-n/a}"
-            echo "- Size: ${{ steps.apk.outputs.size || 'n/a' }} bytes"
-            echo "- SHA-256: \`${{ steps.apk.outputs.sha || 'n/a' }}\`"
+            echo "- Size: ${APK_SIZE:-n/a} bytes"
+            echo "- SHA-256: \`${APK_SHA:-n/a}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   backend:
@@ -311,27 +465,32 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Compile check
+      - name: Compile backend
         shell: bash
         run: |
           set -euo pipefail
           python -m compileall -q backend
 
-      - name: Install deps (agar requirements hai)
+      - name: Install backend dependencies
         shell: bash
         run: |
           set -euo pipefail
+
           if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+            python -m pip install -r requirements.txt
+          else
+            echo "No root requirements.txt; skipping dependency installation."
           fi
 
-      - name: Import check
+      - name: Import backend
         shell: bash
         run: |
           set -euo pipefail
