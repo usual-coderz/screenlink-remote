@@ -137,6 +137,11 @@ function keyOf(keys) {
   return out;
 }
 
+function isIdOnlyKey(keys) {
+  const fields = Object.keys(keys || {});
+  return fields.length === 1 && fields[0] === "_id";
+}
+
 function autoIndexName(keys) {
   return Object.keys(keys)
     .map((f) => `${f}_${keys[f]}`)
@@ -195,6 +200,8 @@ async function dropIndexSafe(c, existing, name, label) {
 }
 
 async function applyIndex(c, existing, keys, opts, label) {
+  if (isIdOnlyKey(keys)) return;
+
   const wantName = autoIndexName(keys);
 
   const byName = existing.find((i) => i.name === wantName);
