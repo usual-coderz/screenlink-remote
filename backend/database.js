@@ -1,15 +1,5 @@
 "use strict";
 
-/**
- * backend/database.js
- * Hardened Mongo layer.
- *  - connect + reconnect watchdog, generation-guarded events
- *  - index failure connection ko kill nahi karta
- *  - failure pe state rollback (dead client pe point nahi karta)
- *  - lazy collection access + isReady() guard
- *  - DB autodetect + startup counts logging
- */
-
 const { MongoClient, ObjectId, ReturnDocument } = require("mongodb");
 
 const COLLECTIONS = [
@@ -52,8 +42,6 @@ const state = {
 
 const _col = Object.create(null);
 let _watchdog = null;
-
-// ------------------------------------------------------------------ env
 
 function envUri() {
   return (
@@ -104,8 +92,6 @@ function maskedUri() {
   return envUri().replace(/\/\/[^@/]*@/, "//***@");
 }
 
-// --------------------------------------------------------------- events
-
 function attachEvents(client, gen) {
   const live = () => gen === state.generation;
 
@@ -128,8 +114,6 @@ function attachEvents(client, gen) {
   });
 }
 
-// ------------------------------------------------------------ collections
-
 function coll(name) {
   if (_col[name]) return _col[name];
   if (!state.db) return null;
@@ -147,41 +131,128 @@ function requireColl(name) {
   return c;
 }
 
-// ---------------------------------------------------------------- indexes
+function keyOf(keys) {
+  const out = {};
+  for (const f of Object.keys(keys || {})) out[f] = Number(keys[f]);
+  return out;
+}
 
-async function createIndexSafe(c, keys, options = {}, label = "") {
+function autoIndexName(keys) {
+  return Object.keys(keys)
+    .map((f) => `${f}_${keys[f]}`)
+    .join("_");
+}
+
+function sameKeyExact(a, b) {
+  const ka = keyOf(a);
+  const kb = keyOf(b);
+  const fa = Object.keys(ka);
+  const fb = Object.keys(kb);
+  if (fa.length !== fb.length) return false;
+  for (const f of fa) if (!(f in kb) || ka[f] !== kb[f]) return false;
+  return true;
+}
+
+function sameKeyLoose(a, b) {
+  const ka = keyOf(a);
+  const kb = keyOf(b);
+  const fa = Object.keys(ka);
+  const fb = Object.keys(kb);
+  if (fa.length !== fb.length) return false;
+  for (const f of fa) {
+    if (!(f in kb)) return false;
+    if (f === "_id") continue;
+    if (ka[f] !== kb[f]) return false;
+  }
+  return true;
+}
+
+function specMatches(idx, keys, opts) {
+  if (!sameKeyExact(idx.key, keys)) return false;
+  if (!!idx.unique !== !!opts.unique) return false;
+  if (!!idx.sparse !== !!opts.sparse) return false;
+  if (!!idx.partialFilterExpression !== !!opts.partialFilterExpression) return false;
+  return true;
+}
+
+function optionsSatisfied(idx, opts) {
+  if (opts.unique && !idx.unique) return false;
+  if (opts.sparse && !idx.sparse) return false;
+  if (opts.partialFilterExpression && !idx.partialFilterExpression) return false;
+  return true;
+}
+
+async function dropIndexSafe(c, existing, name, label) {
   try {
-    await c.createIndex(keys, options);
+    await c.dropIndex(name);
+    const i = existing.findIndex((x) => x.name === name);
+    if (i >= 0) existing.splice(i, 1);
     return true;
   } catch (err) {
-    const dup =
-      err &&
-      (err.code === 11000 ||
-        err.codeName === "DuplicateKey" ||
-        /duplicate key/i.test(err.message || ""));
+    console.warn(`[database] index ${label} drop ${name} fail: ${err.message}`);
+    return false;
+  }
+}
 
-    if (dup && options.unique) {
-      console.warn(`[database] index ${label}: duplicate data — relaxed (non-unique)`);
-      const relaxed = { ...options };
+async function applyIndex(c, existing, keys, opts, label) {
+  const wantName = autoIndexName(keys);
+
+  const byName = existing.find((i) => i.name === wantName);
+  if (byName) {
+    if (specMatches(byName, keys, opts)) return;
+    if (!(await dropIndexSafe(c, existing, wantName, label))) return;
+  }
+
+  const byKey = existing.find((i) => sameKeyLoose(i.key, keys));
+  if (byKey) {
+    if (optionsSatisfied(byKey, opts)) return;
+    if (!(await dropIndexSafe(c, existing, byKey.name, label))) return;
+  }
+
+  try {
+    const created = await c.createIndex(keys, opts);
+    existing.push({ name: created, key: keyOf(keys), ...opts });
+    return;
+  } catch (err) {
+    const code = err && err.code;
+    const dup =
+      code === 11000 ||
+      err.codeName === "DuplicateKey" ||
+      /duplicate key/i.test(err.message || "");
+
+    if (dup && opts.unique) {
+      const relaxed = { ...opts };
       delete relaxed.unique;
       delete relaxed.partialFilterExpression;
       try {
-        await c.createIndex(keys, relaxed);
-        return true;
+        const created = await c.createIndex(keys, relaxed);
+        existing.push({ name: created, key: keyOf(keys), ...relaxed });
+        console.warn(`[database] index ${label}: duplicate data, created non-unique`);
+        return;
       } catch (e2) {
         console.warn(`[database] index ${label} relaxed fail: ${e2.message}`);
-        return false;
+        return;
       }
     }
 
+    if (code === 85 || code === 86) {
+      try {
+        const fresh = await c.listIndexes().toArray();
+        const hit = fresh.find((i) => sameKeyLoose(i.key, keys) && optionsSatisfied(i, opts));
+        if (hit) {
+          existing.length = 0;
+          existing.push(...fresh);
+          return;
+        }
+      } catch (_) {}
+    }
+
     console.warn(`[database] index ${label} fail: ${err.message}`);
-    return false;
   }
 }
 
 async function ensureIndexes() {
   const jobs = [
-    // devices
     ["devices", { registration_id_hash: 1 }, {}, "devices.rid_hash"],
     ["devices", { short_id: 1 }, { unique: true, sparse: true }, "devices.short_id"],
     ["devices", { last_seen: -1 }, {}, "devices.last_seen"],
@@ -189,30 +260,24 @@ async function ensureIndexes() {
     ["devices", { android_id: 1 }, { sparse: true }, "devices.android_id"],
     ["devices", { "auto_sender.enabled": 1 }, {}, "devices.auto_sender_enabled"],
 
-    // messages
     ["messages", { device_id: 1, _id: -1 }, {}, "messages.device_id"],
     ["messages", { device_id: 1, created_at: -1 }, {}, "messages.device_created"],
     ["messages", { dedupe_key: 1 }, { sparse: true }, "messages.dedupe_key"],
     ["messages", { created_at: -1 }, {}, "messages.created_at"],
     ["messages", { direction: 1, _id: -1 }, {}, "messages.direction"],
 
-    // outbox
     ["outbox", { device_id: 1, status: 1, _id: 1 }, {}, "outbox.queue"],
     ["outbox", { status: 1, pushed_at: 1 }, {}, "outbox.stale"],
     ["outbox", { created_at: 1 }, {}, "outbox.created_at"],
 
-    // pairing
     ["pairing_codes", { code_hash: 1 }, { unique: true, sparse: true }, "pairing_codes.code_hash"],
     ["pairing_codes", { expires_at: 1 }, {}, "pairing_codes.expires_at"],
 
-    // bans (code `address` field use karta hai)
     ["banned_senders", { address: 1 }, { unique: true, sparse: true }, "banned_senders.address"],
 
-    // keys
     ["panel_keys", { key_hash: 1 }, { unique: true, sparse: true }, "panel_keys.key_hash"],
     ["panel_keys", { expires_at: 1 }, {}, "panel_keys.expires_at"],
 
-    // fingerprints: null exclude karo, warna "" pe unique collide
     [
       "install_fingerprints",
       { android_id: 1 },
@@ -220,28 +285,41 @@ async function ensureIndexes() {
       "install_fingerprints.android_id",
     ],
 
-    // builder
     ["apps", { userId: 1, _id: -1 }, {}, "apps.userId"],
     ["builds", { status: 1, _id: 1 }, {}, "builds.queue"],
     ["builds", { userId: 1, _id: -1 }, {}, "builds.userId"],
     ["builds", { appId: 1 }, {}, "builds.appId"],
     ["orders", { appId: 1, _id: -1 }, {}, "orders.appId"],
 
-    // logs / events
     ["activity_logs", { created_at: -1 }, {}, "activity_logs.created_at"],
     ["activity_logs", { event_type: 1, _id: -1 }, {}, "activity_logs.event"],
     ["device_events", { device_id: 1, _id: -1 }, {}, "device_events.device_id"],
     ["device_events", { event: 1, created_at: -1 }, {}, "device_events.event"],
     ["tg_logs", { _id: -1 }, {}, "tg_logs.recent"],
 
-    // relay
     ["relay_config", { _id: 1 }, {}, "relay_config.id"],
   ];
 
-  for (const [name, keys, opts, label] of jobs) {
+  const grouped = new Map();
+  for (const job of jobs) {
+    if (!grouped.has(job[0])) grouped.set(job[0], []);
+    grouped.get(job[0]).push(job);
+  }
+
+  for (const [name, list] of grouped) {
     const c = coll(name);
     if (!c) continue;
-    await createIndexSafe(c, keys, opts, label);
+    let existing = [];
+    try {
+      existing = await c.listIndexes().toArray();
+    } catch (err) {
+      if (err && err.codeName !== "NamespaceNotFound") {
+        console.warn(`[database] listIndexes ${name} fail: ${err.message}`);
+      }
+    }
+    for (const [, keys, opts, label] of list) {
+      await applyIndex(c, existing, keys, opts, label);
+    }
   }
 }
 
@@ -257,8 +335,6 @@ async function logCounts() {
     console.warn(`[database] counts fail: ${err.message}`);
   }
 }
-
-// ------------------------------------------------------------- autodetect
 
 async function pickDatabase(client, wanted) {
   const primary = client.db(wanted);
@@ -296,8 +372,6 @@ async function pickDatabase(client, wanted) {
   }
 }
 
-// --------------------------------------------------------------- connect
-
 async function connectOnce() {
   const uri = envUri();
   const wanted = envDbName();
@@ -318,11 +392,9 @@ async function connectOnce() {
 
     const database = await pickDatabase(client, wanted);
 
-    // collections ko naye db pe point karo
     for (const k of Object.keys(_col)) delete _col[k];
     for (const n of COLLECTIONS) _col[n] = database.collection(n);
 
-    // index failure connection ko nahi maarta
     await ensureIndexes();
 
     state.client = client;
@@ -340,7 +412,6 @@ async function connectOnce() {
     await logCounts();
     return database;
   } catch (err) {
-    // rollback — warna state dead client pe point karega
     state.generation = gen - 1;
     state.client = prevClient;
     state.db = prevDb;
@@ -391,8 +462,6 @@ async function reconnect() {
   return initDbWithRetry(Number(process.env.MONGO_RECONNECT_TRIES || 5), 1000);
 }
 
-// -------------------------------------------------------------- watchdog
-
 function startWatchdog(intervalMs = Number(process.env.MONGO_WATCHDOG_MS || 15000)) {
   if (_watchdog) return;
   _watchdog = setInterval(async () => {
@@ -418,8 +487,6 @@ function stopWatchdog() {
     _watchdog = null;
   }
 }
-
-// ------------------------------------------------------------------ api
 
 function isReady() {
   return !!(state.ready && state.db && state.client);
