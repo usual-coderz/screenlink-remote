@@ -4,6 +4,53 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// ---------------------------------------------------------------- .env loader
+// dotenv package ke bina bhi kaam karta hai. systemd EnvironmentFile ko
+// override NAHI karta (already-set vars chhode jaate hain).
+
+function loadEnvFile(file) {
+  let txt;
+  try {
+    txt = fs.readFileSync(file, "utf8");
+  } catch (_) {
+    return false;
+  }
+  for (let line of txt.split(/\r?\n/)) {
+    line = line.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("export ")) line = line.slice(7).trim();
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    let val = line.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+  return true;
+}
+
+(function loadAll() {
+  const cands = [
+    path.resolve(__dirname, "..", ".env"),
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(__dirname, ".env"),
+  ];
+  const seen = new Set();
+  for (const f of cands) {
+    if (seen.has(f)) continue;
+    seen.add(f);
+    loadEnvFile(f);
+  }
+})();
+
+// ---------------------------------------------------------------- config
+
 let raw = {};
 try {
   raw = require("./config") || {};
@@ -25,16 +72,24 @@ const BASE_DIR = path.resolve(
   pick(raw.BASE_DIR, process.env.BASE_DIR, path.resolve(__dirname, ".."))
 );
 
+// ADMIN_USERNAME/ADMIN_PASSWORD, ADMINS, ADMIN_USERS — sab support
 function parseAdmins() {
   if (raw.ADMINS && typeof raw.ADMINS === "object" && !Array.isArray(raw.ADMINS)) {
     return raw.ADMINS;
   }
+
+  const u = pick(process.env.ADMIN_USERNAME, process.env.ADMIN_USER, "");
+  const p = pick(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASS, "");
+  if (u && p) return { [String(u).trim()]: String(p) };
+
   const s = pick(process.env.ADMINS, process.env.ADMIN_USERS, "");
   if (!s) return {};
+
   try {
     const j = JSON.parse(s);
     if (j && typeof j === "object" && !Array.isArray(j)) return j;
   } catch (_) {}
+
   const out = {};
   for (const pair of String(s).split(",")) {
     const i = pair.indexOf(":");
@@ -65,6 +120,7 @@ function resolveAdminFile() {
 }
 
 const SESSION_SECRET = pick(raw.SESSION_SECRET, process.env.SESSION_SECRET, "");
+const ADMINS = parseAdmins();
 
 module.exports = {
   RAW: raw,
@@ -76,9 +132,23 @@ module.exports = {
   SESSION_SECRET_SRC: SESSION_SECRET
     ? (raw.SESSION_SECRET ? "config" : "env")
     : "generated",
-  SESSION_MAX_AGE: Number(pick(raw.SESSION_MAX_AGE, process.env.SESSION_MAX_AGE, 60 * 60 * 24 * 30)),
+  SESSION_MAX_AGE: Number(
+    pick(raw.SESSION_MAX_AGE, process.env.SESSION_MAX_AGE, 60 * 60 * 24 * 30)
+  ),
   FORCE_SECURE: bool(pick(raw.FORCE_SECURE, process.env.COOKIE_SECURE), false),
-  ADMINS: parseAdmins(),
+  ADMINS,
+  ADMIN_USERNAME: Object.keys(ADMINS)[0] || "",
   ADMIN_FILE: resolveAdminFile(),
   TRUST_PROXY: bool(process.env.TRUST_PROXY, true),
 };
+
+if (Object.keys(ADMINS).length === 0) {
+  console.warn(
+    "[env] WARN: koi admin nahi mila — .env me ADMINS=user:pass ya ADMIN_USERNAME/ADMIN_PASSWORD set karo"
+  );
+}
+if (!SESSION_SECRET) {
+  console.warn(
+    "[env] WARN: SESSION_SECRET missing — random bana liya, restart pe sessions tootenge"
+  );
+}
