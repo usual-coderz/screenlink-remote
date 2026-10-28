@@ -1,3 +1,15 @@
+issue backend mai mongo db data jo hai vo load nhi horha connected devices show nhi krrh usse fix kro proper mongo db connection need and 1 he command sai pura web + apk builder sbb deployed ho vps pr aaisa kro and rewrite entire files fix jo jo issues hai and database file fix kro
+
+
+
+
+Procfile
+
+web: node backend/server.js $PORT --workers 2 --proxy-headers
+worker: node backend/server.js --worker
+
+
+
 backend/database.js
 
 
