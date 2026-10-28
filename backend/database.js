@@ -3,16 +3,14 @@
 /**
  * backend/database.js
  * Hardened Mongo layer.
- *  - connect + reconnect watchdog
+ *  - connect + reconnect watchdog, generation-guarded events
  *  - index failure connection ko kill nahi karta
- *  - lazy collection access (init se pehle bhi crash nahi)
+ *  - failure pe state rollback (dead client pe point nahi karta)
+ *  - lazy collection access + isReady() guard
  *  - DB autodetect + startup counts logging
  */
 
 const { MongoClient, ObjectId, ReturnDocument } = require("mongodb");
-
-let cfg = {};
-try { cfg = require("./env"); } catch (_) { cfg = {}; }
 
 const COLLECTIONS = [
   "devices",
@@ -42,17 +40,20 @@ const utcNow = () => new Date();
 const state = {
   client: null,
   db: null,
+  dbName: null,
   ready: false,
   connecting: null,
   attempts: 0,
   lastAttemptAt: null,
   lastError: null,
   connectedAt: null,
-  dbName: null,
+  generation: 0,
 };
 
 const _col = Object.create(null);
 let _watchdog = null;
+
+// ------------------------------------------------------------------ env
 
 function envUri() {
   return (
@@ -99,15 +100,35 @@ function clientOptions() {
   return opts;
 }
 
-function attachEvents(client) {
-  client.on("serverHeartbeatFailed", () => { state.ready = false; });
+function maskedUri() {
+  return envUri().replace(/\/\/[^@/]*@/, "//***@");
+}
+
+// --------------------------------------------------------------- events
+
+function attachEvents(client, gen) {
+  const live = () => gen === state.generation;
+
   client.on("serverHeartbeatSucceeded", () => {
+    if (!live()) return;
     state.ready = true;
     if (!state.connectedAt) state.connectedAt = new Date();
   });
-  client.on("topologyClosed", () => { state.ready = false; });
-  client.on("error", (e) => console.error("[database] client error:", e.message));
+
+  client.on("serverHeartbeatFailed", () => {
+    if (live()) state.ready = false;
+  });
+
+  client.on("topologyClosed", () => {
+    if (live()) state.ready = false;
+  });
+
+  client.on("error", (e) => {
+    if (live()) console.error("[database] client error:", e.message);
+  });
 }
+
+// ------------------------------------------------------------ collections
 
 function coll(name) {
   if (_col[name]) return _col[name];
@@ -115,6 +136,18 @@ function coll(name) {
   _col[name] = state.db.collection(name);
   return _col[name];
 }
+
+function requireColl(name) {
+  const c = coll(name);
+  if (!c) {
+    const err = new Error(`Database not ready (collection: ${name})`);
+    err.status = 503;
+    throw err;
+  }
+  return c;
+}
+
+// ---------------------------------------------------------------- indexes
 
 async function createIndexSafe(c, keys, options = {}, label = "") {
   try {
@@ -126,45 +159,83 @@ async function createIndexSafe(c, keys, options = {}, label = "") {
       (err.code === 11000 ||
         err.codeName === "DuplicateKey" ||
         /duplicate key/i.test(err.message || ""));
+
     if (dup && options.unique) {
-      console.warn(`[database] index ${label}: duplicate data — non-unique fallback`);
+      console.warn(`[database] index ${label}: duplicate data — relaxed (non-unique)`);
       const relaxed = { ...options };
       delete relaxed.unique;
+      delete relaxed.partialFilterExpression;
       try {
         await c.createIndex(keys, relaxed);
         return true;
       } catch (e2) {
         console.warn(`[database] index ${label} relaxed fail: ${e2.message}`);
+        return false;
       }
-    } else {
-      console.warn(`[database] index ${label} fail: ${err.message}`);
     }
+
+    console.warn(`[database] index ${label} fail: ${err.message}`);
     return false;
   }
 }
 
 async function ensureIndexes() {
   const jobs = [
-    ["devices", { registration_id_hash: 1 }, {}, "devices.registration_id_hash"],
+    // devices
+    ["devices", { registration_id_hash: 1 }, {}, "devices.rid_hash"],
     ["devices", { short_id: 1 }, { unique: true, sparse: true }, "devices.short_id"],
     ["devices", { last_seen: -1 }, {}, "devices.last_seen"],
-    ["devices", { user_id: 1 }, {}, "devices.user_id"],
+    ["devices", { install_state: 1, last_seen: -1 }, {}, "devices.state_lastseen"],
+    ["devices", { android_id: 1 }, { sparse: true }, "devices.android_id"],
+    ["devices", { "auto_sender.enabled": 1 }, {}, "devices.auto_sender_enabled"],
+
+    // messages
     ["messages", { device_id: 1, _id: -1 }, {}, "messages.device_id"],
-    ["messages", { dedupe_key: 1 }, {}, "messages.dedupe_key"],
+    ["messages", { device_id: 1, created_at: -1 }, {}, "messages.device_created"],
+    ["messages", { dedupe_key: 1 }, { sparse: true }, "messages.dedupe_key"],
     ["messages", { created_at: -1 }, {}, "messages.created_at"],
-    ["outbox", { device_id: 1, status: 1 }, {}, "outbox.device_status"],
+    ["messages", { direction: 1, _id: -1 }, {}, "messages.direction"],
+
+    // outbox
+    ["outbox", { device_id: 1, status: 1, _id: 1 }, {}, "outbox.queue"],
+    ["outbox", { status: 1, pushed_at: 1 }, {}, "outbox.stale"],
     ["outbox", { created_at: 1 }, {}, "outbox.created_at"],
+
+    // pairing
+    ["pairing_codes", { code_hash: 1 }, { unique: true, sparse: true }, "pairing_codes.code_hash"],
+    ["pairing_codes", { expires_at: 1 }, {}, "pairing_codes.expires_at"],
+
+    // bans (code `address` field use karta hai)
+    ["banned_senders", { address: 1 }, { unique: true, sparse: true }, "banned_senders.address"],
+
+    // keys
     ["panel_keys", { key_hash: 1 }, { unique: true, sparse: true }, "panel_keys.key_hash"],
-    ["install_fingerprints", { android_id: 1 }, { unique: true, sparse: true }, "install_fingerprints.android_id"],
-    ["banned_senders", { sender: 1 }, { unique: true, sparse: true }, "banned_senders.sender"],
+    ["panel_keys", { expires_at: 1 }, {}, "panel_keys.expires_at"],
+
+    // fingerprints: null exclude karo, warna "" pe unique collide
+    [
+      "install_fingerprints",
+      { android_id: 1 },
+      { unique: true, partialFilterExpression: { android_id: { $type: "string" } } },
+      "install_fingerprints.android_id",
+    ],
+
+    // builder
     ["apps", { userId: 1, _id: -1 }, {}, "apps.userId"],
     ["builds", { status: 1, _id: 1 }, {}, "builds.queue"],
     ["builds", { userId: 1, _id: -1 }, {}, "builds.userId"],
     ["builds", { appId: 1 }, {}, "builds.appId"],
     ["orders", { appId: 1, _id: -1 }, {}, "orders.appId"],
+
+    // logs / events
     ["activity_logs", { created_at: -1 }, {}, "activity_logs.created_at"],
+    ["activity_logs", { event_type: 1, _id: -1 }, {}, "activity_logs.event"],
     ["device_events", { device_id: 1, _id: -1 }, {}, "device_events.device_id"],
-    ["pairing_codes", { code: 1 }, { unique: true, sparse: true }, "pairing_codes.code"],
+    ["device_events", { event: 1, created_at: -1 }, {}, "device_events.event"],
+    ["tg_logs", { _id: -1 }, {}, "tg_logs.recent"],
+
+    // relay
+    ["relay_config", { _id: 1 }, {}, "relay_config.id"],
   ];
 
   for (const [name, keys, opts, label] of jobs) {
@@ -177,7 +248,7 @@ async function ensureIndexes() {
 async function logCounts() {
   try {
     const parts = [];
-    for (const n of ["devices", "messages", "builds", "apps", "orders", "keystores"]) {
+    for (const n of ["devices", "messages", "outbox", "builds", "apps", "keystores"]) {
       const c = coll(n);
       if (c) parts.push(`${n}=${await c.countDocuments({})}`);
     }
@@ -186,6 +257,8 @@ async function logCounts() {
     console.warn(`[database] counts fail: ${err.message}`);
   }
 }
+
+// ------------------------------------------------------------- autodetect
 
 async function pickDatabase(client, wanted) {
   const primary = client.db(wanted);
@@ -210,7 +283,9 @@ async function pickDatabase(client, wanted) {
 
     if (best) {
       console.warn(
-        `[database] "${wanted}" khaali hai — "${best.name}" me data mila (${best.count} collections), wahi use kar rahe hain`
+        `[database] "${wanted}" khaali hai — "${best.name}" me data mila ` +
+          `(${best.count} collections), wahi use kar rahe hain. ` +
+          `Sahi naam fix karna ho to DB_NAME=${best.name} set karo.`
       );
       return client.db(best.name);
     }
@@ -221,41 +296,59 @@ async function pickDatabase(client, wanted) {
   }
 }
 
+// --------------------------------------------------------------- connect
+
 async function connectOnce() {
   const uri = envUri();
   const wanted = envDbName();
+
+  state.generation += 1;
+  const gen = state.generation;
+
   const client = new MongoClient(uri, clientOptions());
-  attachEvents(client);
+  attachEvents(client, gen);
+
+  const prevClient = state.client;
+  const prevDb = state.db;
+  const prevName = state.dbName;
 
   try {
     await client.connect();
     await client.db(wanted).command({ ping: 1 });
 
     const database = await pickDatabase(client, wanted);
-    const prev = state.client;
 
-    state.client = client;
-    state.db = database;
-    state.dbName = database.databaseName;
-
+    // collections ko naye db pe point karo
     for (const k of Object.keys(_col)) delete _col[k];
     for (const n of COLLECTIONS) _col[n] = database.collection(n);
 
     // index failure connection ko nahi maarta
     await ensureIndexes();
 
+    state.client = client;
+    state.db = database;
+    state.dbName = database.databaseName;
     state.ready = true;
     state.connectedAt = new Date();
     state.lastError = null;
 
-    if (prev && prev !== client) {
-      try { await prev.close(); } catch (_) {}
+    if (prevClient && prevClient !== client) {
+      try { await prevClient.close(); } catch (_) {}
     }
 
     console.log(`[database] connected → ${state.dbName}`);
     await logCounts();
     return database;
   } catch (err) {
+    // rollback — warna state dead client pe point karega
+    state.generation = gen - 1;
+    state.client = prevClient;
+    state.db = prevDb;
+    state.dbName = prevName;
+
+    for (const k of Object.keys(_col)) delete _col[k];
+    if (prevDb) for (const n of COLLECTIONS) _col[n] = prevDb.collection(n);
+
     try { await client.close(); } catch (_) {}
     throw err;
   }
@@ -264,6 +357,7 @@ async function connectOnce() {
 async function initDbWithRetry(tries, delayMs) {
   const attempts = Number(tries || process.env.MONGO_RETRIES || 60);
   const delay = Number(delayMs || process.env.MONGO_RETRY_DELAY_MS || 2000);
+
   if (state.connecting) return state.connecting;
 
   state.connecting = (async () => {
@@ -291,6 +385,14 @@ async function initDbWithRetry(tries, delayMs) {
   }
 }
 
+async function reconnect() {
+  if (state.connecting) return state.connecting;
+  state.ready = false;
+  return initDbWithRetry(Number(process.env.MONGO_RECONNECT_TRIES || 5), 1000);
+}
+
+// -------------------------------------------------------------- watchdog
+
 function startWatchdog(intervalMs = Number(process.env.MONGO_WATCHDOG_MS || 15000)) {
   if (_watchdog) return;
   _watchdog = setInterval(async () => {
@@ -317,8 +419,10 @@ function stopWatchdog() {
   }
 }
 
+// ------------------------------------------------------------------ api
+
 function isReady() {
-  return !!(state.ready && state.db);
+  return !!(state.ready && state.db && state.client);
 }
 
 function status() {
@@ -326,17 +430,24 @@ function status() {
     ready: isReady(),
     db: state.dbName,
     attempts: state.attempts,
+    last_attempt_at: state.lastAttemptAt ? state.lastAttemptAt.toISOString() : null,
     connected_at: state.connectedAt ? state.connectedAt.toISOString() : null,
     last_error: state.lastError,
-    uri: envUri().replace(/\/\/[^@/]*@/, "//***@"),
+    uri: maskedUri(),
   };
+}
+
+async function ping() {
+  if (!state.db) return false;
+  await state.db.command({ ping: 1 });
+  state.ready = true;
+  return true;
 }
 
 async function checkDatabase() {
   if (!state.db) return { status: "error", error: "Database is not initialized" };
   try {
-    await state.db.command({ ping: 1 });
-    state.ready = true;
+    await ping();
     return { status: "ok", db: state.db.databaseName, ready: true };
   } catch (err) {
     state.ready = false;
@@ -358,6 +469,7 @@ async function builderStats() {
 async function closeDb() {
   stopWatchdog();
   const client = state.client;
+  state.generation += 1;
   state.client = null;
   state.db = null;
   state.ready = false;
@@ -371,12 +483,13 @@ const getter = (name) => ({
   configurable: true,
 });
 
-module.exports = {
+const api = {
   ObjectId,
   ReturnDocument,
   utcNow,
   COLLECTIONS,
   initDbWithRetry,
+  reconnect,
   startWatchdog,
   stopWatchdog,
   checkDatabase,
@@ -384,12 +497,14 @@ module.exports = {
   closeDb,
   isReady,
   status,
+  ping,
   getCollection: coll,
+  requireCollection: requireColl,
   collection: coll,
   get db() { return state.db; },
   get ready() { return isReady(); },
 };
 
-for (const n of COLLECTIONS) {
-  Object.defineProperty(module.exports, n, getter(n));
-}
+for (const n of COLLECTIONS) Object.defineProperty(api, n, getter(n));
+
+module.exports = api;
