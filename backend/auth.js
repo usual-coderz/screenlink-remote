@@ -20,11 +20,26 @@ function constEq(a, b) {
 }
 
 const _loginFails = new Map();
+let _lastSweep = 0;
+
+function sweepFails(now = Date.now()) {
+  if (now - _lastSweep < 30000) return;
+  _lastSweep = now;
+  const ttl = config.LOGIN_LOCK_SECONDS * 1000;
+  for (const [ip, hits] of _loginFails) {
+    const kept = hits.filter((t) => now - t < ttl);
+    if (kept.length) _loginFails.set(ip, kept);
+    else _loginFails.delete(ip);
+  }
+}
 
 function recentFails(ip) {
   const now = Date.now();
-  const hits = (_loginFails.get(ip) || []).filter((t) => now - t < config.LOGIN_LOCK_SECONDS * 1000);
-  _loginFails.set(ip, hits);
+  sweepFails(now);
+  const ttl = config.LOGIN_LOCK_SECONDS * 1000;
+  const hits = (_loginFails.get(ip) || []).filter((t) => now - t < ttl);
+  if (hits.length) _loginFails.set(ip, hits);
+  else _loginFails.delete(ip);
   return hits;
 }
 
@@ -41,34 +56,48 @@ function clearFails(ip) {
 
 function adminMatch(username) {
   if (!username) return null;
-  if (username in config.ADMINS) return username;
-  const low = username.toLowerCase();
+  const n = String(username).trim();
+  if (n in config.ADMINS) return n;
+  const low = n.toLowerCase();
   for (const k of Object.keys(config.ADMINS)) {
     if (k.toLowerCase() === low) return k;
   }
   return null;
 }
 
+function checkPassword(username, password) {
+  const key = adminMatch(username);
+  if (!key) return null;
+  return constEq(password, config.ADMINS[key]) ? key : null;
+}
+
 // ------------------------------------------------------------------ tokens
+
+function sign(payload) {
+  return crypto
+    .createHmac("sha256", config.SESSION_SECRET)
+    .update(payload)
+    .digest("hex")
+    .slice(0, 40);
+}
 
 function makeToken(adminId, ttl = config.TOKEN_TTL) {
   const exp = Math.floor(Date.now() / 1000) + ttl;
   const payload = `${adminId}|${exp}`;
-  const sig = crypto.createHmac("sha256", config.SESSION_SECRET).update(payload).digest("hex").slice(0, 40);
-  return Buffer.from(`${payload}|${sig}`, "utf8").toString("base64url");
+  return Buffer.from(`${payload}|${sign(payload)}`, "utf8").toString("base64url");
 }
 
 function verifyToken(token) {
   try {
-    const raw = Buffer.from(token, "base64url").toString("utf8");
+    if (!token) return null;
+    const raw = Buffer.from(String(token), "base64url").toString("utf8");
     const parts = raw.split("|");
     if (parts.length < 3) return null;
     const sig = parts.pop();
     const exp = parts.pop();
     const adminId = parts.join("|");
-    const expected = crypto.createHmac("sha256", config.SESSION_SECRET)
-      .update(`${adminId}|${exp}`).digest("hex").slice(0, 40);
-    if (!constEq(sig, expected)) return null;
+    if (!adminId) return null;
+    if (!constEq(sig, sign(`${adminId}|${exp}`))) return null;
     if (parseInt(exp, 10) < Date.now() / 1000) return null;
     return adminId;
   } catch (_) {
@@ -78,17 +107,17 @@ function verifyToken(token) {
 
 function splitIdent(ident) {
   if (!ident) return [null, null];
-  if (ident.includes(":")) {
-    const i = ident.indexOf(":");
-    const role = ident.slice(0, i);
-    const name = ident.slice(i + 1);
+  const i = String(ident).indexOf(":");
+  if (i > 0) {
+    const role = String(ident).slice(0, i);
+    const name = String(ident).slice(i + 1);
     if ((role === "admin" || role === "key") && name) return [role, name];
   }
-  return ["admin", ident];
+  return ["admin", String(ident)];
 }
 
 function bearerIdentity(req) {
-  const auth = req.headers.authorization || "";
+  const auth = String(req.headers.authorization || "");
   if (auth.slice(0, 7).toLowerCase() === "bearer ") return verifyToken(auth.slice(7).trim());
   return null;
 }
@@ -105,9 +134,14 @@ async function requirePanel(req) {
   if (!ident) throw new HttpError(401, "Please log in");
 
   const [role, name] = splitIdent(ident);
-  if (role === "admin") return { role: "admin", name, expires_at: null };
 
-  const doc = (await u.keyDoc(name)) || (await u.keyDoc(name.replace(/-/g, "")));
+  if (role === "admin") {
+    const key = adminMatch(name) || name;
+    if (!adminMatch(key)) throw new HttpError(401, "Admin not recognised — dobara login karo");
+    return { role: "admin", name: key, expires_at: null };
+  }
+
+  const doc = (await u.keyDoc(name)) || (await u.keyDoc(String(name).replace(/-/g, "")));
   if (!doc) throw new HttpError(401, "Key not found");
   if (!u.keyActive(doc)) throw new HttpError(403, "Key expire/block ho gayi — admin se nayi lo");
 
@@ -136,8 +170,9 @@ async function requirePanelOrKey(req) {
 
 function loginThrottle(ip) {
   const hits = recentFails(ip);
-  if (hits.length > config.LOGIN_MAX_TRIES) {
-    const wait = Math.max(1, Math.round(config.LOGIN_LOCK_SECONDS - (Date.now() - hits[0]) / 1000));
+  if (hits.length >= config.LOGIN_MAX_TRIES) {
+    const elapsed = (Date.now() - hits[0]) / 1000;
+    const wait = Math.max(1, Math.round(config.LOGIN_LOCK_SECONDS - elapsed));
     throw new HttpError(429, `Bahut zyada galat tries — ${wait}s baad try karo`);
   }
 }
@@ -148,6 +183,7 @@ module.exports = {
   pushFail,
   clearFails,
   adminMatch,
+  checkPassword,
   makeToken,
   verifyToken,
   splitIdent,
@@ -157,6 +193,7 @@ module.exports = {
   requireAdmin,
   requirePanelOrKey,
   loginThrottle,
+  // legacy aliases
   require_admin_or_key: requirePanelOrKey,
   bearer_admin: bearerIdentity,
 };
