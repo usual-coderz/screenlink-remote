@@ -2,11 +2,12 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const crypto = require("crypto");
 const { spawn: spawnProc, spawnSync } = require("child_process");
 const express = require("express");
 
-const config = require("./config");
+const config = require("./env");
 const db = require("./database");
 const u = require("./utils");
 const themes = require("./builder.theme");
@@ -16,36 +17,53 @@ const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch
 const IS_WIN = process.platform === "win32";
 const WIN_EXT = (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean);
 const IS_WORKER_PROC = process.argv.includes("--worker");
-const SDK_ZIP_URL = "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip";
-const JDK_URL = "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse";
+const WORKER_ID = `${os.hostname()}:${process.pid}`;
+
+const SDK_ZIP_URL =
+  "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip";
+const JDK_URL =
+  "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse";
+
+const BASE_DIR = config.BASE_DIR || path.resolve(__dirname, "..");
 
 const builderConfig = {
-  WORKER_MODE: process.env.BUILDER_WORKER_MODE || (IS_WORKER_PROC ? "inline" : "api"),
+  WORKER_MODE:
+    process.env.BUILDER_WORKER_MODE || (IS_WORKER_PROC ? "inline" : "api"),
   ENGINE: process.env.BUILDER_ENGINE || "node",
   MAX_CONCURRENT_BUILDS: parseInt(process.env.MAX_CONCURRENT_BUILDS || "2", 10),
   DEFAULT_VARIANT: process.env.DEFAULT_VARIANT || "prod",
   DEFAULT_THEME: process.env.DEFAULT_THEME || "mono",
 
-  STORAGE_ROOT: process.env.STORAGE_ROOT || path.join(config.BASE_DIR, "storage"),
-  BUILD_ROOT: process.env.BUILD_ROOT || path.join(config.BASE_DIR, "storage", "builds"),
-  KEYSTORE_DIR: process.env.KEYSTORE_DIR || path.join(config.BASE_DIR, "storage", "keystores"),
-  GRADLE_ROOT: process.env.GRADLE_ROOT || path.join(config.BASE_DIR, "storage", "gradle"),
+  STORAGE_ROOT: process.env.STORAGE_ROOT || path.join(BASE_DIR, "storage"),
+  BUILD_ROOT: process.env.BUILD_ROOT || path.join(BASE_DIR, "storage", "builds"),
+  KEYSTORE_DIR: process.env.KEYSTORE_DIR || path.join(BASE_DIR, "storage", "keystores"),
+  GRADLE_ROOT: process.env.GRADLE_ROOT || path.join(BASE_DIR, "storage", "gradle"),
   TEMPLATE_DIR: process.env.TEMPLATE_DIR || "",
   PY_BUILDER: process.env.PY_BUILDER || "python3",
 
   GRADLE_BIN: process.env.GRADLE_BIN || "gradle",
   GRADLE_VERSION: process.env.GRADLE_VERSION || "8.7",
   KEYTOOL_BIN: process.env.KEYTOOL_BIN || "keytool",
+  APKSIGNER_BIN: process.env.APKSIGNER_BIN || "apksigner",
+  ZIPALIGN_BIN: process.env.ZIPALIGN_BIN || "zipalign",
   DOCKER_BIN: process.env.DOCKER_BIN || "docker",
 
   USE_DOCKER: ["1", "true", "yes"].includes(String(process.env.USE_DOCKER || "").toLowerCase()),
-  REQUIRE_SIGNATURE: !["0", "false", "no"].includes(String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()),
-  CLEAN_WORKDIR: ["1", "true", "yes"].includes(String(process.env.CLEAN_WORKDIR || "").toLowerCase()),
+  REQUIRE_SIGNATURE: !["0", "false", "no"].includes(
+    String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()
+  ),
+  CLEAN_WORKDIR: ["1", "true", "yes"].includes(
+    String(process.env.CLEAN_WORKDIR || "").toLowerCase()
+  ),
   AUTO_SDK: !["0", "false", "no"].includes(String(process.env.AUTO_SDK || "true").toLowerCase()),
   AUTO_JDK: !["0", "false", "no"].includes(String(process.env.AUTO_JDK || "true").toLowerCase()),
-  AUTO_GRADLE: !["0", "false", "no"].includes(String(process.env.AUTO_GRADLE || "true").toLowerCase()),
+  AUTO_GRADLE: !["0", "false", "no"].includes(
+    String(process.env.AUTO_GRADLE || "true").toLowerCase()
+  ),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
+  BUILD_POLL_MS: parseInt(process.env.BUILD_POLL_MS || "1500", 10),
+  BUILD_STALE_MS: parseInt(process.env.BUILD_STALE_MS || String(60 * 60 * 1000), 10),
   MAX_LOG_LINES: 500,
   QUOTA_PER_DAY: parseInt(process.env.BUILD_QUOTA_PER_DAY || "0", 10),
 };
@@ -68,8 +86,8 @@ function resolveTemplateDir() {
     if (isDir(abs)) return abs;
   }
   return firstDir([
-    path.join(config.BASE_DIR, "backend", "apk_template"),
-    path.join(config.BASE_DIR, "apk_template"),
+    path.join(BASE_DIR, "backend", "apk_template"),
+    path.join(BASE_DIR, "apk_template"),
     path.join(process.cwd(), "backend", "apk_template"),
     path.join(process.cwd(), "apk_template"),
     path.join(__dirname, "apk_template"),
@@ -83,72 +101,23 @@ function resolveAndroidSdk() {
     process.env.ANDROID_HOME,
     process.env.ANDROID_SDK_ROOT,
     path.join(process.env.HOME || "/root", "Android", "Sdk"),
-    "/opt/android-sdk", "/usr/lib/android-sdk", "/usr/local/android-sdk",
+    "/opt/android-sdk",
+    "/usr/lib/android-sdk",
+    "/usr/local/android-sdk",
   ]) {
     if (!c) continue;
     const abs = path.resolve(c);
-    if (isDir(abs) && (isDir(path.join(abs, "platforms")) || isDir(path.join(abs, "cmdline-tools")) || isDir(path.join(abs, "build-tools")))) return abs;
+    if (
+      isDir(abs) &&
+      (isDir(path.join(abs, "platforms")) ||
+        isDir(path.join(abs, "cmdline-tools")) ||
+        isDir(path.join(abs, "build-tools")))
+    ) {
+      return abs;
+    }
   }
   return null;
 }
-
-function resolveJavaHome() {
-  const cands = [
-    process.env.JAVA_HOME,
-    process.env.JDK_ROOT,
-    "/usr/lib/jvm/java-17-openjdk-amd64",
-    "/usr/lib/jvm/java-11-openjdk-amd64",
-    "/usr/lib/jvm/default-java",
-    "/opt/java/openjdk",
-    path.join(process.env.HOME || "", ".jdk"),
-  ].filter(Boolean);
-  for (const c of cands) {
-    if (isFile(path.join(c, "bin", "java"))) return c;
-  }
-  const j = whichSync("java");
-  if (j) {
-    try {
-      const home = path.dirname(path.dirname(fs.realpathSync(j)));
-      if (isFile(path.join(home, "bin", "java"))) return home;
-    } catch (_) {}
-  }
-  const root = process.env.JDK_ROOT || path.join(builderConfig.STORAGE_ROOT, "jdk");
-  if (isDir(root)) {
-    try {
-      for (const d of fs.readdirSync(root)) {
-        const cand = path.join(root, d);
-        if (isFile(path.join(cand, "bin", "java"))) return cand;
-      }
-    } catch (_) {}
-  }
-  return null;
-}
-
-builderConfig.TEMPLATE_DIR = resolveTemplateDir() || path.join(config.BASE_DIR, "apk_template");
-builderConfig.ANDROID_SDK = resolveAndroidSdk();
-
-function ensureDirs() {
-  for (const d of [builderConfig.STORAGE_ROOT, builderConfig.BUILD_ROOT, builderConfig.KEYSTORE_DIR, builderConfig.GRADLE_ROOT]) {
-    fs.mkdirSync(d, { recursive: true });
-  }
-  if (!process.env.GRADLE_USER_HOME) process.env.GRADLE_USER_HOME = path.join(builderConfig.STORAGE_ROOT, ".gradle");
-  fs.mkdirSync(process.env.GRADLE_USER_HOME, { recursive: true });
-}
-
-const sha256hex = (s) => crypto.createHash("sha256").update(s).digest("hex");
-const genSecret = () => crypto.randomBytes(24).toString("base64url");
-const oid = (v) => { try { return new db.ObjectId(String(v)); } catch (_) { return null; } };
-const unwrap = (r) => (r && Object.prototype.hasOwnProperty.call(r, "value") ? r.value : r);
-
-function safeEq(a, b) {
-  try {
-    const ba = Buffer.from(String(a), "utf8");
-    const bb = Buffer.from(String(b), "utf8");
-    return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
-  } catch (_) { return false; }
-}
-
-function startOfDay() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 
 function whichSync(cmd) {
   if (!cmd) return null;
@@ -163,6 +132,81 @@ function whichSync(cmd) {
     }
   }
   return null;
+}
+
+function resolveJavaHome() {
+  const cands = [
+    process.env.JAVA_HOME,
+    process.env.JDK_ROOT,
+    "/usr/lib/jvm/java-17-openjdk-amd64",
+    "/usr/lib/jvm/java-11-openjdk-amd64",
+    "/usr/lib/jvm/default-java",
+    "/opt/java/openjdk",
+    path.join(process.env.HOME || "", ".jdk"),
+  ].filter(Boolean);
+
+  for (const c of cands) {
+    if (isFile(path.join(c, "bin", "java"))) return c;
+  }
+
+  const j = whichSync("java");
+  if (j) {
+    try {
+      const home = path.dirname(path.dirname(fs.realpathSync(j)));
+      if (isFile(path.join(home, "bin", "java"))) return home;
+    } catch (_) {}
+  }
+
+  const root = process.env.JDK_ROOT || path.join(builderConfig.STORAGE_ROOT, "jdk");
+  if (isDir(root)) {
+    try {
+      for (const d of fs.readdirSync(root)) {
+        const cand = path.join(root, d);
+        if (isFile(path.join(cand, "bin", "java"))) return cand;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+builderConfig.TEMPLATE_DIR =
+  resolveTemplateDir() || path.join(BASE_DIR, "apk_template");
+builderConfig.ANDROID_SDK = resolveAndroidSdk();
+
+function ensureDirs() {
+  for (const d of [
+    builderConfig.STORAGE_ROOT,
+    builderConfig.BUILD_ROOT,
+    builderConfig.KEYSTORE_DIR,
+    builderConfig.GRADLE_ROOT,
+  ]) {
+    fs.mkdirSync(d, { recursive: true });
+  }
+  if (!process.env.GRADLE_USER_HOME) {
+    process.env.GRADLE_USER_HOME = path.join(builderConfig.STORAGE_ROOT, ".gradle");
+  }
+  fs.mkdirSync(process.env.GRADLE_USER_HOME, { recursive: true });
+}
+
+const sha256hex = (s) => crypto.createHash("sha256").update(s).digest("hex");
+const genSecret = () => crypto.randomBytes(24).toString("base64url");
+const oid = (v) => { try { return new db.ObjectId(String(v)); } catch (_) { return null; } };
+const unwrap = (r) => (r && Object.prototype.hasOwnProperty.call(r, "value") ? r.value : r);
+
+function safeEq(a, b) {
+  try {
+    const ba = Buffer.from(String(a), "utf8");
+    const bb = Buffer.from(String(b), "utf8");
+    return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+  } catch (_) {
+    return false;
+  }
+}
+
+function startOfDay() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function ensureExec(p) {
@@ -181,7 +225,9 @@ function applyJavaHome(javaHome) {
   return javaHome;
 }
 
-function wrapperJar(dir) { return path.join(dir, "gradle", "wrapper", "gradle-wrapper.jar"); }
+function wrapperJar(dir) {
+  return path.join(dir, "gradle", "wrapper", "gradle-wrapper.jar");
+}
 
 function wrapperDistUrl(workDir) {
   for (const f of [
@@ -202,7 +248,9 @@ function resolveGradle(workDir) {
   const override = String(builderConfig.GRADLE_BIN || "").trim();
   if (override && override !== "gradle") {
     const abs = whichSync(override);
-    if (abs) return { bin: ensureExec(abs), prefixArgs: [], source: "GRADLE_BIN", shell: IS_WIN };
+    if (abs) {
+      return { bin: ensureExec(abs), prefixArgs: [], source: "GRADLE_BIN", shell: IS_WIN };
+    }
   }
   const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
   for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
@@ -212,27 +260,34 @@ function resolveGradle(workDir) {
   }
   const onPath = whichSync("gradle");
   if (onPath) return { bin: onPath, prefixArgs: [], source: "PATH", shell: IS_WIN };
+
   const java = whichSync("java");
   if (java) {
     for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
       const jar = wrapperJar(dir);
-      if (isFile(jar)) return { bin: java, prefixArgs: ["-jar", jar], source: "wrapper-jar", shell: false };
+      if (isFile(jar)) {
+        return { bin: java, prefixArgs: ["-jar", jar], source: "wrapper-jar", shell: false };
+      }
     }
   }
   return null;
 }
 
 function gradleHint() {
-  return "gradle nahi mila. (a) apk_template mein gradlew + gradle/wrapper/gradle-wrapper.jar daalo, " +
-    "(b) gradle install karo, (c) GRADLE_BIN set karo, ya (d) USE_DOCKER=1.";
+  return (
+    "gradle nahi mila. (a) apk_template mein gradlew + gradle/wrapper/gradle-wrapper.jar daalo, " +
+    "(b) gradle install karo, (c) GRADLE_BIN set karo, ya (d) USE_DOCKER=1."
+  );
 }
 
 function preflight() {
   const javaHome = resolveJavaHome();
   const tools = {
-    gradle: null, docker: null,
+    gradle: null,
+    docker: null,
     java: javaHome ? path.join(javaHome, "bin", "java") : null,
-    python: null, keytool: null,
+    python: null,
+    keytool: null,
     android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
     java_home: javaHome,
     wrapper_jar: isFile(wrapperJar(builderConfig.TEMPLATE_DIR)),
@@ -243,8 +298,11 @@ function preflight() {
   if (!tools.java) tools.java = whichSync("java");
   tools.docker = whichSync(builderConfig.DOCKER_BIN) || whichSync("docker");
   tools.python = whichSync(builderConfig.PY_BUILDER);
-  tools.keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
-    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
+  tools.keytool =
+    whichSync(builderConfig.KEYTOOL_BIN) ||
+    (javaHome && isFile(path.join(javaHome, "bin", "keytool"))
+      ? path.join(javaHome, "bin", "keytool")
+      : null);
 
   const g = resolveGradle(builderConfig.TEMPLATE_DIR);
   tools.gradle = g ? { path: g.bin, source: g.source } : null;
@@ -253,7 +311,9 @@ function preflight() {
   const themeList = themes.list(builderConfig.TEMPLATE_DIR);
 
   if (!templateOk) problems.push(`TEMPLATE_DIR missing: ${builderConfig.TEMPLATE_DIR}`);
-  if (templateOk && themeList.length === 0) problems.push(`koi theme nahi mila: ${themes.themesDir(builderConfig.TEMPLATE_DIR)}`);
+  if (templateOk && themeList.length === 0) {
+    problems.push(`koi theme nahi mila: ${themes.themesDir(builderConfig.TEMPLATE_DIR)}`);
+  }
 
   if (builderConfig.ENGINE === "python") {
     if (!tools.python) problems.push(`PY_BUILDER "${builderConfig.PY_BUILDER}" PATH par nahi mila.`);
@@ -263,7 +323,12 @@ function preflight() {
     problems.push(gradleHint());
   }
 
-  if (builderConfig.ENGINE === "node" && !tools.android_sdk && !builderConfig.USE_DOCKER && !builderConfig.AUTO_SDK) {
+  if (
+    builderConfig.ENGINE === "node" &&
+    !tools.android_sdk &&
+    !builderConfig.USE_DOCKER &&
+    !builderConfig.AUTO_SDK
+  ) {
     problems.push("ANDROID_HOME/ANDROID_SDK_ROOT nahi mila.");
   }
   if (builderConfig.REQUIRE_SIGNATURE && !tools.java && !builderConfig.AUTO_JDK) {
@@ -291,11 +356,19 @@ function runProcess(bin, args, opts, onData, timeoutMs) {
   return new Promise((resolve, reject) => {
     let p;
     try {
-      p = spawnProc(bin, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, ...opts });
-    } catch (e) { return reject(e); }
+      p = spawnProc(bin, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        ...opts,
+      });
+    } catch (e) {
+      return reject(e);
+    }
 
     let failed = false;
-    const timer = setTimeout(() => { try { p.kill("SIGKILL"); } catch (_) {} }, timeoutMs);
+    const timer = setTimeout(() => {
+      try { p.kill("SIGKILL"); } catch (_) {}
+    }, timeoutMs);
 
     p.stdout.on("data", onData);
     p.stderr.on("data", onData);
@@ -322,7 +395,11 @@ function findApk(root) {
   while (stack.length) {
     const dir = stack.pop();
     let entries = [];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { continue; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
     for (const e of entries) {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) stack.push(full);
@@ -349,7 +426,10 @@ async function ensureJavaRuntime(log) {
   const marker = path.join(root, ".home");
   if (isFile(marker)) {
     const saved = fs.readFileSync(marker, "utf8").trim();
-    if (isFile(path.join(saved, "bin", "java"))) { applyJavaHome(saved); return saved; }
+    if (isFile(path.join(saved, "bin", "java"))) {
+      applyJavaHome(saved);
+      return saved;
+    }
   }
 
   const tgz = path.join(root, "jdk.tar.gz");
@@ -379,7 +459,9 @@ async function ensureJavaRuntime(log) {
 }
 
 async function ensureAndroidSdkRuntime(log) {
-  const root = process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME ||
+  const root =
+    process.env.ANDROID_SDK_ROOT ||
+    process.env.ANDROID_HOME ||
     path.join(builderConfig.STORAGE_ROOT, "android-sdk");
   if (isDir(path.join(root, "platforms")) && isDir(path.join(root, "build-tools"))) return root;
 
@@ -411,15 +493,17 @@ async function ensureAndroidSdkRuntime(log) {
   if (!env.JAVA_HOME) applyJavaHome(resolveJavaHome());
 
   log("accepting android licenses…");
-  spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], { encoding: "utf8", env });
+  spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], {
+    encoding: "utf8",
+    env,
+  });
 
   log("installing platform-tools, platforms;android-34, build-tools;34.0.0…");
-  const inst = spawnSync(sdkmanager, [
-    `--sdk_root=${root}`,
-    "platform-tools",
-    "platforms;android-34",
-    "build-tools;34.0.0",
-  ], { encoding: "utf8", env });
+  const inst = spawnSync(
+    sdkmanager,
+    [`--sdk_root=${root}`, "platform-tools", "platforms;android-34", "build-tools;34.0.0"],
+    { encoding: "utf8", env }
+  );
   if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
 
   process.env.ANDROID_HOME = process.env.ANDROID_HOME || root;
@@ -429,7 +513,8 @@ async function ensureAndroidSdkRuntime(log) {
 }
 
 async function ensureGradleRuntime(log, workDir) {
-  const url = wrapperDistUrl(workDir) ||
+  const url =
+    wrapperDistUrl(workDir) ||
     `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
   const file = (url.split("/").pop() || "").replace(/\.zip$/i, "");
   const name = file.replace(/-(bin|all)$/i, "") || `gradle-${builderConfig.GRADLE_VERSION}`;
@@ -455,20 +540,37 @@ async function ensureGradleRuntime(log, workDir) {
 }
 
 function ensureJavaOnce(log) {
-  if (!_javaPromise) _javaPromise = ensureJavaRuntime(log).catch((e) => { _javaPromise = null; throw e; });
+  if (!_javaPromise) {
+    _javaPromise = ensureJavaRuntime(log).catch((e) => {
+      _javaPromise = null;
+      throw e;
+    });
+  }
   return _javaPromise;
 }
 
 function ensureSdkOnce(log) {
-  if (!_sdkPromise) _sdkPromise = ensureAndroidSdkRuntime(log).catch((e) => { _sdkPromise = null; throw e; });
+  if (!_sdkPromise) {
+    _sdkPromise = ensureAndroidSdkRuntime(log).catch((e) => {
+      _sdkPromise = null;
+      throw e;
+    });
+  }
   return _sdkPromise;
 }
 
 function ensureGradleOnce(log, workDir) {
-  const url = wrapperDistUrl(workDir) ||
+  const url =
+    wrapperDistUrl(workDir) ||
     `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
   if (!_gradlePromises.has(url)) {
-    _gradlePromises.set(url, ensureGradleRuntime(log, workDir).catch((e) => { _gradlePromises.delete(url); throw e; }));
+    _gradlePromises.set(
+      url,
+      ensureGradleRuntime(log, workDir).catch((e) => {
+        _gradlePromises.delete(url);
+        throw e;
+      })
+    );
   }
   return _gradlePromises.get(url);
 }
@@ -476,7 +578,9 @@ function ensureGradleOnce(log, workDir) {
 function keystoreCreds(appId) {
   fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
   const file = path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`);
-  if (fs.existsSync(file)) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) {} }
+  if (fs.existsSync(file)) {
+    try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (_) {}
+  }
   const creds = {
     storePassword: crypto.randomBytes(12).toString("base64url"),
     keyAlias: `app${String(appId).replace(/[^a-z0-9]/gi, "").slice(-6)}`,
@@ -487,25 +591,34 @@ function keystoreCreds(appId) {
 }
 
 async function loadKeystoreBlob(appId) {
-  try { return await db.keystores.findOne({ _id: appId }); } catch (_) { return null; }
+  const c = db.keystores;
+  if (!c) return null;
+  try { return await c.findOne({ _id: appId }); } catch (_) { return null; }
 }
 
 async function saveKeystoreBlob(appId, jksPath, creds) {
+  const c = db.keystores;
+  if (!c) return;
   try {
     const jks = fs.readFileSync(jksPath).toString("base64");
-    await db.keystores.updateOne(
+    await c.updateOne(
       { _id: appId },
       { $set: { jks, creds, updated_at: db.utcNow() } },
-      { upsert: true },
+      { upsert: true }
     );
-  } catch (_) {}
+  } catch (err) {
+    console.warn("[builder] keystore save fail:", err.message);
+  }
 }
 
 async function ensureKeystore(appId) {
   if (!builderConfig.REQUIRE_SIGNATURE) return null;
   const javaHome = resolveJavaHome();
-  const keytool = whichSync(builderConfig.KEYTOOL_BIN) ||
-    (javaHome && isFile(path.join(javaHome, "bin", "keytool")) ? path.join(javaHome, "bin", "keytool") : null);
+  const keytool =
+    whichSync(builderConfig.KEYTOOL_BIN) ||
+    (javaHome && isFile(path.join(javaHome, "bin", "keytool"))
+      ? path.join(javaHome, "bin", "keytool")
+      : null);
   if (!keytool) return null;
 
   fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
@@ -518,7 +631,11 @@ async function ensureKeystore(appId) {
       try {
         fs.writeFileSync(ks, Buffer.from(blob.jks, "base64"), { mode: 0o600 });
         if (blob.creds) {
-          fs.writeFileSync(path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`), JSON.stringify(blob.creds, null, 2), { mode: 0o600 });
+          fs.writeFileSync(
+            path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`),
+            JSON.stringify(blob.creds, null, 2),
+            { mode: 0o600 }
+          );
           Object.assign(creds, blob.creds);
         }
       } catch (_) {}
@@ -526,12 +643,16 @@ async function ensureKeystore(appId) {
   }
 
   if (!fs.existsSync(ks)) {
-    const r = spawnSync(keytool, [
-      "-genkeypair", "-v", "-keystore", ks, "-alias", creds.keyAlias,
-      "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
-      "-storepass", creds.storePassword, "-keypass", creds.keyPassword,
-      "-dname", `CN=${appId}, OU=apps, O=venice, L=NA, ST=NA, C=IN`,
-    ], { encoding: "utf8", env: { ...process.env } });
+    const r = spawnSync(
+      keytool,
+      [
+        "-genkeypair", "-v", "-keystore", ks, "-alias", creds.keyAlias,
+        "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+        "-storepass", creds.storePassword, "-keypass", creds.keyPassword,
+        "-dname", `CN=${appId}, OU=apps, O=venice, L=NA, ST=NA, C=IN`,
+      ],
+      { encoding: "utf8", env: { ...process.env } }
+    );
     if (r.status !== 0) return null;
     await saveKeystoreBlob(appId, ks, creds);
   }
@@ -548,12 +669,16 @@ function getS3() {
       region: process.env.S3_REGION || "auto",
       endpoint: process.env.S3_ENDPOINT || undefined,
       forcePathStyle: String(process.env.S3_FORCE_PATH_STYLE || "") === "1",
-      credentials: process.env.S3_ACCESS_KEY_ID ? {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-      } : undefined,
+      credentials: process.env.S3_ACCESS_KEY_ID
+        ? {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+          }
+        : undefined,
     });
-  } catch (_) { _s3 = false; }
+  } catch (_) {
+    _s3 = false;
+  }
   return _s3;
 }
 
@@ -564,12 +689,14 @@ async function uploadArtifact(file, key) {
   const { PutObjectCommand } = require("@aws-sdk/client-s3");
   const prefix = String(process.env.S3_PREFIX || "apks").replace(/^\/|\/$/g, "");
   const objKey = `${prefix}/${key}.apk`;
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: objKey,
-    Body: fs.readFileSync(file),
-    ContentType: "application/vnd.android.package-archive",
-  }));
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: objKey,
+      Body: fs.readFileSync(file),
+      ContentType: "application/vnd.android.package-archive",
+    })
+  );
   const base = String(process.env.S3_PUBLIC_BASE || "").replace(/\/$/, "");
   return base ? `${base}/${objKey}` : null;
 }
@@ -597,9 +724,29 @@ async function quota() {
   if (!limit || limit <= 0) return { unlimited: true, daily_limit: 0, used_today: 0 };
   let used = 0;
   try {
-    used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
+    if (db.builds) used = await db.builds.countDocuments({ created_at: { $gte: startOfDay() } });
   } catch (_) {}
   return { unlimited: false, daily_limit: limit, used_today: used };
+}
+
+async function requeueStale(maxAgeMs = builderConfig.BUILD_STALE_MS) {
+  if (!db.builds) return;
+  try {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    const r = await db.builds.updateMany(
+      { status: "running", started_at: { $lt: cutoff } },
+      {
+        $set: {
+          status: "queued",
+          error: "requeued after worker restart",
+          requeued_at: db.utcNow(),
+        },
+      }
+    );
+    if (r.modifiedCount) console.log(`[builder] ${r.modifiedCount} stale build requeue`);
+  } catch (err) {
+    console.warn("[builder] requeueStale fail:", err.message);
+  }
 }
 
 class BuildQueue {
@@ -607,54 +754,92 @@ class BuildQueue {
     this.running = false;
     this.active = 0;
     this._timer = null;
+    this._requeued = false;
     this.counts = { queued: 0, running: 0, done: 0, failed: 0, canceled: 0 };
   }
 
-  async start() { if (this.running) return; this.running = true; this._loop(); }
+  async start() {
+    if (this.running) return;
+    this.running = true;
+    if (!this._requeued) {
+      this._requeued = true;
+      await requeueStale();
+    }
+    this._tick().catch(() => {});
+    this._loop();
+  }
 
-  async stop() { this.running = false; if (this._timer) clearTimeout(this._timer); }
+  async stop() {
+    this.running = false;
+    if (this._timer) clearTimeout(this._timer);
+  }
 
   _loop() {
     if (!this.running) return;
-    this._timer = setTimeout(() => this._tick().catch(() => {}).finally(() => this._loop()), 1500);
+    this._timer = setTimeout(() => {
+      this._tick()
+        .catch(() => {})
+        .finally(() => this._loop());
+    }, builderConfig.BUILD_POLL_MS);
   }
 
   async _tick() {
-    if (this.active >= builderConfig.MAX_CONCURRENT_BUILDS) return;
+    if (!this.running) return;
+    if (!db.builds) return;
 
-    let job = null;
-    try {
-      job = unwrap(await db.builds.findOneAndUpdate(
-        { status: "queued" },
-        { $set: { status: "running", started_at: db.utcNow() } },
-        { sort: { _id: 1 }, returnDocument: "after" },
-      ));
-    } catch (_) { return; }
-    if (!job) return;
+    while (this.active < builderConfig.MAX_CONCURRENT_BUILDS) {
+      let job = null;
+      try {
+        job = unwrap(
+          await db.builds.findOneAndUpdate(
+            { status: "queued" },
+            { $set: { status: "running", started_at: db.utcNow(), worker: WORKER_ID } },
+            { sort: { _id: 1 }, returnDocument: db.ReturnDocument.AFTER }
+          )
+        );
+      } catch (err) {
+        console.warn("[builder] queue poll fail:", err.message);
+        return;
+      }
 
-    this.counts.queued = Math.max(0, this.counts.queued - 1);
-    this.active += 1;
-    this.counts.running = this.active;
+      if (!job) return;
 
+      this.active += 1;
+      this.counts.queued = Math.max(0, this.counts.queued - 1);
+      this.counts.running = this.active;
+      this._run(job);
+    }
+  }
+
+  _run(job) {
     runBuild(job)
       .then(() => {
-        this.counts.running = Math.max(0, this.counts.running - 1);
         this.counts.done += 1;
       })
-      .catch(async (e) => {
-        this.counts.running = Math.max(0, this.counts.running - 1);
+      .catch(async (err) => {
         this.counts.failed += 1;
         try {
-          await db.builds.updateOne({ _id: job._id }, {
-            $set: { status: "failed", error: String(e.message || e), finished_at: db.utcNow() },
-          });
+          await db.builds.updateOne(
+            { _id: job._id },
+            {
+              $set: {
+                status: "failed",
+                error: String(err.message || err),
+                finished_at: db.utcNow(),
+              },
+            }
+          );
         } catch (_) {}
         userHub.broadcast(String(job.userId || ""), {
           type: "build",
-          data: { buildId: String(job._id), status: "failed", error: String(e.message || e) },
+          data: { buildId: String(job._id), status: "failed", error: String(err.message || err) },
         });
       })
-      .finally(() => { this.active = Math.max(0, this.active - 1); });
+      .finally(() => {
+        this.active = Math.max(0, this.active - 1);
+        this.counts.running = this.active;
+        this._tick().catch(() => {});
+      });
   }
 
   async add(doc) {
@@ -675,20 +860,28 @@ class BuildQueue {
       mode: builderConfig.WORKER_MODE,
       engine: builderConfig.ENGINE,
       max_concurrent: builderConfig.MAX_CONCURRENT_BUILDS,
+      worker: WORKER_ID,
     };
   }
 }
 
 let _queue = null;
-function initQueue() { if (!_queue) _queue = new BuildQueue(); return _queue; }
-function getQueue() { return initQueue(); }
+function initQueue() {
+  if (!_queue) _queue = new BuildQueue();
+  return _queue;
+}
+function getQueue() {
+  return initQueue();
+}
 
 async function warmup() {
   if (builderConfig.AUTO_JDK) {
     try {
       const jh = await ensureJavaOnce((m) => console.log("[builder] %s", m));
       console.log("[builder] java ready: %s", jh);
-    } catch (e) { console.warn("[builder] java warmup fail: %s", e.message || e); }
+    } catch (e) {
+      console.warn("[builder] java warmup fail: %s", e.message || e);
+    }
   } else {
     applyJavaHome(resolveJavaHome());
   }
@@ -697,23 +890,35 @@ async function warmup() {
     try {
       const sdk = await ensureSdkOnce((m) => console.log("[builder] %s", m));
       console.log("[builder] android sdk ready: %s", sdk);
-    } catch (e) { console.warn("[builder] sdk warmup fail: %s", e.message || e); }
+    } catch (e) {
+      console.warn("[builder] sdk warmup fail: %s", e.message || e);
+    }
   }
 
   if (builderConfig.AUTO_GRADLE && !builderConfig.USE_DOCKER) {
     try {
       const gb = await ensureGradleOnce((m) => console.log("[builder] %s", m), builderConfig.TEMPLATE_DIR);
       console.log("[builder] gradle ready: %s", gb);
-    } catch (e) { console.warn("[builder] gradle warmup fail: %s", e.message || e); }
+    } catch (e) {
+      console.warn("[builder] gradle warmup fail: %s", e.message || e);
+    }
   }
 }
 
 function bindLoop() {
   const pf = preflight();
-  if (pf.ok) console.log("[builder] preflight ok — mode=%s engine=%s themes=%d", builderConfig.WORKER_MODE, builderConfig.ENGINE, pf.themes.length);
-  else for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
+  if (pf.ok) {
+    console.log(
+      "[builder] preflight ok — mode=%s engine=%s themes=%d",
+      builderConfig.WORKER_MODE,
+      builderConfig.ENGINE,
+      pf.themes.length
+    );
+  } else {
+    for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
+  }
 
-  if (builderConfig.WORKER_MODE === "inline") getQueue().start();
+  if (builderConfig.WORKER_MODE === "inline") getQueue().start().catch(() => {});
   warmup().catch(() => {});
   return pf;
 }
@@ -732,7 +937,10 @@ async function runBuild(job) {
     if (!force && now - lastFlush < 1200) return;
     lastFlush = now;
     try {
-      await db.builds.updateOne({ _id: job._id }, { $set: { log_tail: logs.slice(-builderConfig.MAX_LOG_LINES) } });
+      await db.builds.updateOne(
+        { _id: job._id },
+        { $set: { log_tail: logs.slice(-builderConfig.MAX_LOG_LINES) } }
+      );
     } catch (_) {}
     userHub.broadcast(String(job.userId || ""), {
       type: "build",
@@ -755,15 +963,23 @@ async function runBuild(job) {
     try {
       const cur = await db.builds.findOne({ _id: job._id }, { projection: { status: 1 } });
       return cur && cur.status === "canceled";
-    } catch (_) { return false; }
+    } catch (_) {
+      return false;
+    }
   };
 
-  log(`build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT} theme=${job.theme || builderConfig.DEFAULT_THEME}`);
+  log(
+    `build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT} theme=${job.theme || builderConfig.DEFAULT_THEME}`
+  );
 
   try {
     let javaHome = resolveJavaHome();
     if (!javaHome && builderConfig.AUTO_JDK) {
-      try { javaHome = await ensureJavaOnce(log); } catch (e) { log(`jdk bootstrap fail: ${e.message || e}`); }
+      try {
+        javaHome = await ensureJavaOnce(log);
+      } catch (e) {
+        log(`jdk bootstrap fail: ${e.message || e}`);
+      }
     }
     if (javaHome) {
       applyJavaHome(javaHome);
@@ -778,9 +994,9 @@ async function runBuild(job) {
       await runProcess(
         pyBin,
         ["-m", "backend.apk_builder.worker", buildId],
-        { cwd: config.BASE_DIR, env: { ...process.env, BUILD_DIR: workDir } },
+        { cwd: BASE_DIR, env: { ...process.env, BUILD_DIR: workDir } },
         pushLog,
-        builderConfig.BUILD_TIMEOUT_MS,
+        builderConfig.BUILD_TIMEOUT_MS
       );
     } else {
       const tmpl = builderConfig.TEMPLATE_DIR;
@@ -788,7 +1004,10 @@ async function runBuild(job) {
       if (isDir(tmpl)) {
         log(`copying template from ${tmpl}…`);
         fs.cpSync(tmpl, workDir, { recursive: true });
-      } else if (fs.existsSync(path.join(workDir, "settings.gradle.kts")) || fs.existsSync(path.join(workDir, "settings.gradle"))) {
+      } else if (
+        fs.existsSync(path.join(workDir, "settings.gradle.kts")) ||
+        fs.existsSync(path.join(workDir, "settings.gradle"))
+      ) {
         log("template missing — workDir project use kar rahe hain");
       } else {
         throw new Error(`Template nahi mila: ${tmpl}`);
@@ -842,7 +1061,11 @@ async function runBuild(job) {
 
         if (sdk) {
           const sdkMount = IS_WIN ? path.resolve(sdk).replace(/\\/g, "/") : sdk;
-          args.push("-v", `${sdkMount}:/opt/android-sdk:ro`, "-e", "ANDROID_HOME=/opt/android-sdk", "-e", "ANDROID_SDK_ROOT=/opt/android-sdk");
+          args.push(
+            "-v", `${sdkMount}:/opt/android-sdk:ro`,
+            "-e", "ANDROID_HOME=/opt/android-sdk",
+            "-e", "ANDROID_SDK_ROOT=/opt/android-sdk"
+          );
         }
         args.push("gradle:8", task);
         bin = dockerBin;
@@ -864,7 +1087,10 @@ async function runBuild(job) {
       await runProcess(bin, args, opts, pushLog, builderConfig.BUILD_TIMEOUT_MS);
     }
 
-    if (await canceled()) { log("canceled — artifact skipped"); return; }
+    if (await canceled()) {
+      log("canceled — artifact skipped");
+      return;
+    }
 
     const outRoot = path.join(workDir, "app", "build", "outputs", "apk");
     const artifact = fs.existsSync(outRoot) ? findApk(outRoot) : null;
@@ -889,7 +1115,10 @@ async function runBuild(job) {
 
         try {
           const url = await uploadArtifact(stable, buildId);
-          if (url) { patch.artifact_url = url; log(`uploaded: ${url}`); }
+          if (url) {
+            patch.artifact_url = url;
+            log(`uploaded: ${url}`);
+          }
         } catch (e) {
           log(`upload fail: ${e.message || e}`);
         }
@@ -903,12 +1132,20 @@ async function runBuild(job) {
     await db.builds.updateOne({ _id: job._id }, { $set: patch });
 
     if (job.appId) {
-      try { await db.apps.updateOne({ _id: oid(job.appId) }, { $inc: { builds_total: 1 } }); } catch (_) {}
+      try {
+        await db.apps.updateOne({ _id: oid(job.appId) }, { $inc: { builds_total: 1 } });
+      } catch (_) {}
     }
 
     userHub.broadcast(String(job.userId || ""), {
       type: "build",
-      data: { buildId, status: "success", apk_size: patch.apk_size || 0, duration_ms: patch.duration_ms, artifact_url: patch.artifact_url || null },
+      data: {
+        buildId,
+        status: "success",
+        apk_size: patch.apk_size || 0,
+        duration_ms: patch.duration_ms,
+        artifact_url: patch.artifact_url || null,
+      },
     });
     log("done");
   } finally {
@@ -920,7 +1157,9 @@ async function runBuild(job) {
 }
 
 class UserHub {
-  constructor() { this.rooms = new Map(); }
+  constructor() {
+    this.rooms = new Map();
+  }
 
   join(userId, ws) {
     if (!this.rooms.has(userId)) this.rooms.set(userId, new Set());
@@ -929,14 +1168,19 @@ class UserHub {
 
   leave(userId, ws) {
     const s = this.rooms.get(userId);
-    if (s) { s.delete(ws); if (!s.size) this.rooms.delete(userId); }
+    if (s) {
+      s.delete(ws);
+      if (!s.size) this.rooms.delete(userId);
+    }
   }
 
   broadcast(userId, payload) {
     const s = this.rooms.get(userId);
     if (!s || !s.size) return;
     const data = JSON.stringify(payload);
-    for (const ws of s) { try { ws.send(data); } catch (_) {} }
+    for (const ws of s) {
+      try { ws.send(data); } catch (_) {}
+    }
   }
 
   common(ws, req, userId) {
@@ -944,35 +1188,49 @@ class UserHub {
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch (_) { return; }
       const type = String(msg.type || "").toLowerCase();
-      if (type === "ping") { try { ws.send(JSON.stringify({ type: "pong" })); } catch (_) {} return; }
+      if (type === "ping") {
+        try { ws.send(JSON.stringify({ type: "pong" })); } catch (_) {}
+        return;
+      }
       if (type === "subscribe" && msg.buildId) ws._buildId = String(msg.buildId);
     });
   }
 
   userSocket(ws, req) {
-    const userId = new URL(req.url, "http://x").searchParams.get("userId") || "anon";
+    const userId =
+      new URL(req.url, "http://x").searchParams.get("userId") || "anon";
     this.join(userId, ws);
     this.common(ws, req, userId);
     ws.on("close", () => this.leave(userId, ws));
     ws.on("error", () => this.leave(userId, ws));
-    try { ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() })); } catch (_) {}
+    try {
+      ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() }));
+    } catch (_) {}
   }
 
   appSocket(ws, req) {
     this.common(ws, req, "app");
-    try { ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() })); } catch (_) {}
+    try {
+      ws.send(JSON.stringify({ type: "hello", server_time: db.utcNow().toISOString() }));
+    } catch (_) {}
   }
 }
 
 const userHub = new UserHub();
 
 const jsonParser = express.json({
-  verify: (req, _res, buf) => { if (buf && buf.length) req.rawBody = buf.toString("utf8"); },
+  verify: (req, _res, buf) => {
+    if (buf && buf.length) req.rawBody = buf.toString("utf8");
+  },
 });
 
 function rawBody(req) {
   if (typeof req.rawBody === "string") return req.rawBody;
-  try { return req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : ""; } catch (_) { return ""; }
+  try {
+    return req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : "";
+  } catch (_) {
+    return "";
+  }
 }
 
 async function verifyApp(req, res, next) {
@@ -980,22 +1238,33 @@ async function verifyApp(req, res, next) {
     const appId = req.headers["x-app-id"];
     const ts = req.headers["x-timestamp"];
     const sig = req.headers["x-signature"];
-    if (!appId || !ts || !sig) throw new u.HttpError(401, "X-App-Id, X-Timestamp, X-Signature required");
+    if (!appId || !ts || !sig) {
+      throw new u.HttpError(401, "X-App-Id, X-Timestamp, X-Signature required");
+    }
 
     const skew = Math.abs(Date.now() / 1000 - Number(ts));
-    if (!Number.isFinite(skew) || skew > 300) throw new u.HttpError(401, "Timestamp out of ±300s window");
+    if (!Number.isFinite(skew) || skew > 300) {
+      throw new u.HttpError(401, "Timestamp out of ±300s window");
+    }
 
     const id = oid(appId);
     const app = id ? await db.apps.findOne({ _id: id }) : null;
     if (!app) throw new u.HttpError(401, "Unknown app");
     if (!app.secret) throw new u.HttpError(401, "App secret missing");
 
-    const expected = crypto.createHmac("sha256", app.secret).update(rawBody(req) + ts).digest("hex");
-    if (!safeEq(expected, String(sig).toLowerCase())) throw new u.HttpError(401, "Bad signature");
+    const expected = crypto
+      .createHmac("sha256", app.secret)
+      .update(rawBody(req) + ts)
+      .digest("hex");
+    if (!safeEq(expected, String(sig).toLowerCase())) {
+      throw new u.HttpError(401, "Bad signature");
+    }
 
     req.app = app;
     next();
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 }
 
 const router = express.Router();
@@ -1066,11 +1335,20 @@ router.post("/api/apps/:appId/secret/rotate", ah(async (req, res) => {
   if (!id) throw new u.HttpError(400, "Bad appId");
 
   const secret = genSecret();
-  const app = unwrap(await db.apps.findOneAndUpdate(
-    { _id: id },
-    { $set: { secret, secret_last4: secret.slice(-4), secret_hash: sha256hex(secret), secret_rotated_at: db.utcNow() } },
-    { returnDocument: "after" },
-  ));
+  const app = unwrap(
+    await db.apps.findOneAndUpdate(
+      { _id: id },
+      {
+        $set: {
+          secret,
+          secret_last4: secret.slice(-4),
+          secret_hash: sha256hex(secret),
+          secret_rotated_at: db.utcNow(),
+        },
+      },
+      { returnDocument: db.ReturnDocument.AFTER }
+    )
+  );
   if (!app) throw new u.HttpError(404, "App not found");
 
   res.json({ status: "ok", app: { ...shapeApp(app), secret } });
@@ -1139,7 +1417,10 @@ router.get("/api/builds/:id", ah(async (req, res) => {
 router.get("/api/builds/:id/log", ah(async (req, res) => {
   const id = oid(req.params.id);
   if (!id) throw new u.HttpError(400, "Bad buildId");
-  const doc = await db.builds.findOne({ _id: id }, { projection: { log_tail: 1, status: 1, error: 1 } });
+  const doc = await db.builds.findOne(
+    { _id: id },
+    { projection: { log_tail: 1, status: 1, error: 1 } }
+  );
   if (!doc) throw new u.HttpError(404, "Build not found");
   res.json({ status: doc.status, error: doc.error || null, log: (doc.log_tail || []).join("\n") });
 }));
@@ -1149,7 +1430,7 @@ router.post("/api/builds/:id/cancel", ah(async (req, res) => {
   if (!id) throw new u.HttpError(400, "Bad buildId");
   const r = await db.builds.updateOne(
     { _id: id, status: { $in: ["queued", "running"] } },
-    { $set: { status: "canceled", finished_at: db.utcNow() } },
+    { $set: { status: "canceled", finished_at: db.utcNow() } }
   );
   if (!r.matchedCount) throw new u.HttpError(409, "Build already finished");
   res.json({ status: "ok" });
@@ -1180,7 +1461,9 @@ router.get("/api/builds/:id/download", ah(async (req, res) => {
   const doc = await db.builds.findOne({ _id: id });
   if (!doc) throw new u.HttpError(404, "Build not found");
 
-  const name = doc.apk_name || `${(doc.appName || "app").replace(/\s+/g, "-")}-${String(doc._id)}.apk`;
+  const name =
+    doc.apk_name ||
+    `${(doc.appName || "app").replace(/\s+/g, "-")}-${String(doc._id)}.apk`;
 
   if (doc.artifact && fs.existsSync(doc.artifact)) {
     res.setHeader("Cache-Control", "no-store");
@@ -1198,12 +1481,19 @@ router.post("/api/orders", verifyApp, ah(async (req, res) => {
     created_at: db.utcNow(),
   };
   const r = await db.orders.insertOne(doc);
-  res.json({ status: "ok", order: { id: String(r.insertedId), appId: doc.appId, created_at: doc.created_at } });
+  res.json({
+    status: "ok",
+    order: { id: String(r.insertedId), appId: doc.appId, created_at: doc.created_at },
+  });
 }));
 
 router.get("/api/orders", verifyApp, ah(async (req, res) => {
   const limit = Math.max(1, Math.min(parseInt(req.query.limit || 100, 10), 500));
-  const rows = await db.orders.find({ appId: String(req.app._id) }).sort({ _id: -1 }).limit(limit).toArray();
+  const rows = await db.orders
+    .find({ appId: String(req.app._id) })
+    .sort({ _id: -1 })
+    .limit(limit)
+    .toArray();
   res.json({ orders: rows });
 }));
 
@@ -1218,6 +1508,7 @@ module.exports = {
   warmup,
   initQueue,
   getQueue,
+  requeueStale,
   stats: () => getQueue().stats(),
   preflight,
   resolveGradle,
