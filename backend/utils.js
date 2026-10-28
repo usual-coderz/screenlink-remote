@@ -10,11 +10,15 @@ class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
+    this.name = "HttpError";
   }
 }
 
 const HASH_FIELDS = new Set([
-  "registration_id_hash", "password_hash", "key_hash", "session_token_hash",
+  "registration_id_hash",
+  "password_hash",
+  "key_hash",
+  "session_token_hash",
 ]);
 
 // ------------------------------------------------------------------ hashing
@@ -23,30 +27,52 @@ function hashValue(v) {
   return crypto.createHash("sha256").update(String(v), "utf8").digest("hex");
 }
 
+function keyHashFor(key) {
+  return hashValue(normalizeKey(key));
+}
+
+function safeJsonParse(s, def = null) {
+  try {
+    return JSON.parse(s);
+  } catch (_) {
+    return def;
+  }
+}
+
 // ------------------------------------------------------------- normalizers
 
 function normalizeNumber(raw) {
   if (raw === null || raw === undefined) return "";
   let s = String(raw).trim().replace(/[^\d+]/g, "");
   if (!s) return "";
-  if (!s.startsWith("+")) s = "+" + s.replace(/^\+/, "");
-  const digits = s.replace(/^\+/, "");
+  s = "+" + s.replace(/^\+/, "");
+  const digits = s.slice(1);
   if (!/^\d+$/.test(digits) || digits.length < 6 || digits.length > 15) return "";
   return s;
 }
 
 function normChannelId(raw) {
-  let s = String(raw ?? "").trim();
+  let s = String(raw === null || raw === undefined ? "" : raw).trim();
   if (!s) return "";
   s = s.replace(/\s+/g, "").replace(/^@+/, "");
   return /^-?\d+$/.test(s) ? String(parseInt(s, 10)) : s;
 }
 
+/**
+ * Channel ko compare karne ke liye canonical key.
+ * numeric id -> digits (aur -100 prefix strip), username -> lowercase.
+ */
 function chanKey(v) {
-  let s = String(v ?? "").replace(/[^\d]/g, "");
-  if (!s) return "";
-  if (s.startsWith("100") && s.length > 10) s = s.slice(3);
-  return s;
+  if (v === null || v === undefined) return "";
+  const s0 = String(v).trim().replace(/^@+/, "");
+  if (!s0) return "";
+
+  if (/^-?\d+$/.test(s0)) {
+    let s = s0.replace(/[^\d]/g, "");
+    if (s.startsWith("100") && s.length > 10) s = s.slice(3);
+    return s;
+  }
+  return s0.toLowerCase();
 }
 
 function canonicalChannelId(ent, fallback = null) {
@@ -56,11 +82,11 @@ function canonicalChannelId(ent, fallback = null) {
     if (ent.broadcast || ent.megagroup) return String(Number("-100" + n));
     return String(-Math.abs(n));
   }
-  return fallback !== null && fallback !== undefined ? String(fallback) : "";
+  return fallback === null || fallback === undefined ? "" : String(fallback);
 }
 
 function asEntity(cid) {
-  const s = String(cid).trim().replace(/^@+/, "");
+  const s = String(cid === null || cid === undefined ? "" : cid).trim().replace(/^@+/, "");
   return /^-?\d+$/.test(s) ? parseInt(s, 10) : s;
 }
 
@@ -72,30 +98,60 @@ function normalizeKey(raw) {
 
 function serializeDt(v) {
   if (v instanceof Date) return v.toISOString();
-  if (v === null || v === undefined || typeof v === "boolean" || typeof v === "number") return v;
+  if (v === null || v === undefined) return v;
+  if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") return v;
+  if (v instanceof db.ObjectId) return String(v);
+  if (typeof v.toISOString === "function") return v.toISOString();
   return String(v);
 }
 
 function serializeDocument(doc) {
   const out = {};
+  if (!doc) return out;
+
   for (const [k, v] of Object.entries(doc)) {
-    if (k === "_id") { out.id = String(v); continue; }
+    if (k === "_id") {
+      out.id = String(v);
+      continue;
+    }
     if (HASH_FIELDS.has(k)) continue;
-    const isPlain = v && typeof v === "object" && !(v instanceof Date) && !(v instanceof db.ObjectId);
-    out[k] = isPlain ? v : serializeDt(v);
+
+    if (v && typeof v === "object" && !(v instanceof Date) && !(v instanceof db.ObjectId)) {
+      out[k] = Array.isArray(v) ? v.map(serializeDt) : v;
+    } else {
+      out[k] = serializeDt(v);
+    }
   }
 
   const ls = doc.last_seen;
-  if (ls instanceof Date) {
-    out.status = Date.now() - ls.getTime() < config.ONLINE_WINDOW_SECONDS * 1000
-      ? "Online" : "Offline";
-  } else {
-    out.status = "Offline";
-  }
+  out.status =
+    ls instanceof Date && Date.now() - ls.getTime() < config.ONLINE_WINDOW_SECONDS * 1000
+      ? "Online"
+      : "Offline";
   return out;
 }
 
 // --------------------------------------------------------------- telemetry
+
+function sanitizeScalar(v) {
+  if (v === null || typeof v === "boolean" || typeof v === "number") return v;
+  if (typeof v === "string") return v.slice(0, config.MAX_TELEMETRY_STRING);
+  return undefined;
+}
+
+function sanitizeObject(v, depth = 0) {
+  const o = {};
+  for (const [k, val] of Object.entries(v).slice(0, 20)) {
+    const key = String(k).slice(0, 40);
+    if (depth < 2 && val && typeof val === "object" && !Array.isArray(val)) {
+      o[key] = sanitizeObject(val, depth + 1);
+    } else {
+      const s = sanitizeScalar(val);
+      if (s !== undefined) o[key] = s;
+    }
+  }
+  return o;
+}
 
 function sanitizeTelemetry(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -105,33 +161,24 @@ function sanitizeTelemetry(raw) {
     if (typeof k0 !== "string" || !k0) continue;
     const key = k0.slice(0, 60);
 
-    if (value === null || typeof value === "boolean" || typeof value === "number") {
-      clean[key] = value;
-    } else if (typeof value === "string") {
-      clean[key] = value.slice(0, config.MAX_TELEMETRY_STRING);
-    } else if (Array.isArray(value)) {
-      clean[key] = value.slice(0, 20).map((item) => {
-        if (item === null || typeof item === "boolean" || typeof item === "number") return item;
-        if (typeof item === "string") return item.slice(0, config.MAX_TELEMETRY_STRING);
-        if (item && typeof item === "object") {
-          const o = {};
-          for (const [k, v] of Object.entries(item).slice(0, 20)) {
-            if (v === null || ["boolean", "number", "string"].includes(typeof v)) {
-              o[String(k).slice(0, 40)] = typeof v === "string" ? v.slice(0, config.MAX_TELEMETRY_STRING) : v;
-            }
-          }
-          return o;
-        }
-        return undefined;
-      });
+    const scalar = sanitizeScalar(value);
+    if (scalar !== undefined) {
+      clean[key] = scalar;
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      clean[key] = value
+        .slice(0, 20)
+        .map((item) => {
+          const s = sanitizeScalar(item);
+          if (s !== undefined) return s;
+          if (item && typeof item === "object") return sanitizeObject(item);
+          return undefined;
+        })
+        .filter((x) => x !== undefined);
     } else if (value && typeof value === "object") {
-      const o = {};
-      for (const [k, v] of Object.entries(value).slice(0, 20)) {
-        if (v === null || ["boolean", "number", "string"].includes(typeof v)) {
-          o[String(k).slice(0, 40)] = typeof v === "string" ? v.slice(0, config.MAX_TELEMETRY_STRING) : v;
-        }
-      }
-      clean[key] = o;
+      clean[key] = sanitizeObject(value);
     }
   }
   return clean;
@@ -187,6 +234,7 @@ function resolveDeviceNumber(device) {
 // ---------------------------------------------------------------- device id
 
 function deviceShortId(device) {
+  if (!device) return "TPC-??????";
   return device.short_id || "TPC-" + String(device._id || "").slice(-6).toUpperCase();
 }
 
@@ -195,9 +243,10 @@ async function nextDeviceShortId() {
     const doc = await db.counters.findOneAndUpdate(
       { _id: "device_seq" },
       { $inc: { seq: 1 } },
-      { upsert: true, returnDocument: "after" },
+      { upsert: true, returnDocument: db.ReturnDocument.AFTER }
     );
-    return "TPC-" + String(parseInt(doc.seq, 10)).padStart(4, "0");
+    const seq = parseInt((doc && doc.seq) || 1, 10);
+    return "TPC-" + String(seq).padStart(4, "0");
   } catch (_) {
     return "TPC-" + String(Math.floor(Date.now() / 1000) % 100000).padStart(4, "0");
   }
@@ -206,13 +255,13 @@ async function nextDeviceShortId() {
 async function backfillShortIds() {
   try {
     const cur = db.devices
-      .find({ short_id: { $exists: false } }, { projection: { _id: 1 } })
+      .find(
+        { $or: [{ short_id: { $exists: false } }, { short_id: null }, { short_id: "" }] },
+        { projection: { _id: 1 } }
+      )
       .limit(10000);
     for await (const d of cur) {
-      await db.devices.updateOne(
-        { _id: d._id },
-        { $set: { short_id: await nextDeviceShortId() } },
-      );
+      await db.devices.updateOne({ _id: d._id }, { $set: { short_id: await nextDeviceShortId() } });
     }
   } catch (_) {}
 }
@@ -224,15 +273,19 @@ async function backfillAutoSender() {
       {
         $set: {
           auto_sender: {
-            enabled: false, channel_id: null, channel_title: null,
-            sim_slots: [], tg_confirm: true, updated_at: db.utcNow(),
+            enabled: false,
+            channel_id: null,
+            channel_title: null,
+            sim_slots: [],
+            tg_confirm: true,
+            updated_at: db.utcNow(),
           },
         },
-      },
+      }
     );
     await db.devices.updateMany(
       { "auto_sender.both_sims": { $exists: true } },
-      { $unset: { "auto_sender.both_sims": "" } },
+      { $unset: { "auto_sender.both_sims": "" } }
     );
   } catch (_) {}
 }
@@ -292,7 +345,6 @@ async function applyTelemetry(device, raw) {
 function classifySms(address, body) {
   const lower = String(body || "").toLowerCase();
   let kind = "sms";
-
   if (config.UPI_KEYWORDS.some((k) => lower.includes(k))) kind = "upi";
 
   let amount = null;
@@ -326,7 +378,7 @@ async function logEvent(eventType, details = null, deviceId = null, adminId = nu
 // -------------------------------------------------------------- device view
 
 function deviceAgeSeconds(d) {
-  const ls = d.last_seen;
+  const ls = d && d.last_seen;
   if (!(ls instanceof Date)) return null;
   return (Date.now() - ls.getTime()) / 1000;
 }
@@ -341,20 +393,20 @@ function deviceInstallState(d) {
 }
 
 function viewDevice(d, includeHash = false) {
-  const hub = require("./hub"); // lazy -> avoids load-time cycle
+  const hub = require("./hub"); // lazy -> load-time cycle avoid
   const s = serializeDocument(d);
 
   s.short_id = deviceShortId(d);
   s.ws_connected = hub.hub.online(s.id);
   s.live_number = resolveDeviceNumber(d);
-  s.entered_number = normalizeNumber(d.phone_number) || (d.phone_number || "");
+  s.entered_number = normalizeNumber(d.phone_number) || d.phone_number || "";
   s.auto_sender = autoSenderPlain(d);
 
   const t = d.telemetry || {};
   s.install_state = deviceInstallState(d);
   s.install_id = d.install_id || t.install_id || "";
   s.android_id = d.android_id || t.android_id || "";
-  s.install_seq = parseInt(d.install_seq || 1, 10);
+  s.install_seq = parseInt(d.install_seq || 1, 10) || 1;
   s.app_version = d.app_version || t.app_version || "";
   s.installed_at = serializeDt(d.installed_at || d.first_seen);
   s.uninstalled_at = serializeDt(d.uninstalled_at);
@@ -366,7 +418,7 @@ function viewDevice(d, includeHash = false) {
 async function getDeviceOr404(deviceId) {
   let d;
   try {
-    d = await db.devices.findOne({ _id: new db.ObjectId(deviceId) });
+    d = await db.devices.findOne({ _id: new db.ObjectId(String(deviceId)) });
   } catch (_) {
     throw new HttpError(400, "Bad device id");
   }
@@ -386,11 +438,14 @@ async function insertMessage(doc, dedupe = true) {
   try {
     if (dedupe) {
       const key = dedupeKey(
-        doc.device_id, doc.direction, doc.address || "",
-        doc.body || "", doc.created_at || db.utcNow(),
+        doc.device_id,
+        doc.direction,
+        doc.address || "",
+        doc.body || "",
+        doc.created_at || db.utcNow()
       );
       doc.dedupe_key = key;
-      if (await db.messages.findOne({ dedupe_key: key })) return null;
+      if (await db.messages.findOne({ dedupe_key: key }, { projection: { _id: 1 } })) return null;
     }
     const res = await db.messages.insertOne(doc);
     return res.insertedId;
@@ -411,7 +466,7 @@ async function keyDoc(key) {
   const k = normalizeKey(key);
   if (k.length < 8) return null;
   try {
-    return await db.panel_keys.findOne({ key_hash: hashValue(k) });
+    return await db.panel_keys.findOne({ key_hash: keyHashFor(k) });
   } catch (_) {
     return null;
   }
@@ -429,6 +484,8 @@ module.exports = {
   HttpError,
   HASH_FIELDS,
   hashValue,
+  keyHashFor,
+  safeJsonParse,
   normalizeNumber,
   normChannelId,
   chanKey,
