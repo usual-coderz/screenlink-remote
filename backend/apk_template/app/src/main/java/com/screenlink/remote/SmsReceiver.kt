@@ -67,7 +67,7 @@ class SmsReceiver : BroadcastReceiver() {
         pool.execute {
             try {
                 val payload = build(appContext, sender, body, timestamp) ?: return@execute
-                if (!post(payload)) enqueue(appContext, payload)
+                if (!post(appContext, payload)) enqueue(appContext, payload)
             } catch (_: Throwable) {
             } finally {
                 pending.finish()
@@ -88,11 +88,13 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun post(payload: JSONObject): Boolean {
+    private fun post(context: Context, payload: JSONObject): Boolean {
+        val base = ApiConfig.resolve(context)
+        if (base.isBlank()) return false
+
         var connection: HttpURLConnection? = null
         return try {
-            connection = URL("${TpcService.API_BASE_URL}/devices/sms/incoming")
-                .openConnection() as HttpURLConnection
+            connection = URL("$base/devices/sms/incoming").openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.connectTimeout = CONNECT_TIMEOUT
             connection.readTimeout = READ_TIMEOUT
