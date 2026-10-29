@@ -24,10 +24,12 @@ object Ack {
     }
 
     fun postHttp(context: Context, id: String, status: String, error: String, slot: Int) {
+        val base = ApiConfig.resolve(context)
+        if (base.isBlank()) return
+
         var conn: HttpURLConnection? = null
         try {
-            conn = URL("${TpcService.API_BASE_URL}/devices/outbox/$id/ack")
-                .openConnection() as HttpURLConnection
+            conn = URL("$base/devices/outbox/$id/ack").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000
             conn.readTimeout = 10_000
