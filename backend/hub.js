@@ -165,6 +165,17 @@ async function sendCommand(deviceId, action, extra = null) {
   return hub.sendToDevice(deviceId, payload);
 }
 
+// ---------------------------------------------------------------- relay glue
+
+/** relay.js ko lazy require — require cycle se bachne ke liye. */
+function relayIncoming(device, address, body) {
+  try {
+    return require("./relay").relayForwardIncoming(device, address, body);
+  } catch (_) {
+    return Promise.resolve();
+  }
+}
+
 // ------------------------------------------------------------------ outbox
 
 function pushRow(deviceId, row) {
@@ -383,6 +394,7 @@ module.exports = {
   broadcastDevice,
   broadcastBuild,
   sendCommand,
+  relayIncoming,
   pushRow,
   deliverOutboxRow,
   pushOutbox,
