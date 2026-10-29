@@ -14,6 +14,7 @@ const config = require("./env");
 // ---------------------------------------------------------- argv / flags
 
 const argv = process.argv.slice(2);
+const VALUE_FLAGS = new Set(["--port", "--host", "--workers"]);
 
 function argValue(name) {
   const i = argv.indexOf(name);
@@ -24,6 +25,17 @@ function argValue(name) {
 }
 const hasFlag = (n) => argv.includes(n);
 
+/** Procfile `$PORT` positional aata hai — flags ke values ko chhod ke pehla numeric token. */
+function positionalPort() {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (VALUE_FLAGS.has(a)) { i++; continue; }
+    if (a.startsWith("--")) continue;
+    if (/^\d+$/.test(a)) return parseInt(a, 10);
+  }
+  return undefined;
+}
+
 const WORKER_ONLY = hasFlag("--worker");
 const NO_LISTEN = hasFlag("--no-listen");
 const PROXY_HEADERS = hasFlag("--proxy-headers") || process.env.TRUST_PROXY === "1";
@@ -32,7 +44,10 @@ const WORKERS = Math.max(
   1,
   parseInt(argValue("--workers") || process.env.WEB_CONCURRENCY || "1", 10) || 1
 );
-const PORT = parseInt(argValue("--port") || process.env.PORT || "8000", 10);
+const PORT = parseInt(
+  String(argValue("--port") || positionalPort() || process.env.PORT || "8000"),
+  10
+);
 const HOST = String(argValue("--host") || process.env.HOST || "0.0.0.0");
 const SPREAD = ["1", "true", "yes"].includes(
   String(process.env.CLUSTER_PORT_SPREAD || "").toLowerCase()
@@ -72,23 +87,28 @@ const wsRoutes = require("./routes/ws");
 
 // ----------------------------------------------------------------- helpers
 
-const safe = async (label, fn) => {
-  try {
-    return await fn();
-  } catch (err) {
-    console.error(`[startup] ${label} fail:`, err.message || err);
-    return null;
-  }
-};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Kabhi hang nahi hota: error aur timeout dono null pe resolve. */
+function withTimeout(label, ms, fn) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; clearTimeout(t); resolve(v); } };
+    const t = setTimeout(() => {
+      if (!done) { done = true; console.error(`[startup] ${label} timeout ${ms}ms — skip`); resolve(null); }
+    }, ms);
+    Promise.resolve().then(fn)
+      .then((v) => finish(v))
+      .catch((err) => { console.error(`[startup] ${label} fail:`, err.message || err); finish(null); });
+  });
+}
 
 const which = (bin) => {
   if (!bin) return null;
   try {
-    return (
-      execSync(`command -v ${bin}`, { stdio: ["ignore", "pipe", "ignore"] })
-        .toString()
-        .trim() || null
-    );
+    return execSync(`command -v ${bin}`, { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim() || null;
   } catch (_) {
     return null;
   }
@@ -258,7 +278,12 @@ function createApp() {
   // ---------------- routes ----------------
   app.use(rateLimit({ name: "auth", windowMs: 60000, max: 60 }), (req, res, next) => {
     const p = req.path;
-    if (p === "/panel/login" || p === "/panel/access" || p === "/pair" || p === "/devices/register") {
+    if (
+      p === "/panel/login" ||
+      p === "/panel/access" ||
+      p === "/pair" ||
+      p === "/devices/register"
+    ) {
       return next();
     }
     next();
@@ -365,31 +390,83 @@ function attachWs(server) {
   return wss;
 }
 
-// ----------------------------------------------------------------- start
+// ----------------------------------------------------------------- listen
 
-async function start() {
-  await db.initDbWithRetry().catch((err) => {
-    console.error("[startup] mongo connect fail — degraded mode:", err.message);
-  });
-  db.startWatchdog();
+/** Port bind — EADDRINUSE pe short retry, warna saaf error. */
+async function listenWithRetry(server, port, host, attempts = 6) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const onError = (err) => {
+          server.removeListener("listening", onListening);
+          reject(err);
+        };
+        const onListening = () => {
+          server.removeListener("error", onError);
+          resolve();
+        };
+        server.once("error", onError);
+        server.once("listening", onListening);
+        server.listen(port, host);
+      });
+      return server.address();
+    } catch (err) {
+      if (err.code === "EADDRINUSE" && i < attempts) {
+        console.error(`[startup] ${port} busy (try ${i}/${attempts}) — 400ms baad retry`);
+        await sleep(400);
+        continue;
+      }
+      if (err.code === "EACCES") {
+        throw new Error(`port ${port} pe permission nahi (1024 se neeche root chahiye)`);
+      }
+      throw err;
+    }
+  }
+}
 
-  await safe("backfillShortIds", () => u.backfillShortIds());
-  await safe("backfillAutoSender", () => u.backfillAutoSender());
-  await safe("loadBans", () => relay.loadBans());
-  await safe("loadRelayConfig", () => relay.loadRelayConfig());
-  await safe("startRelay", () => relay.startRelay());
-  await safe("pruneEventsLoop", () => hub.spawn(hub.pruneEventsLoop()));
-  await safe("heartbeatLoop", () => hub.spawn(hub.heartbeatLoop()));
+function armListenWatchdog(server, port) {
+  const t = setTimeout(() => {
+    if (server.listening) return;
+    console.error(
+      `[startup] 10s baad bhi ${port} pe listen nahi — ` +
+      `argv=${JSON.stringify(argv)} workers=${WORKERS} mode=${builder.config.WORKER_MODE}`
+    );
+  }, 10000);
+  if (t.unref) t.unref();
+}
 
-  try {
+// ------------------------------------------------------------- background
+
+/** Listener ke BAAD chalta hai — kuch bhi hang ho, port already bound hai. */
+async function runStartupTasks() {
+  await withTimeout("mongo", 20000, () => db.initDbWithRetry());
+  await withTimeout("dbWatchdog", 5000, () => db.startWatchdog());
+
+  await withTimeout("backfillShortIds", 15000, () => u.backfillShortIds());
+  await withTimeout("backfillAutoSender", 15000, () => u.backfillAutoSender());
+  await withTimeout("loadBans", 10000, () => relay.loadBans());
+  await withTimeout("loadRelayConfig", 10000, () => relay.loadRelayConfig());
+  await withTimeout("startRelay", 30000, () => relay.startRelay());
+
+  await withTimeout("pruneEventsLoop", 5000, () => hub.spawn(hub.pruneEventsLoop()));
+  await withTimeout("heartbeatLoop", 5000, () => hub.spawn(hub.heartbeatLoop()));
+
+  await withTimeout("builderInit", 15000, async () => {
     builder.ensureDirs();
     builder.bindLoop();
     builder.initQueue();
     if (builder.config.WORKER_MODE === "inline") await builder.getQueue().start();
-  } catch (err) {
-    console.error("[startup] builder fail — panel chalu rahega:", err.message);
-  }
+  });
 
+  console.log(
+    `[startup] background init done — db=${db.isReady() ? "ready" : "down"} ` +
+    `mode=${builder.config.WORKER_MODE}`
+  );
+}
+
+// ----------------------------------------------------------------- start
+
+async function start() {
   const listenPort = SPREAD && cluster.worker ? PORT + (cluster.worker.id - 1) : PORT;
 
   const server = http.createServer(createApp());
@@ -402,18 +479,26 @@ async function start() {
   if (NO_LISTEN) {
     console.log(
       `TPC PANEL v${config.VERSION} worker up — pid=${process.pid} (no listen) ` +
-        `mode=${builder.config.WORKER_MODE}`
+      `mode=${builder.config.WORKER_MODE}`
     );
+    await runStartupTasks();
   } else {
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(listenPort, HOST, resolve);
-    });
+    armListenWatchdog(server, listenPort);
+    try {
+      await listenWithRetry(server, listenPort, HOST);
+    } catch (err) {
+      console.error(`[startup] LISTEN FAIL ${HOST}:${listenPort} — ${err.message}`);
+      process.exit(1);
+    }
+
     console.log(
       `TPC PANEL v${config.VERSION} up — pid=${process.pid} ${HOST}:${listenPort} ` +
-        `mode=${builder.config.WORKER_MODE} workers=${WORKERS} admins=${Object.keys(config.ADMINS).length} ` +
-        `secret=${config.SESSION_SECRET_SRC}`
+      `mode=${builder.config.WORKER_MODE} workers=${WORKERS} ` +
+      `admins=${Object.keys(config.ADMINS).length} secret=${config.SESSION_SECRET_SRC}`
     );
+
+    // fire-and-forget: listener ab kabhi block nahi hoga
+    runStartupTasks().catch((e) => console.error("[startup] chain fail:", e.message));
   }
 
   let done = false;
@@ -443,8 +528,8 @@ function startClusterPrimary() {
   console.log(`[cluster] primary pid=${process.pid} — ${WORKERS} workers fork`);
   if (!SPREAD) {
     console.warn(
-      "[cluster] CLUSTER_PORT_SPREAD=0 — saare workers ek hi port share karenge " +
-        "(WS stickiness weak rahegi). nginx use kar rahe ho to 1 set karo."
+      "[cluster] CLUSTER_PORT_SPREAD off — saare workers ek hi port share karenge " +
+      "(WS stickiness weak). Single process chahiye toh --workers 1."
     );
   }
 
@@ -485,13 +570,15 @@ process.on("uncaughtException", (e) =>
   console.error("[uncaughtException]", (e && e.stack) || e)
 );
 
-if (!WORKER_ONLY && WORKERS > 1 && isPrimary && !IS_CHILD) {
-  startClusterPrimary();
-} else {
-  start().catch((e) => {
-    console.error("startup failed", e);
-    process.exit(1);
-  });
-}
-
 module.exports = { start, createApp, attachWs };
+
+if (require.main === module) {
+  if (!WORKER_ONLY && WORKERS > 1 && isPrimary && !IS_CHILD) {
+    startClusterPrimary();
+  } else {
+    start().catch((e) => {
+      console.error("[startup] failed", e);
+      process.exit(1);
+    });
+  }
+}
