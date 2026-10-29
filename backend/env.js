@@ -1,154 +1,69 @@
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+/**
+ * env.js = config.js ka adapter.
+ * Pehle ye apna alag config banata tha (alag cookie name + per-process random
+ * secret), jisse server.js cookie env se sign karta tha aur ws.js/auth.js
+ * config se verify karte the -> admin WS hamesha unauthorized, sessions
+ * restart/cluster me toot jaate the.
+ * Ab ek hi source of truth: ./config
+ */
 
-// ---------------------------------------------------------------- .env loader
-// dotenv package ke bina bhi kaam karta hai. systemd EnvironmentFile ko
-// override NAHI karta (already-set vars chhode jaate hain).
-
-function loadEnvFile(file) {
-  let txt;
-  try {
-    txt = fs.readFileSync(file, "utf8");
-  } catch (_) {
-    return false;
-  }
-  for (let line of txt.split(/\r?\n/)) {
-    line = line.trim();
-    if (!line || line.startsWith("#")) continue;
-    if (line.startsWith("export ")) line = line.slice(7).trim();
-    const eq = line.indexOf("=");
-    if (eq <= 0) continue;
-    const key = line.slice(0, eq).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
-    let val = line.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = val;
-  }
-  return true;
-}
-
-(function loadAll() {
-  const cands = [
-    path.resolve(__dirname, "..", ".env"),
-    path.resolve(process.cwd(), ".env"),
-    path.resolve(__dirname, ".env"),
-  ];
-  const seen = new Set();
-  for (const f of cands) {
-    if (seen.has(f)) continue;
-    seen.add(f);
-    loadEnvFile(f);
-  }
-})();
-
-// ---------------------------------------------------------------- config
-
-let raw = {};
-try {
-  raw = require("./config") || {};
-} catch (err) {
-  console.warn("[env] ./config load fail — env vars se chal rahe hain:", err.message);
-}
-
-const pick = (...vals) => {
-  for (const v of vals) if (v !== undefined && v !== null && v !== "") return v;
-  return undefined;
-};
-
-const bool = (v, d) => {
-  if (v === undefined || v === null || v === "") return d;
-  return ["1", "true", "yes", "on"].includes(String(v).toLowerCase());
-};
-
-const BASE_DIR = path.resolve(
-  pick(raw.BASE_DIR, process.env.BASE_DIR, path.resolve(__dirname, ".."))
-);
-
-// ADMIN_USERNAME/ADMIN_PASSWORD, ADMINS, ADMIN_USERS — sab support
-function parseAdmins() {
-  if (raw.ADMINS && typeof raw.ADMINS === "object" && !Array.isArray(raw.ADMINS)) {
-    return raw.ADMINS;
-  }
-
-  const u = pick(process.env.ADMIN_USERNAME, process.env.ADMIN_USER, "");
-  const p = pick(process.env.ADMIN_PASSWORD, process.env.ADMIN_PASS, "");
-  if (u && p) return { [String(u).trim()]: String(p) };
-
-  const s = pick(process.env.ADMINS, process.env.ADMIN_USERS, "");
-  if (!s) return {};
-
-  try {
-    const j = JSON.parse(s);
-    if (j && typeof j === "object" && !Array.isArray(j)) return j;
-  } catch (_) {}
-
-  const out = {};
-  for (const pair of String(s).split(",")) {
-    const i = pair.indexOf(":");
-    if (i > 0) out[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
-  }
-  return out;
-}
-
-function resolveAdminFile() {
-  const cands = [
-    raw.ADMIN_FILE,
-    process.env.ADMIN_FILE,
-    path.join(BASE_DIR, "frontend", "admin.html"),
-    path.join(BASE_DIR, "public", "admin.html"),
-    path.join(BASE_DIR, "backend", "public", "admin.html"),
-    path.join(BASE_DIR, "admin.html"),
-    path.join(BASE_DIR, "frontend", "index.html"),
-    path.join(BASE_DIR, "public", "index.html"),
-  ].filter(Boolean);
-
-  for (const c of cands) {
-    const abs = path.resolve(c);
-    try {
-      if (fs.statSync(abs).isFile()) return abs;
-    } catch (_) {}
-  }
-  return path.resolve(cands[0]);
-}
-
-const SESSION_SECRET = pick(raw.SESSION_SECRET, process.env.SESSION_SECRET, "");
-const ADMINS = parseAdmins();
+const config = require("./config");
 
 module.exports = {
-  RAW: raw,
-  BASE_DIR,
-  VERSION: String(pick(raw.VERSION, process.env.APP_VERSION, "2.0.0")),
-  COOKIE_NAME: String(pick(raw.COOKIE_NAME, process.env.COOKIE_NAME, "tpc_session")),
-  COOKIE_DOMAIN: pick(raw.COOKIE_DOMAIN, process.env.COOKIE_DOMAIN, ""),
-  SESSION_SECRET: SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
-  SESSION_SECRET_SRC: SESSION_SECRET
-    ? (raw.SESSION_SECRET ? "config" : "env")
-    : "generated",
-  SESSION_MAX_AGE: Number(
-    pick(raw.SESSION_MAX_AGE, process.env.SESSION_MAX_AGE, 60 * 60 * 24 * 30)
-  ),
-  FORCE_SECURE: bool(pick(raw.FORCE_SECURE, process.env.COOKIE_SECURE), false),
-  ADMINS,
-  ADMIN_USERNAME: Object.keys(ADMINS)[0] || "",
-  ADMIN_FILE: resolveAdminFile(),
-  TRUST_PROXY: bool(process.env.TRUST_PROXY, true),
-};
+  BASE_DIR: config.BASE_DIR,
+  VERSION: config.VERSION,
 
-if (Object.keys(ADMINS).length === 0) {
-  console.warn(
-    "[env] WARN: koi admin nahi mila — .env me ADMINS=user:pass ya ADMIN_USERNAME/ADMIN_PASSWORD set karo"
-  );
-}
-if (!SESSION_SECRET) {
-  console.warn(
-    "[env] WARN: SESSION_SECRET missing — random bana liya, restart pe sessions tootenge"
-  );
-}
+  COOKIE_NAME: config.COOKIE_NAME,
+  COOKIE_NAMES: config.COOKIE_NAMES,
+  COOKIE_DOMAIN: config.COOKIE_DOMAIN,
+  FORCE_SECURE: config.FORCE_SECURE,
+  SESSION_MAX_AGE: config.SESSION_MAX_AGE,
+  SESSION_TTL: config.SESSION_TTL,
+  TOKEN_TTL: config.TOKEN_TTL,
+
+  SESSION_SECRET: config.SESSION_SECRET,
+  SESSION_SECRET_OLD: config.SESSION_SECRET_OLD,
+  SESSION_SECRET_SRC: config.SESSION_SECRET_SRC,
+
+  ADMINS: config.ADMINS,
+  ADMIN_USERNAME: config.ADMIN_USERNAME,
+  ADMIN_FILE: config.ADMIN_FILE,
+  ADMIN_API_KEY: config.ADMIN_API_KEY,
+
+  TRUST_PROXY: config.TRUST_PROXY,
+
+  ONLINE_WINDOW_SECONDS: config.ONLINE_WINDOW_SECONDS,
+  IDLE_AFTER_HOURS: config.IDLE_AFTER_HOURS,
+  STALE_AFTER_DAYS: config.STALE_AFTER_DAYS,
+  MAX_WS_TEXT_BYTES: config.MAX_WS_TEXT_BYTES,
+  MAX_SMS_BODY: config.MAX_SMS_BODY,
+  MAX_BROADCAST: config.MAX_BROADCAST,
+  WS_PING_INTERVAL: config.WS_PING_INTERVAL,
+  WS_IDLE_TIMEOUT: config.WS_IDLE_TIMEOUT,
+  OUTBOX_REPUSH_AFTER: config.OUTBOX_REPUSH_AFTER,
+  NUMBER_RETRY_AFTER: config.NUMBER_RETRY_AFTER,
+  SEND_STUCK_AFTER: config.SEND_STUCK_AFTER,
+  EVENT_PRUNE_LIMIT: config.EVENT_PRUNE_LIMIT,
+  TG_LOG_LIMIT: config.TG_LOG_LIMIT,
+  ACTIVITY_LOG_LIMIT: config.ACTIVITY_LOG_LIMIT,
+  LOGIN_MAX_TRIES: config.LOGIN_MAX_TRIES,
+  LOGIN_LOCK_SECONDS: config.LOGIN_LOCK_SECONDS,
+  KEY_ALPHABET: config.KEY_ALPHABET,
+
+  TELE_API_ID: config.TELE_API_ID,
+  TELE_API_HASH: config.TELE_API_HASH,
+  TARGET_CHANNEL_ID: config.TARGET_CHANNEL_ID,
+  DEFAULT_FWD_USER: config.DEFAULT_FWD_USER,
+  RELAY_SESSION_FILE: config.RELAY_SESSION_FILE,
+
+  LOG_LEVEL: config.LOG_LEVEL,
+  MONGO_URL: config.MONGO_URL,
+  DB_NAME: config.DB_NAME,
+  UPI_KEYWORDS: config.UPI_KEYWORDS,
+  AMOUNT_RE: config.AMOUNT_RE,
+  DEFAULT_KEY_DAYS: config.DEFAULT_KEY_DAYS,
+
+  RAW: config,
+};
