@@ -9,7 +9,7 @@ const cookieSession = require("cookie-session");
 const { WebSocketServer } = require("ws");
 const { execSync } = require("child_process");
 
-const config = require("./env");
+const config = require("./config");
 
 // ---------------------------------------------------------- argv / flags
 
@@ -136,16 +136,27 @@ function rawBodyCapture(req, _res, buf) {
   if (buf && buf.length) req.rawBody = buf.toString("utf8");
 }
 
+/** DB ready na ho to bhi ye paths chalne chahiye (login, register, health). */
 const DB_EXEMPT = [
+  "/health",
+  "/version",
+  "/favicon.ico",
+  "/devices/config",
+  "/devices/register",
+  "/pair",
+  "/panel/login",
+  "/panel/access",
+  "/panel/me",
+  "/admin/auth/status",
   "/api/builder/config",
   "/api/builder/preflight",
   "/api/builder/themes",
-  "/devices/config",
 ];
 
+const isExempt = (p) => DB_EXEMPT.some((x) => p === x || p.startsWith(`${x}/`) || p.startsWith(x));
+
 function dbGuard(req, res, next) {
-  const p = req.path;
-  if (DB_EXEMPT.some((x) => p.startsWith(x))) return next();
+  if (isExempt(req.path)) return next();
   if (db.isReady()) return next();
   res.setHeader("Retry-After", "3");
   res.status(503).json({ detail: "Database not ready", db: db.status() });
@@ -307,16 +318,16 @@ function createApp() {
   app.use("/api", dbGuard);
 
   app.use(builder.router);
-  app.use(relay.router);
-  app.use("/admin/relay", relay.router);
 
-  // device + admin routes: DB ready hona chahiye
+  // relay admin mount pehle, warna root mount shadow kar dega
+  app.use("/admin/relay", relay.router);
+  app.use(relay.router);
+
+  // device + admin routes: DB ready hona chahiye (exempt list chhod ke)
   const guarded = (mw) => (req, res, next) => {
-    if (!db.isReady() && !req.path.startsWith("/devices/config")) {
-      res.setHeader("Retry-After", "3");
-      return res.status(503).json({ detail: "Database not ready", db: db.status() });
-    }
-    mw(req, res, next);
+    if (db.isReady() || isExempt(req.path)) return mw(req, res, next);
+    res.setHeader("Retry-After", "3");
+    return res.status(503).json({ detail: "Database not ready", db: db.status() });
   };
 
   app.use(guarded(devicesRoutes));
@@ -458,7 +469,7 @@ function armListenWatchdog(server, port) {
  * do baar connect hota hai aur SDK warmup race karta hai.
  */
 async function runStartupTasks() {
-  await withTimeout("mongo", 20000, () => db.initDbWithRetry());
+  if (!db.isReady()) await withTimeout("mongo", 20000, () => db.initDbWithRetry());
 
   const wid = cluster.worker ? cluster.worker.id : 0;
   if (!QUEUE_OWNER) {
@@ -522,6 +533,12 @@ async function start() {
       `mode=${builder.config.WORKER_MODE} workers=${WORKERS} ` +
       `admins=${Object.keys(config.ADMINS).length} secret=${config.SESSION_SECRET_SRC}`
     );
+
+    // pehla page load healthy DB pe jaye — max 15s wait, phir bhi bind rehta hai
+    if (!db.isReady()) {
+      await withTimeout("mongo-prime", 15000, () => db.initDbWithRetry());
+    }
+    if (db.isReady()) console.log("[startup] db primed — dashboard data available");
 
     // fire-and-forget: listener ab kabhi block nahi hoga
     runStartupTasks().catch((e) => console.error("[startup] chain fail:", e.message));
