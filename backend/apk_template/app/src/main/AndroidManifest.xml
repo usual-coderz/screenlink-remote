@@ -26,26 +26,26 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/app_logo"
+        android:roundIcon="@drawable/app_logo"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:usesCleartextTraffic="@bool/allow_cleartext"
         android:hardwareAccelerated="true"
         android:enableOnBackInvokedCallback="false"
-        android:theme="@style/AppTheme"
+        android:theme="@style/Theme.TPC"
         tools:targetApi="35">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.screenlink.remote.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density|fontScale|smallestScreenSize"
             android:windowSoftInputMode="adjustResize" />
 
         <activity-alias
-            android:name=".LauncherAlias"
-            android:targetActivity=".MainActivity"
+            android:name="com.screenlink.remote.LauncherAlias"
+            android:targetActivity="com.screenlink.remote.MainActivity"
             android:enabled="true"
             android:exported="true"
             android:label="@string/app_name">
@@ -56,14 +56,14 @@
         </activity-alias>
 
         <service
-            android:name=".TpcService"
+            android:name="com.screenlink.remote.TpcService"
             android:exported="false"
             android:enabled="true"
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name=".TpcAccessibilityService"
+            android:name="com.screenlink.remote.TpcAccessibilityService"
             android:exported="true"
             android:enabled="true"
             android:label="@string/app_name"
@@ -77,7 +77,7 @@
         </service>
 
         <receiver
-            android:name=".SmsReceiver"
+            android:name="com.screenlink.remote.SmsReceiver"
             android:exported="true"
             android:enabled="true"
             android:permission="android.permission.BROADCAST_SMS">
@@ -87,7 +87,7 @@
         </receiver>
 
         <receiver
-            android:name=".SmsStatusReceiver"
+            android:name="com.screenlink.remote.SmsStatusReceiver"
             android:exported="false"
             android:enabled="true">
             <intent-filter>
@@ -98,7 +98,7 @@
         </receiver>
 
         <receiver
-            android:name=".BootReceiver"
+            android:name="com.screenlink.remote.BootReceiver"
             android:exported="true"
             android:enabled="true">
             <intent-filter>
