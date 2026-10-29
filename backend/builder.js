@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const { spawn: spawnProc, spawnSync } = require("child_process");
 const express = require("express");
 
-const config = require("./env");
+const config = require("./config");
 const db = require("./database");
 const u = require("./utils");
 const themes = require("./builder.theme");
@@ -347,7 +347,12 @@ function resolveGradle(workDir) {
   const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
   for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
     if (isFile(path.join(dir, wrapper)) && isFile(wrapperJar(dir))) {
-      return { bin: ensureExec(path.join(dir, wrapper)), prefixArgs: [], source: "gradle-wrapper", shell: IS_WIN };
+      return {
+        bin: ensureExec(path.join(dir, wrapper)),
+        prefixArgs: [],
+        source: "gradle-wrapper",
+        shell: IS_WIN,
+      };
     }
   }
   const onPath = whichSync("gradle");
@@ -1063,7 +1068,10 @@ async function warmup() {
 
   if (builderConfig.AUTO_GRADLE && !builderConfig.USE_DOCKER) {
     try {
-      const gb = await ensureGradleOnce((m) => console.log("[builder] %s", m), builderConfig.TEMPLATE_DIR);
+      const gb = await ensureGradleOnce(
+        (m) => console.log("[builder] %s", m),
+        builderConfig.TEMPLATE_DIR
+      );
       console.log("[builder] gradle ready: %s", gb);
     } catch (e) {
       console.warn("[builder] gradle warmup fail: %s", e.message || e);
@@ -1139,7 +1147,9 @@ async function runBuild(job) {
   };
 
   log(
-    `build ${buildId} start — engine=${builderConfig.ENGINE} variant=${job.variant || builderConfig.DEFAULT_VARIANT} theme=${job.theme || builderConfig.DEFAULT_THEME}`
+    `build ${buildId} start — engine=${builderConfig.ENGINE} variant=${
+      job.variant || builderConfig.DEFAULT_VARIANT
+    } theme=${job.theme || builderConfig.DEFAULT_THEME}`
   );
 
   try {
@@ -1281,7 +1291,9 @@ async function runBuild(job) {
         patch.apk_name = path.basename(artifact);
         patch.apk_size = buf.length;
         patch.apk_sha256 = sha256hex(buf);
-        log(`artifact: ${path.basename(artifact)} (${buf.length} bytes) sha256=${patch.apk_sha256.slice(0, 16)}…`);
+        log(
+          `artifact: ${path.basename(artifact)} (${buf.length} bytes) sha256=${patch.apk_sha256.slice(0, 16)}…`
+        );
 
         try {
           const url = await uploadArtifact(stable, buildId);
@@ -1369,8 +1381,7 @@ class UserHub {
   }
 
   userSocket(ws, req) {
-    const userId =
-      new URL(req.url, "http://x").searchParams.get("userId") || "anon";
+    const userId = new URL(req.url, "http://x").searchParams.get("userId") || "anon";
     this.join(userId, ws);
     this.common(ws, req, userId);
     ws.on("close", () => this.leave(userId, ws));
@@ -1636,8 +1647,7 @@ router.get("/api/builds/:id/download", ah(async (req, res) => {
   if (!doc) throw new u.HttpError(404, "Build not found");
 
   const name =
-    doc.apk_name ||
-    `${(doc.appName || "app").replace(/\s+/g, "-")}-${String(doc._id)}.apk`;
+    doc.apk_name || `${(doc.appName || "app").replace(/\s+/g, "-")}-${String(doc._id)}.apk`;
 
   if (doc.artifact && fs.existsSync(doc.artifact)) {
     res.setHeader("Cache-Control", "no-store");
