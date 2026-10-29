@@ -47,7 +47,7 @@ const builderConfig = {
   PY_BUILDER: process.env.PY_BUILDER || "python3",
 
   GRADLE_BIN: process.env.GRADLE_BIN || "gradle",
-  GRADLE_VERSION: process.env.GRADLE_VERSION || "8.7",
+  GRADLE_VERSION: process.env.GRADLE_VERSION || "8.9",
   KEYTOOL_BIN: process.env.KEYTOOL_BIN || "keytool",
   APKSIGNER_BIN: process.env.APKSIGNER_BIN || "apksigner",
   ZIPALIGN_BIN: process.env.ZIPALIGN_BIN || "zipalign",
