@@ -1,3 +1,6 @@
+backend/apk_templete/app/src/main/java/com/screenlink/remote/ImageLoader.kt
+
+
 package com.screenlink.remote
 
 import android.graphics.Bitmap
