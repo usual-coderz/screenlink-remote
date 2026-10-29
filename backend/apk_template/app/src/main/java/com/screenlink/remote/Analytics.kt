@@ -56,6 +56,9 @@ object Analytics {
     }
 
     private fun post(context: Context, event: String) {
+        val base = ApiConfig.resolve(context)
+        if (base.isBlank()) return
+
         var conn: HttpURLConnection? = null
         try {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -70,7 +73,7 @@ object Analytics {
                 put("theme", BuildConfig.THEME)
                 put("ts", System.currentTimeMillis())
             }
-            conn = URL("${TpcService.API_BASE_URL}/devices/event").openConnection() as HttpURLConnection
+            conn = URL("$base/devices/event").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 10_000
             conn.readTimeout = 10_000
