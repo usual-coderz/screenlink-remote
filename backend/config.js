@@ -141,6 +141,9 @@ const config = {
   LOG_LEVEL: envStr("LOG_LEVEL", "INFO"),
   FORCE_SECURE: envFlag("COOKIE_SECURE", false),
 
+  // build ke waqt APK me inject hone wala public origin
+  PUBLIC_BASE_URL: envStr("PUBLIC_BASE_URL", "").replace(/\/+$/, ""),
+
   MONGO_URL: envStr("MONGO_URL", envStr("MONGODB_URI", "mongodb://127.0.0.1:27017")),
   DB_NAME: envStr("DB_NAME", "tpc_panel"),
 
