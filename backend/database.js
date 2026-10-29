@@ -60,7 +60,7 @@ function envDbName() {
     process.env.MONGO_DB ||
     process.env.MONGODB_DB ||
     process.env.MONGO_DATABASE ||
-    "tpc_panel"
+    "shadow_panel"
   );
 }
 
