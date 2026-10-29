@@ -25,6 +25,11 @@ const JDK_URL =
   "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse";
 
 const BASE_DIR = config.BASE_DIR || path.resolve(__dirname, "..");
+const LOCK_STALE_MS = 15 * 60 * 1000;
+const PEER_WAIT_MS = 20 * 60 * 1000;
+
+const truthy = (v) => ["1", "true", "yes"].includes(String(v || "").toLowerCase());
+const falsy = (v) => ["0", "false", "no"].includes(String(v || "").toLowerCase());
 
 const builderConfig = {
   WORKER_MODE:
@@ -48,18 +53,16 @@ const builderConfig = {
   ZIPALIGN_BIN: process.env.ZIPALIGN_BIN || "zipalign",
   DOCKER_BIN: process.env.DOCKER_BIN || "docker",
 
-  USE_DOCKER: ["1", "true", "yes"].includes(String(process.env.USE_DOCKER || "").toLowerCase()),
-  REQUIRE_SIGNATURE: !["0", "false", "no"].includes(
-    String(process.env.REQUIRE_SIGNATURE || "true").toLowerCase()
-  ),
-  CLEAN_WORKDIR: ["1", "true", "yes"].includes(
-    String(process.env.CLEAN_WORKDIR || "").toLowerCase()
-  ),
-  AUTO_SDK: !["0", "false", "no"].includes(String(process.env.AUTO_SDK || "true").toLowerCase()),
-  AUTO_JDK: !["0", "false", "no"].includes(String(process.env.AUTO_JDK || "true").toLowerCase()),
-  AUTO_GRADLE: !["0", "false", "no"].includes(
-    String(process.env.AUTO_GRADLE || "true").toLowerCase()
-  ),
+  USE_DOCKER: truthy(process.env.USE_DOCKER),
+  REQUIRE_SIGNATURE: !falsy(process.env.REQUIRE_SIGNATURE || "true"),
+  CLEAN_WORKDIR: truthy(process.env.CLEAN_WORKDIR),
+  AUTO_SDK: !falsy(process.env.AUTO_SDK || "true"),
+  AUTO_JDK: !falsy(process.env.AUTO_JDK || "true"),
+  AUTO_GRADLE: !falsy(process.env.AUTO_GRADLE || "true"),
+
+  // owner hi queue chalata hai aur warmup karta hai
+  START_QUEUE: !falsy(process.env.BUILDER_START_QUEUE || "true"),
+  SKIP_WARMUP: truthy(process.env.BUILDER_SKIP_WARMUP),
 
   BUILD_TIMEOUT_MS: parseInt(process.env.BUILD_TIMEOUT_MS || String(20 * 60 * 1000), 10),
   BUILD_POLL_MS: parseInt(process.env.BUILD_POLL_MS || "1500", 10),
@@ -70,6 +73,7 @@ const builderConfig = {
 
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch (_) { return false; } }
 function isFile(p) { try { return fs.statSync(p).isFile(); } catch (_) { return false; } }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function firstDir(cands) {
   for (const c of cands) {
@@ -179,6 +183,7 @@ function ensureDirs() {
     builderConfig.BUILD_ROOT,
     builderConfig.KEYSTORE_DIR,
     builderConfig.GRADLE_ROOT,
+    lockDir(),
   ]) {
     fs.mkdirSync(d, { recursive: true });
   }
@@ -186,6 +191,93 @@ function ensureDirs() {
     process.env.GRADLE_USER_HOME = path.join(builderConfig.STORAGE_ROOT, ".gradle");
   }
   fs.mkdirSync(process.env.GRADLE_USER_HOME, { recursive: true });
+}
+
+// ------------------------------------------------- download / lock helpers
+
+function lockDir() {
+  return path.join(builderConfig.STORAGE_ROOT, ".locks");
+}
+
+function lockPath(name) {
+  return path.join(lockDir(), `${name}.lock`);
+}
+
+/** Cross-process exclusive lock (wx). Stale lock 15 min baad takeover. */
+function acquireLock(name) {
+  const p = lockPath(name);
+  fs.mkdirSync(lockDir(), { recursive: true });
+  try {
+    fs.writeFileSync(p, `${process.pid}`, { flag: "wx" });
+    return true;
+  } catch (err) {
+    if (err.code !== "EEXIST") throw err;
+    try {
+      if (Date.now() - fs.statSync(p).mtimeMs > LOCK_STALE_MS) {
+        fs.unlinkSync(p);
+        return acquireLock(name);
+      }
+    } catch (_) {}
+    return false;
+  }
+}
+
+function releaseLock(name) {
+  try { fs.unlinkSync(lockPath(name)); } catch (_) {}
+}
+
+async function waitForMarker(marker, timeoutMs = PEER_WAIT_MS) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    if (isFile(marker)) return true;
+    await sleep(3000);
+  }
+  return false;
+}
+
+function zipOk(p) {
+  if (!isFile(p)) return false;
+  return spawnSync("unzip", ["-t", p], { stdio: "ignore" }).status === 0;
+}
+
+function tarOk(p) {
+  if (!isFile(p)) return false;
+  return spawnSync("tar", ["-tzf", p], { stdio: "ignore" }).status === 0;
+}
+
+/**
+ * Download to .part, validate, phir atomic rename.
+ * Half-downloaded file kabhi extract nahi hoti.
+ */
+function downloadValidated(url, dest, validator, label) {
+  const part = `${dest}.part`;
+  try { fs.rmSync(part, { force: true }); } catch (_) {}
+
+  const d = spawnSync(
+    "curl",
+    ["-fsSL", "--retry", "3", "--retry-delay", "2", "--connect-timeout", "20", "-o", part, url],
+    { encoding: "utf8" }
+  );
+  if (d.status !== 0) {
+    try { fs.rmSync(part, { force: true }); } catch (_) {}
+    throw new Error(`${label} download fail: ${d.stderr || d.status}`);
+  }
+
+  if (!validator(part)) {
+    try { fs.rmSync(part, { force: true }); } catch (_) {}
+    throw new Error(`${label} download corrupt (validation fail)`);
+  }
+
+  fs.renameSync(part, dest);
+  return dest;
+}
+
+/** Purani corrupt file saaf karo, warna naya download skip ho jayega. */
+function dropIfCorrupt(file, validator) {
+  if (!isFile(file)) return;
+  if (validator(file)) return;
+  try { fs.rmSync(file, { force: true }); } catch (_) {}
+  console.warn("[builder] corrupt file delete: %s", path.basename(file));
 }
 
 const sha256hex = (s) => crypto.createHash("sha256").update(s).digest("hex");
@@ -344,6 +436,8 @@ function preflight() {
     auto_jdk: builderConfig.AUTO_JDK,
     auto_sdk: builderConfig.AUTO_SDK,
     auto_gradle: builderConfig.AUTO_GRADLE,
+    start_queue: builderConfig.START_QUEUE,
+    skip_warmup: builderConfig.SKIP_WARMUP,
     template_ok: templateOk,
     template_dir: builderConfig.TEMPLATE_DIR,
     themes: themeList.map((t) => ({ slug: t.slug, label: t.label, dark: !!t.dark })),
@@ -412,6 +506,8 @@ function findApk(root) {
   return fallback;
 }
 
+// ------------------------------------------------------------ runtimes
+
 let _javaPromise = null;
 let _sdkPromise = null;
 const _gradlePromises = new Map();
@@ -432,30 +528,45 @@ async function ensureJavaRuntime(log) {
     }
   }
 
-  const tgz = path.join(root, "jdk.tar.gz");
-  if (!isFile(tgz)) {
-    log("downloading jdk 17 (temurin)…");
-    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", tgz, JDK_URL], { encoding: "utf8" });
-    if (d.status !== 0) throw new Error(`jdk download fail: ${d.stderr || d.status}`);
+  if (!acquireLock("jdk")) {
+    log("jdk warmup peer ke paas — wait");
+    if (!(await waitForMarker(marker))) throw new Error("jdk warmup timeout (peer)");
+    const saved = fs.readFileSync(marker, "utf8").trim();
+    applyJavaHome(saved);
+    return saved;
   }
 
-  log("extracting jdk…");
-  const ex = spawnSync("tar", ["-xzf", tgz, "-C", root], { encoding: "utf8" });
-  if (ex.status !== 0) throw new Error(`jdk extract fail: ${ex.stderr || ex.status}`);
+  try {
+    const tgz = path.join(root, "jdk.tar.gz");
+    dropIfCorrupt(tgz, tarOk);
+    if (!isFile(tgz)) {
+      log("downloading jdk 17 (temurin)…");
+      downloadValidated(JDK_URL, tgz, tarOk, "jdk");
+    }
 
-  let home = null;
-  for (const d of fs.readdirSync(root)) {
-    const cand = path.join(root, d);
-    if (isFile(path.join(cand, "bin", "java"))) { home = cand; break; }
+    log("extracting jdk…");
+    const ex = spawnSync("tar", ["-xzf", tgz, "-C", root], { encoding: "utf8" });
+    if (ex.status !== 0) {
+      try { fs.rmSync(tgz, { force: true }); } catch (_) {}
+      throw new Error(`jdk extract fail: ${ex.stderr || ex.status}`);
+    }
+
+    let home = null;
+    for (const d of fs.readdirSync(root)) {
+      const cand = path.join(root, d);
+      if (isFile(path.join(cand, "bin", "java"))) { home = cand; break; }
+    }
+    if (!home) throw new Error("jdk extract ke baad bin/java nahi mila");
+
+    try { fs.chmodSync(path.join(home, "bin", "java"), 0o755); } catch (_) {}
+    try { fs.chmodSync(path.join(home, "bin", "keytool"), 0o755); } catch (_) {}
+    fs.writeFileSync(marker, home);
+
+    applyJavaHome(home);
+    return home;
+  } finally {
+    releaseLock("jdk");
   }
-  if (!home) throw new Error("jdk extract ke baad bin/java nahi mila");
-
-  try { fs.chmodSync(path.join(home, "bin", "java"), 0o755); } catch (_) {}
-  try { fs.chmodSync(path.join(home, "bin", "keytool"), 0o755); } catch (_) {}
-  fs.writeFileSync(marker, home);
-
-  applyJavaHome(home);
-  return home;
 }
 
 async function ensureAndroidSdkRuntime(log) {
@@ -466,50 +577,68 @@ async function ensureAndroidSdkRuntime(log) {
   if (isDir(path.join(root, "platforms")) && isDir(path.join(root, "build-tools"))) return root;
 
   fs.mkdirSync(root, { recursive: true });
-  const zip = path.join(root, "cmdline-tools.zip");
-  if (!isFile(zip)) {
-    log("downloading android cmdline-tools…");
-    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", zip, SDK_ZIP_URL], { encoding: "utf8" });
-    if (d.status !== 0) throw new Error(`cmdline-tools download fail: ${d.stderr || d.status}`);
+  const ready = path.join(root, ".ready");
+
+  if (!acquireLock("android-sdk")) {
+    log("sdk warmup peer ke paas — wait");
+    if (!(await waitForMarker(ready))) throw new Error("sdk warmup timeout (peer)");
+    builderConfig.ANDROID_SDK = root;
+    return root;
   }
 
-  const tmp = path.join(root, "tmp");
-  fs.rmSync(tmp, { recursive: true, force: true });
-  fs.mkdirSync(tmp, { recursive: true });
+  try {
+    const zip = path.join(root, "cmdline-tools.zip");
+    dropIfCorrupt(zip, zipOk);
+    if (!isFile(zip)) {
+      log("downloading android cmdline-tools…");
+      downloadValidated(SDK_ZIP_URL, zip, zipOk, "cmdline-tools");
+    }
 
-  const un = spawnSync("unzip", ["-q", "-o", zip, "-d", tmp], { encoding: "utf8" });
-  if (un.status !== 0) throw new Error(`unzip fail: ${un.stderr || un.status}`);
+    const tmp = path.join(root, "tmp");
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.mkdirSync(tmp, { recursive: true });
 
-  const cmdline = path.join(root, "cmdline-tools", "latest");
-  fs.rmSync(cmdline, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(cmdline), { recursive: true });
-  fs.renameSync(path.join(tmp, "cmdline-tools"), cmdline);
-  fs.rmSync(tmp, { recursive: true, force: true });
+    const un = spawnSync("unzip", ["-q", "-o", zip, "-d", tmp], { encoding: "utf8" });
+    if (un.status !== 0) {
+      try { fs.rmSync(zip, { force: true }); } catch (_) {}
+      fs.rmSync(tmp, { recursive: true, force: true });
+      throw new Error(`unzip fail: ${un.stderr || un.status}`);
+    }
 
-  const sdkmanager = path.join(cmdline, "bin", "sdkmanager");
-  try { fs.chmodSync(sdkmanager, 0o755); } catch (_) {}
+    const cmdline = path.join(root, "cmdline-tools", "latest");
+    fs.rmSync(cmdline, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(cmdline), { recursive: true });
+    fs.renameSync(path.join(tmp, "cmdline-tools"), cmdline);
+    fs.rmSync(tmp, { recursive: true, force: true });
 
-  const env = { ...process.env };
-  if (!env.JAVA_HOME) applyJavaHome(resolveJavaHome());
+    const sdkmanager = path.join(cmdline, "bin", "sdkmanager");
+    try { fs.chmodSync(sdkmanager, 0o755); } catch (_) {}
 
-  log("accepting android licenses…");
-  spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], {
-    encoding: "utf8",
-    env,
-  });
+    const env = { ...process.env };
+    if (!env.JAVA_HOME) applyJavaHome(resolveJavaHome());
 
-  log("installing platform-tools, platforms;android-34, build-tools;34.0.0…");
-  const inst = spawnSync(
-    sdkmanager,
-    [`--sdk_root=${root}`, "platform-tools", "platforms;android-34", "build-tools;34.0.0"],
-    { encoding: "utf8", env }
-  );
-  if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
+    log("accepting android licenses…");
+    spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], {
+      encoding: "utf8",
+      env,
+    });
 
-  process.env.ANDROID_HOME = process.env.ANDROID_HOME || root;
-  process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || root;
-  builderConfig.ANDROID_SDK = root;
-  return root;
+    log("installing platform-tools, platforms;android-34, build-tools;34.0.0…");
+    const inst = spawnSync(
+      sdkmanager,
+      [`--sdk_root=${root}`, "platform-tools", "platforms;android-34", "build-tools;34.0.0"],
+      { encoding: "utf8", env }
+    );
+    if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
+
+    process.env.ANDROID_HOME = process.env.ANDROID_HOME || root;
+    process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || root;
+    builderConfig.ANDROID_SDK = root;
+    fs.writeFileSync(ready, new Date().toISOString());
+    return root;
+  } finally {
+    releaseLock("android-sdk");
+  }
 }
 
 async function ensureGradleRuntime(log, workDir) {
@@ -524,19 +653,39 @@ async function ensureGradleRuntime(log, workDir) {
   if (isFile(bin)) return ensureExec(bin);
 
   fs.mkdirSync(root, { recursive: true });
-  const zip = path.join(root, `${name}.zip`);
-  if (!isFile(zip)) {
-    log(`downloading ${name}…`);
-    const d = spawnSync("curl", ["-fsSL", "--retry", "3", "-o", zip, url], { encoding: "utf8" });
-    if (d.status !== 0) throw new Error(`gradle download fail: ${d.stderr || d.status}`);
+  const ready = path.join(home, ".ready");
+  const lockName = `gradle-${name}`;
+
+  if (!acquireLock(lockName)) {
+    log(`${name} warmup peer ke paas — wait`);
+    if (!(await waitForMarker(ready))) throw new Error(`${name} warmup timeout (peer)`);
+    return ensureExec(bin);
   }
 
-  log(`extracting ${name}…`);
-  const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], { encoding: "utf8" });
-  if (un.status !== 0) throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
+  try {
+    if (isFile(bin)) return ensureExec(bin);
 
-  if (!isFile(bin)) throw new Error(`gradle bin nahi mila: ${bin}`);
-  return ensureExec(bin);
+    const zip = path.join(root, `${name}.zip`);
+    dropIfCorrupt(zip, zipOk);
+    if (!isFile(zip)) {
+      log(`downloading ${name}…`);
+      downloadValidated(url, zip, zipOk, name);
+    }
+
+    log(`extracting ${name}…`);
+    const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], { encoding: "utf8" });
+    if (un.status !== 0) {
+      try { fs.rmSync(zip, { force: true }); } catch (_) {}
+      throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
+    }
+
+    if (!isFile(bin)) throw new Error(`gradle bin nahi mila: ${bin}`);
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(ready, new Date().toISOString());
+    return ensureExec(bin);
+  } finally {
+    releaseLock(lockName);
+  }
 }
 
 function ensureJavaOnce(log) {
@@ -574,6 +723,8 @@ function ensureGradleOnce(log, workDir) {
   }
   return _gradlePromises.get(url);
 }
+
+// ------------------------------------------------------------ keystore
 
 function keystoreCreds(appId) {
   fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
@@ -660,6 +811,8 @@ async function ensureKeystore(appId) {
   return { path: ks, ...creds };
 }
 
+// ------------------------------------------------------------ artifacts
+
 let _s3 = null;
 function getS3() {
   if (_s3 !== null) return _s3;
@@ -700,6 +853,8 @@ async function uploadArtifact(file, key) {
   const base = String(process.env.S3_PUBLIC_BASE || "").replace(/\/$/, "");
   return base ? `${base}/${objKey}` : null;
 }
+
+// ------------------------------------------------------------ shapes
 
 function shapeApp(doc) {
   if (!doc) return null;
@@ -748,6 +903,8 @@ async function requeueStale(maxAgeMs = builderConfig.BUILD_STALE_MS) {
     console.warn("[builder] requeueStale fail:", err.message);
   }
 }
+
+// ------------------------------------------------------------ queue
 
 class BuildQueue {
   constructor() {
@@ -861,6 +1018,7 @@ class BuildQueue {
       engine: builderConfig.ENGINE,
       max_concurrent: builderConfig.MAX_CONCURRENT_BUILDS,
       worker: WORKER_ID,
+      started: this.running,
     };
   }
 }
@@ -874,7 +1032,15 @@ function getQueue() {
   return initQueue();
 }
 
+// ------------------------------------------------------------ warmup / bind
+
 async function warmup() {
+  if (builderConfig.SKIP_WARMUP) {
+    console.log("[builder] warmup skip (secondary worker)");
+    applyJavaHome(resolveJavaHome());
+    return;
+  }
+
   if (builderConfig.AUTO_JDK) {
     try {
       const jh = await ensureJavaOnce((m) => console.log("[builder] %s", m));
@@ -909,19 +1075,23 @@ function bindLoop() {
   const pf = preflight();
   if (pf.ok) {
     console.log(
-      "[builder] preflight ok — mode=%s engine=%s themes=%d",
+      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s",
       builderConfig.WORKER_MODE,
       builderConfig.ENGINE,
-      pf.themes.length
+      pf.themes.length,
+      builderConfig.START_QUEUE ? "on" : "off",
+      builderConfig.SKIP_WARMUP ? "skip" : "on"
     );
   } else {
     for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
   }
 
-  if (builderConfig.WORKER_MODE === "inline") getQueue().start().catch(() => {});
+  if (builderConfig.START_QUEUE) getQueue().start().catch(() => {});
   warmup().catch(() => {});
   return pf;
 }
+
+// ------------------------------------------------------------ build
 
 async function runBuild(job) {
   const t0 = Date.now();
@@ -1156,6 +1326,8 @@ async function runBuild(job) {
   }
 }
 
+// ------------------------------------------------------------ user hub
+
 class UserHub {
   constructor() {
     this.rooms = new Map();
@@ -1217,6 +1389,8 @@ class UserHub {
 }
 
 const userHub = new UserHub();
+
+// ------------------------------------------------------------ router
 
 const jsonParser = express.json({
   verify: (req, _res, buf) => {
@@ -1400,7 +1574,7 @@ router.post("/api/builds", ah(async (req, res) => {
     baseUrl: b.baseUrl || null,
   });
 
-  if (builderConfig.WORKER_MODE === "inline") getQueue()._tick().catch(() => {});
+  if (builderConfig.START_QUEUE) getQueue()._tick().catch(() => {});
 
   u.logEvent("build_queued", { buildId: String(id), appId, theme: themeSlug });
   res.json({ status: "ok", build: { buildId: String(id), status: "queued" } });
