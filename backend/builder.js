@@ -60,7 +60,6 @@ const builderConfig = {
   AUTO_JDK: !falsy(process.env.AUTO_JDK || "true"),
   AUTO_GRADLE: !falsy(process.env.AUTO_GRADLE || "true"),
 
-  // owner hi queue chalata hai aur warmup karta hai
   START_QUEUE: !falsy(process.env.BUILDER_START_QUEUE || "true"),
   SKIP_WARMUP: truthy(process.env.BUILDER_SKIP_WARMUP),
 
@@ -84,6 +83,7 @@ function firstDir(cands) {
   return null;
 }
 
+/** dono spelling: apk_template (sahi) aur apk_templete (purana folder naam) */
 function resolveTemplateDir() {
   if (process.env.TEMPLATE_DIR) {
     const abs = path.resolve(process.env.TEMPLATE_DIR);
@@ -91,12 +91,17 @@ function resolveTemplateDir() {
   }
   return firstDir([
     path.join(BASE_DIR, "backend", "apk_template"),
+    path.join(BASE_DIR, "backend", "apk_templete"),
     path.join(BASE_DIR, "apk_template"),
+    path.join(BASE_DIR, "apk_templete"),
     path.join(process.cwd(), "backend", "apk_template"),
+    path.join(process.cwd(), "backend", "apk_templete"),
     path.join(process.cwd(), "apk_template"),
+    path.join(process.cwd(), "apk_templete"),
     path.join(__dirname, "apk_template"),
+    path.join(__dirname, "apk_templete"),
     path.join(__dirname, "..", "backend", "apk_template"),
-    path.join(__dirname, "..", "apk_template"),
+    path.join(__dirname, "..", "backend", "apk_templete"),
   ]);
 }
 
@@ -203,7 +208,6 @@ function lockPath(name) {
   return path.join(lockDir(), `${name}.lock`);
 }
 
-/** Cross-process exclusive lock (wx). Stale lock 15 min baad takeover. */
 function acquireLock(name) {
   const p = lockPath(name);
   fs.mkdirSync(lockDir(), { recursive: true });
@@ -245,10 +249,6 @@ function tarOk(p) {
   return spawnSync("tar", ["-tzf", p], { stdio: "ignore" }).status === 0;
 }
 
-/**
- * Download to .part, validate, phir atomic rename.
- * Half-downloaded file kabhi extract nahi hoti.
- */
 function downloadValidated(url, dest, validator, label) {
   const part = `${dest}.part`;
   try { fs.rmSync(part, { force: true }); } catch (_) {}
@@ -272,7 +272,6 @@ function downloadValidated(url, dest, validator, label) {
   return dest;
 }
 
-/** Purani corrupt file saaf karo, warna naya download skip ho jayega. */
 function dropIfCorrupt(file, validator) {
   if (!isFile(file)) return;
   if (validator(file)) return;
@@ -375,6 +374,18 @@ function gradleHint() {
     "gradle nahi mila. (a) apk_template mein gradlew + gradle/wrapper/gradle-wrapper.jar daalo, " +
     "(b) gradle install karo, (c) GRADLE_BIN set karo, ya (d) USE_DOCKER=1."
   );
+}
+
+/** request se public origin nikaalo — APK me inject hota hai. */
+function requestBaseUrl(req) {
+  const proto =
+    String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim() ||
+    "http";
+  const host = String(req.headers["x-forwarded-host"] || req.get("host") || "")
+    .split(",")[0]
+    .trim();
+  if (!host) return config.PUBLIC_BASE_URL || "";
+  return `${proto}://${host}`.replace(/\/+$/, "");
 }
 
 function preflight() {
@@ -1083,12 +1094,13 @@ function bindLoop() {
   const pf = preflight();
   if (pf.ok) {
     console.log(
-      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s",
+      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s template=%s",
       builderConfig.WORKER_MODE,
       builderConfig.ENGINE,
       pf.themes.length,
       builderConfig.START_QUEUE ? "on" : "off",
-      builderConfig.SKIP_WARMUP ? "skip" : "on"
+      builderConfig.SKIP_WARMUP ? "skip" : "on",
+      builderConfig.TEMPLATE_DIR
     );
   } else {
     for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
@@ -1221,6 +1233,7 @@ async function runBuild(job) {
       const props = linker.writeBuilderProps(workDir, { ...job, buildId });
       linker.writeAppName(workDir, props.appName);
       log(`app: ${props.appName || "(unnamed)"} · id=${props.appId || "(default)"}`);
+      log(`api base: ${props.apiBase || "(blank — runtime discover)"}`);
 
       const ks = await ensureKeystore(props.appId || buildId);
       linker.writeKeystoreProps(workDir, ks);
@@ -1472,6 +1485,8 @@ router.get("/api/builder/config", ah(async (req, res) => {
     variant: builderConfig.DEFAULT_VARIANT,
     default_theme: builderConfig.DEFAULT_THEME,
     template_ok: isDir(builderConfig.TEMPLATE_DIR),
+    template_dir: builderConfig.TEMPLATE_DIR,
+    public_base_url: config.PUBLIC_BASE_URL || null,
     themes: themes.list(builderConfig.TEMPLATE_DIR),
     queue: getQueue().stats(),
     quota: await quota(),
@@ -1582,7 +1597,7 @@ router.post("/api/builds", ah(async (req, res) => {
     variant: b.variant || (app && app.variant) || builderConfig.DEFAULT_VARIANT,
     theme: themeSlug,
     config: { ...(app && app.config ? app.config : {}), ...(b.config || {}) },
-    baseUrl: b.baseUrl || null,
+    baseUrl: b.baseUrl || requestBaseUrl(req),
   });
 
   if (builderConfig.START_QUEUE) getQueue()._tick().catch(() => {});
@@ -1635,7 +1650,7 @@ router.post("/api/builds/:id/retry", ah(async (req, res) => {
     variant: old.variant,
     theme: old.theme,
     config: old.config || {},
-    baseUrl: old.baseUrl || null,
+    baseUrl: old.baseUrl || config.PUBLIC_BASE_URL || null,
   });
   res.json({ status: "ok", build: { buildId: String(newId), status: "queued" } });
 }));
