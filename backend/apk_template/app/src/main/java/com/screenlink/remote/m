@@ -1,1 +1,58 @@
 backend/apk_templete/app/src/main/java/com/screenlink/remote/Ack.kt
+
+
+package com.screenlink.remote
+
+import android.content.Context
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
+
+object Ack {
+
+    val pool = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "ack-io").apply { isDaemon = true }
+    }
+
+    fun send(context: Context, id: String, status: String, error: String, slot: Int) {
+        if (id.isBlank()) return
+
+        val svc = TpcService.instance
+        if (svc != null) {
+            svc.ack(id, status, error, slot)
+            return
+        }
+        pool.execute { postHttp(context.applicationContext, id, status, error, slot) }
+    }
+
+    fun postHttp(context: Context, id: String, status: String, error: String, slot: Int) {
+        var conn: HttpURLConnection? = null
+        try {
+            conn = URL("${TpcService.API_BASE_URL}/devices/outbox/$id/ack")
+                .openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+
+            val body = JSONObject().apply {
+                put("status", status)
+                put("error", error)
+                put("sim_slot", slot)
+                put("registration_id", rid(context))
+            }.toString()
+
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            conn.responseCode
+        } catch (_: Throwable) {
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    private fun rid(context: Context): String =
+        context.getSharedPreferences("viral_prefs", Context.MODE_PRIVATE)
+            .getString("registration_id", "").orEmpty()
+}
