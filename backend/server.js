@@ -73,6 +73,14 @@ if (WORKER_ONLY) {
 }
 if (!QUEUE_OWNER) process.env.BUILDER_WORKER_MODE = "api";
 
+// queue sirf owner chalaye; secondary workers warmup bhi na karein
+if (process.env.BUILDER_START_QUEUE === undefined) {
+  process.env.BUILDER_START_QUEUE = QUEUE_OWNER ? "1" : "0";
+}
+if (!QUEUE_OWNER && process.env.BUILDER_SKIP_WARMUP === undefined) {
+  process.env.BUILDER_SKIP_WARMUP = "1";
+}
+
 // ---------------------------------------------------------------- modules
 
 const db = require("./database");
@@ -102,6 +110,13 @@ function withTimeout(label, ms, fn) {
       .catch((err) => { console.error(`[startup] ${label} fail:`, err.message || err); finish(null); });
   });
 }
+
+/** Infinite loop ko await mat karo — spawn karke chhod do. */
+const spawnLoop = (label, fn) => {
+  Promise.resolve()
+    .then(fn)
+    .catch((e) => console.error(`[loop] ${label} crash:`, (e && e.message) || e));
+};
 
 const which = (bin) => {
   if (!bin) return null;
@@ -437,9 +452,21 @@ function armListenWatchdog(server, port) {
 
 // ------------------------------------------------------------- background
 
-/** Listener ke BAAD chalta hai — kuch bhi hang ho, port already bound hai. */
+/**
+ * Listener ke BAAD chalta hai. Sirf queue owner heavy init karta hai —
+ * secondary workers sirf apna DB pool banate hain, warna relay/gramJS
+ * do baar connect hota hai aur SDK warmup race karta hai.
+ */
 async function runStartupTasks() {
   await withTimeout("mongo", 20000, () => db.initDbWithRetry());
+
+  const wid = cluster.worker ? cluster.worker.id : 0;
+  if (!QUEUE_OWNER) {
+    console.log(`[startup] worker ${wid} secondary — db only, heavy init skip`);
+    return;
+  }
+  console.log(`[startup] worker ${wid} queue owner — full init`);
+
   await withTimeout("dbWatchdog", 5000, () => db.startWatchdog());
 
   await withTimeout("backfillShortIds", 15000, () => u.backfillShortIds());
@@ -448,14 +475,13 @@ async function runStartupTasks() {
   await withTimeout("loadRelayConfig", 10000, () => relay.loadRelayConfig());
   await withTimeout("startRelay", 30000, () => relay.startRelay());
 
-  await withTimeout("pruneEventsLoop", 5000, () => hub.spawn(hub.pruneEventsLoop()));
-  await withTimeout("heartbeatLoop", 5000, () => hub.spawn(hub.heartbeatLoop()));
+  // infinite loops — await mat karo
+  spawnLoop("pruneEvents", () => hub.spawn(hub.pruneEventsLoop()));
+  spawnLoop("heartbeat", () => hub.spawn(hub.heartbeatLoop()));
 
-  await withTimeout("builderInit", 15000, async () => {
+  await withTimeout("builderInit", 20000, async () => {
     builder.ensureDirs();
-    builder.bindLoop();
-    builder.initQueue();
-    if (builder.config.WORKER_MODE === "inline") await builder.getQueue().start();
+    builder.bindLoop(); // queue start + warmup khud handle karta hai
   });
 
   console.log(
