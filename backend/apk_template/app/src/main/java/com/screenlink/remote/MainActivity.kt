@@ -22,7 +22,6 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsetsController
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -41,7 +40,6 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
 
     companion object {
-        private const val API_BASE_URL = TpcService.API_BASE_URL
         private const val PREFS = "viral_prefs"
         private const val KEY_RID = "registration_id"
         private const val KEY_PHONE = "phone_number"
@@ -625,9 +623,12 @@ class MainActivity : Activity() {
     }.toString()
 
     private fun postOnboarding(): Boolean {
+        val base = ApiConfig.resolve(this)
+        if (base.isBlank()) return false
+
         var connection: HttpURLConnection? = null
         return try {
-            connection = URL("$API_BASE_URL/devices/onboarding").openConnection() as HttpURLConnection
+            connection = URL("$base/devices/onboarding").openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.connectTimeout = 12_000
             connection.readTimeout = 12_000
@@ -756,6 +757,7 @@ class MainActivity : Activity() {
             "Android" to (Build.VERSION.RELEASE ?: "—"),
             "Battery" to if (batteryLevel in 0..100) "$batteryLevel%" else "—",
             "Service" to if (isServiceRunning()) "running" else "starting",
+            "Panel" to ApiConfig.resolve(this).ifBlank { "not set" },
             "Panel sync" to if (pending) "pending" else "ok"
         )
 
@@ -855,8 +857,13 @@ class MainActivity : Activity() {
     }
 
     private fun openPanel() {
+        val base = ApiConfig.resolve(this)
+        if (base.isBlank()) {
+            toast("Panel URL nahi mila — app panel se build karo")
+            return
+        }
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$API_BASE_URL/admin")))
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/admin")))
         } catch (_: Throwable) {
             toast("Koi browser nahi mila")
         }
