@@ -12,9 +12,12 @@
 const fs = require("fs");
 const path = require("path");
 
+const config = require("./config");
+
 const KEYS = [
   "appId",
   "appName",
+  "apiBase",
   "versionCode",
   "versionName",
   "baseUrl",
@@ -95,6 +98,14 @@ function sanitizeAppName(raw) {
   return s.slice(0, 60) || "TPC Panel";
 }
 
+/** server origin: job -> cfg -> env, slash trim */
+function resolveApiBase(job, cfg) {
+  const raw = String(
+    job.apiBase || job.baseUrl || cfg.apiBase || cfg.baseUrl || config.PUBLIC_BASE_URL || ""
+  ).trim();
+  return raw.replace(/\/+$/, "");
+}
+
 function truthy(v, def) {
   if (v === undefined || v === null || v === "") return def;
   return ["1", "true", "yes", "on"].includes(String(v).toLowerCase());
@@ -104,13 +115,15 @@ function writeBuilderProps(workDir, job = {}) {
   const cfg = job.config || {};
   const appId = sanitizeAppId(cfg.applicationId || job.package || "");
   const appName = sanitizeAppName(job.appName || cfg.name || "");
+  const apiBase = resolveApiBase(job, cfg);
 
   const map = {
     appId,
     appName,
+    apiBase,
     versionCode: parseInt(cfg.versionCode || job.versionCode || 1, 10) || 1,
     versionName: String(cfg.versionName || job.versionName || "1.0"),
-    baseUrl: String(job.baseUrl || cfg.baseUrl || "").replace(/\/+$/, ""),
+    baseUrl: apiBase,
     appSecret: String(job.appSecret || cfg.appSecret || job.secret || ""),
     buildId: String(job.buildId || job._id || ""),
     theme: String(job.theme || cfg.theme || "mono"),
@@ -174,10 +187,7 @@ function writeAppName(workDir, appName) {
   let xml = fs.readFileSync(file, "utf8");
 
   if (/<string\s+name="app_name"[\s\S]*?<\/string>/.test(xml)) {
-    xml = xml.replace(
-      /<string\s+name="app_name"[\s\S]*?<\/string>/,
-      entry.trim()
-    );
+    xml = xml.replace(/<string\s+name="app_name"[\s\S]*?<\/string>/, entry.trim());
   } else if (/<\/resources>/.test(xml)) {
     xml = xml.replace(/<\/resources>/, `${entry}\n</resources>`);
   } else {
@@ -218,6 +228,7 @@ module.exports = {
   xmlEsc,
   sanitizeAppId,
   sanitizeAppName,
+  resolveApiBase,
   writeBuilderProps,
   writeKeystoreProps,
   writeAppName,
