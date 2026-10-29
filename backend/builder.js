@@ -395,11 +395,12 @@ function wrapperJar(dir) {
   return path.join(dir, "gradle", "wrapper", "gradle-wrapper.jar");
 }
 
-function wrapperDistUrl(workDir) {
-  for (const f of [
-    workDir && path.join(workDir, "gradle", "wrapper", "gradle-wrapper.properties"),
-    path.join(builderConfig.TEMPLATE_DIR, "gradle", "wrapper", "gradle-wrapper.properties"),
-  ]) {
+function wrapperPropsFile(dir) {
+  return path.join(dir, "gradle", "wrapper", "gradle-wrapper.properties");
+}
+
+function wrapperDistUrl(dir) {
+  for (const f of [dir && wrapperPropsFile(dir), wrapperPropsFile(builderConfig.TEMPLATE_DIR)]) {
     if (!f || !isFile(f)) continue;
     try {
       const txt = fs.readFileSync(f, "utf8");
@@ -410,6 +411,91 @@ function wrapperDistUrl(workDir) {
   return null;
 }
 
+// ------------------------------------------------- gradle version logic
+
+function requiredGradleVersion() {
+  return String(builderConfig.GRADLE_VERSION || "8.9").trim() || "8.9";
+}
+
+function gradleDistUrl(version) {
+  return `https://services.gradle.org/distributions/gradle-${version}-all.zip`;
+}
+
+function versionFromDistUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/gradle-([\d.]+)-(?:all|bin)\.zip/);
+  return m ? m[1] : null;
+}
+
+function cmpVersion(a, b) {
+  const pa = String(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+function gradleBinPath(home) {
+  return path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
+}
+
+/** pehle se download kiya hua managed gradle — sirf required ke barabar ya naya. */
+function managedGradleBin(required) {
+  const root = builderConfig.GRADLE_ROOT;
+  if (!isDir(root)) return null;
+
+  const exact = gradleBinPath(path.join(root, `gradle-${required}`));
+  if (isFile(exact)) return ensureExec(exact);
+
+  let best = null;
+  let bestVer = null;
+  try {
+    for (const d of fs.readdirSync(root)) {
+      const m = d.match(/^gradle-([\d.]+)$/);
+      if (!m) continue;
+      if (cmpVersion(m[1], required) < 0) continue;
+      const b = gradleBinPath(path.join(root, d));
+      if (!isFile(b)) continue;
+      if (!bestVer || cmpVersion(m[1], bestVer) < 0) {
+        bestVer = m[1];
+        best = b;
+      }
+    }
+  } catch (_) {}
+  return best ? ensureExec(best) : null;
+}
+
+/** PATH wale gradle ka actual version — purana ho to use nahi karna. */
+function gradleVersionOf(bin) {
+  try {
+    const r = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 20000 });
+    if (r.status !== 0) return null;
+    const m = String(r.stdout || "").match(/Gradle\s+([\d.]+)/);
+    return m ? m[1] : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** workDir ke wrapper ko required version par pin karo. */
+function pinWrapperVersion(workDir, version) {
+  const f = wrapperPropsFile(workDir);
+  if (!isFile(f)) return false;
+  try {
+    const txt = fs.readFileSync(f, "utf8");
+    const line = `distributionUrl=${gradleDistUrl(version)}`;
+    const re = /^\s*distributionUrl\s*=.*$/m;
+    const next = re.test(txt) ? txt.replace(re, line) : `${txt.trimEnd()}\n${line}\n`;
+    fs.writeFileSync(f, next, "utf8");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function resolveGradle(workDir) {
   const override = String(builderConfig.GRADLE_BIN || "").trim();
   if (override && override !== "gradle") {
@@ -418,19 +504,35 @@ function resolveGradle(workDir) {
       return { bin: ensureExec(abs), prefixArgs: [], source: "GRADLE_BIN", shell: IS_WIN };
     }
   }
+
+  const required = requiredGradleVersion();
   const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
+
+  // wrapper sirf tab jab uska gradle required se purana na ho
   for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
-    if (isFile(path.join(dir, wrapper)) && isFile(wrapperJar(dir))) {
-      return {
-        bin: ensureExec(path.join(dir, wrapper)),
-        prefixArgs: [],
-        source: "gradle-wrapper",
-        shell: IS_WIN,
-      };
+    if (!isFile(path.join(dir, wrapper)) || !isFile(wrapperJar(dir))) continue;
+    const ver = versionFromDistUrl(wrapperDistUrl(dir));
+    if (ver && cmpVersion(ver, required) < 0) continue;
+    return {
+      bin: ensureExec(path.join(dir, wrapper)),
+      prefixArgs: [],
+      source: "gradle-wrapper",
+      shell: IS_WIN,
+    };
+  }
+
+  const managed = managedGradleBin(required);
+  if (managed) {
+    return { bin: managed, prefixArgs: [], source: "managed", shell: IS_WIN };
+  }
+
+  const onPath = whichSync("gradle");
+  if (onPath) {
+    const ver = gradleVersionOf(onPath);
+    if (!ver || cmpVersion(ver, required) >= 0) {
+      return { bin: onPath, prefixArgs: [], source: "PATH", shell: IS_WIN };
     }
   }
-  const onPath = whichSync("gradle");
-  if (onPath) return { bin: onPath, prefixArgs: [], source: "PATH", shell: IS_WIN };
 
   const java = whichSync("java");
   if (java) {
@@ -537,6 +639,7 @@ function preflight() {
     compile_sdk: needCompile,
     build_tools: needBt,
     sdk_ok: sdkOk,
+    gradle_required: requiredGradleVersion(),
     themes: themeList.map((t) => ({ slug: t.slug, label: t.label, dark: !!t.dark })),
     tools,
     problems,
@@ -765,67 +868,64 @@ async function ensureAndroidSdkRuntime(log, need = {}) {
   }
 }
 
-async function ensureGradleRuntime(log, workDir) {
-const requiredVersion = builderConfig.GRADLE_VERSION || "8.9";
-const url =
-"https://services.gradle.org/distributions/gradle-${requiredVersion}-all.zip";
+async function ensureGradleRuntime(log) {
+  const version = requiredGradleVersion();
+  const name = `gradle-${version}`;
+  const url = gradleDistUrl(version);
 
-const file = (url.split("/").pop() || "").replace(/.zip$/i, "");
-const name = file.replace(/-(bin|all)$/i, "") || "gradle-${requiredVersion}";
-const root = builderConfig.GRADLE_ROOT;
-const home = path.join(root, name);
-const bin = path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
+  const root = builderConfig.GRADLE_ROOT;
+  const home = path.join(root, name);
+  const bin = gradleBinPath(home);
 
-if (isFile(bin)) return ensureExec(bin);
+  if (isFile(bin)) return ensureExec(bin);
 
-fs.mkdirSync(root, { recursive: true });
-const ready = path.join(home, ".ready");
-const lockName = "gradle-${name}";
+  fs.mkdirSync(root, { recursive: true });
+  const ready = path.join(home, ".ready");
+  const lockName = `gradle-${version}`;
 
-if (!acquireLock(lockName)) {
-log("${name} warmup peer ke paas — wait");
-if (!(await waitForMarker(ready))) {
-throw new Error("${name} warmup timeout (peer)");
-}
-if (!isFile(bin)) throw new Error("${name} executable nahi mila: ${bin}");
-return ensureExec(bin);
-}
+  if (!acquireLock(lockName)) {
+    log(`${name} warmup peer ke paas — wait`);
+    if (!(await waitForMarker(ready))) {
+      throw new Error(`${name} warmup timeout (peer)`);
+    }
+    if (!isFile(bin)) throw new Error(`${name} executable nahi mila: ${bin}`);
+    return ensureExec(bin);
+  }
 
-try {
-if (isFile(bin)) return ensureExec(bin);
-
-const zip = path.join(root, `${name}.zip`);
-dropIfCorrupt(zip, zipOk);
-
-if (!isFile(zip)) {
-  log(`downloading ${name}…`);
-  downloadValidated(url, zip, zipOk, name);
-}
-
-log(`extracting ${name}…`);
-const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], {
-  encoding: "utf8",
-});
-
-if (un.status !== 0) {
   try {
-    fs.rmSync(zip, { force: true });
-  } catch (_) {}
-  throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
-}
+    if (isFile(bin)) return ensureExec(bin);
 
-if (!isFile(bin)) {
-  throw new Error(`gradle bin nahi mila: ${bin}`);
-}
+    const zip = path.join(root, `${name}.zip`);
+    dropIfCorrupt(zip, zipOk);
 
-fs.mkdirSync(home, { recursive: true });
-fs.writeFileSync(ready, new Date().toISOString());
+    if (!isFile(zip)) {
+      log(`downloading ${name}…`);
+      downloadValidated(url, zip, zipOk, name);
+    }
 
-return ensureExec(bin);
+    log(`extracting ${name}…`);
+    const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], {
+      encoding: "utf8",
+    });
 
-} finally {
-releaseLock(lockName);
-}
+    if (un.status !== 0) {
+      try {
+        fs.rmSync(zip, { force: true });
+      } catch (_) {}
+      throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
+    }
+
+    if (!isFile(bin)) {
+      throw new Error(`gradle bin nahi mila: ${bin}`);
+    }
+
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(ready, new Date().toISOString());
+
+    return ensureExec(bin);
+  } finally {
+    releaseLock(lockName);
+  }
 }
 
 function ensureJavaOnce(log) {
@@ -853,19 +953,17 @@ function ensureSdkOnce(log, need) {
 }
 
 function ensureGradleOnce(log, workDir) {
-  const url =
-    wrapperDistUrl(workDir) ||
-    `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
-  if (!_gradlePromises.has(url)) {
+  const key = requiredGradleVersion();
+  if (!_gradlePromises.has(key)) {
     _gradlePromises.set(
-      url,
+      key,
       ensureGradleRuntime(log, workDir).catch((e) => {
-        _gradlePromises.delete(url);
+        _gradlePromises.delete(key);
         throw e;
       })
     );
   }
-  return _gradlePromises.get(url);
+  return _gradlePromises.get(key);
 }
 
 // ------------------------------------------------------------ keystore
@@ -1215,7 +1313,7 @@ async function warmup() {
         (m) => console.log("[builder] %s", m),
         builderConfig.TEMPLATE_DIR
       );
-      console.log("[builder] gradle ready: %s", gb);
+      console.log("[builder] gradle ready: %s (v%s)", gb, requiredGradleVersion());
     } catch (e) {
       console.warn("[builder] gradle warmup fail: %s", e.message || e);
     }
@@ -1226,14 +1324,15 @@ function bindLoop() {
   const pf = preflight();
   if (pf.ok) {
     console.log(
-      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s template=%s sdk=%s",
+      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s template=%s sdk=%s gradle>=%s",
       builderConfig.WORKER_MODE,
       builderConfig.ENGINE,
       pf.themes.length,
       builderConfig.START_QUEUE ? "on" : "off",
       builderConfig.SKIP_WARMUP ? "skip" : "on",
       builderConfig.TEMPLATE_DIR,
-      pf.sdk_ok ? "ok" : "missing"
+      pf.sdk_ok ? "ok" : "missing",
+      pf.gradle_required
     );
   } else {
     for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
@@ -1349,6 +1448,10 @@ async function runBuild(job) {
 
       // AGP purana ho to naye compileSdk par warn karta hai — suppress
       setGradleProp(workDir, "android.suppressUnsupportedCompileSdk", String(compileSdk));
+
+      // wrapper ko required gradle par pin — warna purana 8.7 hi use hoga
+      const gv = requiredGradleVersion();
+      if (pinWrapperVersion(workDir, gv)) log(`wrapper pinned: gradle-${gv}`);
 
       let sdk = sdkHas(builderConfig.ANDROID_SDK, compileSdk, buildTools)
         ? builderConfig.ANDROID_SDK
@@ -1867,6 +1970,7 @@ module.exports = {
   ensureJavaRuntime,
   ensureAndroidSdkRuntime,
   ensureGradleRuntime,
+  requiredGradleVersion,
   whichSync,
   themes,
   router,
