@@ -177,6 +177,14 @@ const [SESSION_SECRET, SESSION_SECRET_SRC] = loadSessionSecret();
 config.SESSION_SECRET = SESSION_SECRET;
 config.SESSION_SECRET_SRC = SESSION_SECRET_SRC;
 
+// rotation support — purane cookies bhi verify honge
+config.SESSION_SECRET_OLD = String(process.env.SESSION_SECRET_OLD || "").trim() || null;
+
+// ek hi canonical name + legacy fallbacks (ws.js inhe padhta hai)
+config.COOKIE_NAMES = [
+  ...new Set([config.COOKIE_NAME, "tpc_admin_session", "tpc_session"]),
+];
+
 // ---- admins: ADMIN_USERS / ADMINS / ADMIN_USERNAME+ADMIN_PASSWORD ----
 function buildAdmins() {
   const users = {};
