@@ -105,27 +105,102 @@ function resolveTemplateDir() {
   ]);
 }
 
+/**
+ * Managed SDK ko priority — distro ka /usr/lib/android-sdk adhoora hota hai
+ * (na cmdline-tools, na licenses, na naye platform packages).
+ */
+function managedSdkRoot() {
+  for (const e of [process.env.ANDROID_SDK_ROOT, process.env.ANDROID_HOME]) {
+    if (e && isDir(path.join(e, "cmdline-tools"))) return path.resolve(e);
+  }
+  return path.join(builderConfig.STORAGE_ROOT, "android-sdk");
+}
+
 function resolveAndroidSdk() {
-  for (const c of [
-    process.env.ANDROID_HOME,
-    process.env.ANDROID_SDK_ROOT,
-    path.join(process.env.HOME || "/root", "Android", "Sdk"),
-    "/opt/android-sdk",
-    "/usr/lib/android-sdk",
-    "/usr/local/android-sdk",
-  ]) {
-    if (!c) continue;
-    const abs = path.resolve(c);
-    if (
-      isDir(abs) &&
-      (isDir(path.join(abs, "platforms")) ||
-        isDir(path.join(abs, "cmdline-tools")) ||
-        isDir(path.join(abs, "build-tools")))
-    ) {
-      return abs;
-    }
+  const managed = managedSdkRoot();
+  if (isDir(path.join(managed, "cmdline-tools")) || isDir(path.join(managed, "platforms"))) {
+    return managed;
+  }
+  for (const c of [process.env.ANDROID_SDK_ROOT, process.env.ANDROID_HOME]) {
+    if (c && isDir(path.resolve(c))) return path.resolve(c);
   }
   return null;
+}
+
+/** template se zaroori SDK level nikalo */
+function detectCompileSdk(tmpl) {
+  for (const rel of [
+    "app/build.gradle",
+    "app/build.gradle.kts",
+    "build.gradle",
+    "build.gradle.kts",
+  ]) {
+    const f = path.join(tmpl || "", rel);
+    if (!isFile(f)) continue;
+    try {
+      const txt = fs.readFileSync(f, "utf8");
+      const m = txt.match(/compileSdk(?:Version)?\s*[= ]\s*(\d{2})/);
+      if (m) return parseInt(m[1], 10);
+    } catch (_) {}
+  }
+  return 34;
+}
+
+function detectBuildToolsVersion(tmpl) {
+  for (const rel of [
+    "app/build.gradle",
+    "app/build.gradle.kts",
+    "build.gradle",
+    "build.gradle.kts",
+  ]) {
+    const f = path.join(tmpl || "", rel);
+    if (!isFile(f)) continue;
+    try {
+      const txt = fs.readFileSync(f, "utf8");
+      const m = txt.match(/buildToolsVersion\s*[= ]\s*["']?([\d.]+)/);
+      if (m) return m[1];
+    } catch (_) {}
+  }
+  return "34.0.0";
+}
+
+function sdkHas(sdkDir, compileSdk, btVersion) {
+  if (!sdkDir) return false;
+  return (
+    isDir(path.join(sdkDir, "platforms", `android-${compileSdk}`)) &&
+    isDir(path.join(sdkDir, "build-tools", btVersion))
+  );
+}
+
+/** Gradle jo licenses file padhta hai — seedha likh do. */
+function writeLicenseHashes(root) {
+  const dir = path.join(root, "licenses");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+  const files = {
+    "android-sdk-license":
+      "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n",
+    "android-sdk-preview-license": "\n84831b9409646a918e30573bab4c9c91346d8abd\n",
+    "android-googletv-license": "\n601085b94cd77f0b54ff86406957099ebe79c4d6\n",
+    "android-sdk-arm-dbt-license": "\n859f317696f67ef3d7f30a50a5560e7834b43903\n",
+  };
+  for (const [name, body] of Object.entries(files)) {
+    try { fs.writeFileSync(path.join(dir, name), body); } catch (_) {}
+  }
+}
+
+/** gradle.properties me ek key set/update karo (duplicate na bane). */
+function setGradleProp(workDir, key, value) {
+  const file = path.join(workDir, "gradle.properties");
+  let txt = "";
+  try { txt = fs.readFileSync(file, "utf8"); } catch (_) {}
+  const re = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=.*$`, "m");
+  if (re.test(txt)) {
+    txt = txt.replace(re, `${key}=${value}`);
+  } else {
+    txt = (txt ? txt.trimEnd() + "\n" : "") + `${key}=${value}\n`;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, txt, "utf8");
 }
 
 function whichSync(cmd) {
@@ -390,13 +465,18 @@ function requestBaseUrl(req) {
 
 function preflight() {
   const javaHome = resolveJavaHome();
+  const needCompile = detectCompileSdk(builderConfig.TEMPLATE_DIR);
+  const needBt = detectBuildToolsVersion(builderConfig.TEMPLATE_DIR);
+  const sdkRoot = resolveAndroidSdk();
+  const sdkOk = sdkHas(sdkRoot, needCompile, needBt);
+
   const tools = {
     gradle: null,
     docker: null,
     java: javaHome ? path.join(javaHome, "bin", "java") : null,
     python: null,
     keytool: null,
-    android_sdk: builderConfig.ANDROID_SDK || resolveAndroidSdk(),
+    android_sdk: sdkRoot,
     java_home: javaHome,
     wrapper_jar: isFile(wrapperJar(builderConfig.TEMPLATE_DIR)),
     wrapper_jar_path: wrapperJar(builderConfig.TEMPLATE_DIR),
@@ -431,13 +511,10 @@ function preflight() {
     problems.push(gradleHint());
   }
 
-  if (
-    builderConfig.ENGINE === "node" &&
-    !tools.android_sdk &&
-    !builderConfig.USE_DOCKER &&
-    !builderConfig.AUTO_SDK
-  ) {
-    problems.push("ANDROID_HOME/ANDROID_SDK_ROOT nahi mila.");
+  if (builderConfig.ENGINE === "node" && !builderConfig.USE_DOCKER && !sdkOk && !builderConfig.AUTO_SDK) {
+    problems.push(
+      `SDK me android-${needCompile} / build-tools;${needBt} missing (${sdkRoot || "koi sdk nahi"})`
+    );
   }
   if (builderConfig.REQUIRE_SIGNATURE && !tools.java && !builderConfig.AUTO_JDK) {
     problems.push("java nahi mila — signing fail hoga.");
@@ -456,6 +533,10 @@ function preflight() {
     skip_warmup: builderConfig.SKIP_WARMUP,
     template_ok: templateOk,
     template_dir: builderConfig.TEMPLATE_DIR,
+    sdk_root: sdkRoot,
+    compile_sdk: needCompile,
+    build_tools: needBt,
+    sdk_ok: sdkOk,
     themes: themeList.map((t) => ({ slug: t.slug, label: t.label, dark: !!t.dark })),
     tools,
     problems,
@@ -525,7 +606,7 @@ function findApk(root) {
 // ------------------------------------------------------------ runtimes
 
 let _javaPromise = null;
-let _sdkPromise = null;
+const _sdkPromises = new Map();
 const _gradlePromises = new Map();
 
 async function ensureJavaRuntime(log) {
@@ -585,14 +666,20 @@ async function ensureJavaRuntime(log) {
   }
 }
 
-async function ensureAndroidSdkRuntime(log) {
-  const root =
-    process.env.ANDROID_SDK_ROOT ||
-    process.env.ANDROID_HOME ||
-    path.join(builderConfig.STORAGE_ROOT, "android-sdk");
-  if (isDir(path.join(root, "platforms")) && isDir(path.join(root, "build-tools"))) return root;
+async function ensureAndroidSdkRuntime(log, need = {}) {
+  const compileSdk = parseInt(need.compileSdk, 10) || 34;
+  const buildTools = String(need.buildTools || "34.0.0");
+
+  const root = managedSdkRoot();
+  if (sdkHas(root, compileSdk, buildTools)) {
+    writeLicenseHashes(root);
+    builderConfig.ANDROID_SDK = root;
+    return root;
+  }
 
   fs.mkdirSync(root, { recursive: true });
+  writeLicenseHashes(root);
+
   const ready = path.join(root, ".ready");
 
   if (!acquireLock("android-sdk")) {
@@ -603,29 +690,32 @@ async function ensureAndroidSdkRuntime(log) {
   }
 
   try {
-    const zip = path.join(root, "cmdline-tools.zip");
-    dropIfCorrupt(zip, zipOk);
-    if (!isFile(zip)) {
-      log("downloading android cmdline-tools…");
-      downloadValidated(SDK_ZIP_URL, zip, zipOk, "cmdline-tools");
-    }
-
-    const tmp = path.join(root, "tmp");
-    fs.rmSync(tmp, { recursive: true, force: true });
-    fs.mkdirSync(tmp, { recursive: true });
-
-    const un = spawnSync("unzip", ["-q", "-o", zip, "-d", tmp], { encoding: "utf8" });
-    if (un.status !== 0) {
-      try { fs.rmSync(zip, { force: true }); } catch (_) {}
-      fs.rmSync(tmp, { recursive: true, force: true });
-      throw new Error(`unzip fail: ${un.stderr || un.status}`);
-    }
-
+    // cmdline-tools zaroori hai — na ho to download karo
     const cmdline = path.join(root, "cmdline-tools", "latest");
-    fs.rmSync(cmdline, { recursive: true, force: true });
-    fs.mkdirSync(path.dirname(cmdline), { recursive: true });
-    fs.renameSync(path.join(tmp, "cmdline-tools"), cmdline);
-    fs.rmSync(tmp, { recursive: true, force: true });
+    if (!isFile(path.join(cmdline, "bin", "sdkmanager"))) {
+      const zip = path.join(root, "cmdline-tools.zip");
+      dropIfCorrupt(zip, zipOk);
+      if (!isFile(zip)) {
+        log("downloading android cmdline-tools…");
+        downloadValidated(SDK_ZIP_URL, zip, zipOk, "cmdline-tools");
+      }
+
+      const tmp = path.join(root, "tmp");
+      fs.rmSync(tmp, { recursive: true, force: true });
+      fs.mkdirSync(tmp, { recursive: true });
+
+      const un = spawnSync("unzip", ["-q", "-o", zip, "-d", tmp], { encoding: "utf8" });
+      if (un.status !== 0) {
+        try { fs.rmSync(zip, { force: true }); } catch (_) {}
+        fs.rmSync(tmp, { recursive: true, force: true });
+        throw new Error(`unzip fail: ${un.stderr || un.status}`);
+      }
+
+      fs.rmSync(cmdline, { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(cmdline), { recursive: true });
+      fs.renameSync(path.join(tmp, "cmdline-tools"), cmdline);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
 
     const sdkmanager = path.join(cmdline, "bin", "sdkmanager");
     try { fs.chmodSync(sdkmanager, 0o755); } catch (_) {}
@@ -633,22 +723,40 @@ async function ensureAndroidSdkRuntime(log) {
     const env = { ...process.env };
     if (!env.JAVA_HOME) applyJavaHome(resolveJavaHome());
 
+    writeLicenseHashes(root);
     log("accepting android licenses…");
-    spawnSync("sh", ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`], {
+    spawnSync(
+      "sh",
+      ["-c", `yes | "${sdkmanager}" --sdk_root="${root}" --licenses >/dev/null 2>&1`],
+      { encoding: "utf8", env }
+    );
+    writeLicenseHashes(root);
+
+    const pkgs = [
+      "platform-tools",
+      `platforms;android-${compileSdk}`,
+      `build-tools;${buildTools}`,
+    ];
+    if (compileSdk !== 34) pkgs.push("platforms;android-34", "build-tools;34.0.0");
+
+    log(`installing ${pkgs.join(", ")}…`);
+    const inst = spawnSync(sdkmanager, [`--sdk_root=${root}`, ...pkgs], {
       encoding: "utf8",
       env,
     });
+    if (inst.status !== 0) {
+      writeLicenseHashes(root);
+      throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
+    }
 
-    log("installing platform-tools, platforms;android-34, build-tools;34.0.0…");
-    const inst = spawnSync(
-      sdkmanager,
-      [`--sdk_root=${root}`, "platform-tools", "platforms;android-34", "build-tools;34.0.0"],
-      { encoding: "utf8", env }
-    );
-    if (inst.status !== 0) throw new Error(`sdkmanager fail: ${inst.stderr || inst.status}`);
+    if (!sdkHas(root, compileSdk, buildTools)) {
+      throw new Error(
+        `sdk install ke baad bhi package nahi mile (android-${compileSdk}/${buildTools})`
+      );
+    }
 
-    process.env.ANDROID_HOME = process.env.ANDROID_HOME || root;
-    process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || root;
+    process.env.ANDROID_HOME = root;
+    process.env.ANDROID_SDK_ROOT = root;
     builderConfig.ANDROID_SDK = root;
     fs.writeFileSync(ready, new Date().toISOString());
     return root;
@@ -714,14 +822,18 @@ function ensureJavaOnce(log) {
   return _javaPromise;
 }
 
-function ensureSdkOnce(log) {
-  if (!_sdkPromise) {
-    _sdkPromise = ensureAndroidSdkRuntime(log).catch((e) => {
-      _sdkPromise = null;
-      throw e;
-    });
+function ensureSdkOnce(log, need) {
+  const key = `${(need && need.compileSdk) || 34}|${(need && need.buildTools) || "34.0.0"}`;
+  if (!_sdkPromises.has(key)) {
+    _sdkPromises.set(
+      key,
+      ensureAndroidSdkRuntime(log, need).catch((e) => {
+        _sdkPromises.delete(key);
+        throw e;
+      })
+    );
   }
-  return _sdkPromise;
+  return _sdkPromises.get(key);
 }
 
 function ensureGradleOnce(log, workDir) {
@@ -1070,8 +1182,12 @@ async function warmup() {
 
   if (builderConfig.AUTO_SDK && !builderConfig.USE_DOCKER) {
     try {
-      const sdk = await ensureSdkOnce((m) => console.log("[builder] %s", m));
-      console.log("[builder] android sdk ready: %s", sdk);
+      const need = {
+        compileSdk: detectCompileSdk(builderConfig.TEMPLATE_DIR),
+        buildTools: detectBuildToolsVersion(builderConfig.TEMPLATE_DIR),
+      };
+      const sdk = await ensureSdkOnce((m) => console.log("[builder] %s", m), need);
+      console.log("[builder] android sdk ready: %s (android-%s)", sdk, need.compileSdk);
     } catch (e) {
       console.warn("[builder] sdk warmup fail: %s", e.message || e);
     }
@@ -1094,13 +1210,14 @@ function bindLoop() {
   const pf = preflight();
   if (pf.ok) {
     console.log(
-      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s template=%s",
+      "[builder] preflight ok — mode=%s engine=%s themes=%d queue=%s warmup=%s template=%s sdk=%s",
       builderConfig.WORKER_MODE,
       builderConfig.ENGINE,
       pf.themes.length,
       builderConfig.START_QUEUE ? "on" : "off",
       builderConfig.SKIP_WARMUP ? "skip" : "on",
-      builderConfig.TEMPLATE_DIR
+      builderConfig.TEMPLATE_DIR,
+      pf.sdk_ok ? "ok" : "missing"
     );
   } else {
     for (const p of pf.problems) console.warn("[builder] WARN: %s", p);
@@ -1210,17 +1327,30 @@ async function runBuild(job) {
         log("warning: gradle-wrapper.jar missing — runtime gradle use hoga");
       }
 
-      let sdk = builderConfig.ANDROID_SDK || resolveAndroidSdk();
+      const compileSdk = detectCompileSdk(tmpl);
+      const buildTools = detectBuildToolsVersion(tmpl);
+      log(`sdk need: platforms;android-${compileSdk} build-tools;${buildTools}`);
+
+      // AGP purana ho to naye compileSdk par warn karta hai — suppress
+      setGradleProp(workDir, "android.suppressUnsupportedCompileSdk", String(compileSdk));
+
+      let sdk = sdkHas(builderConfig.ANDROID_SDK, compileSdk, buildTools)
+        ? builderConfig.ANDROID_SDK
+        : null;
       if (!sdk && builderConfig.AUTO_SDK) {
-        sdk = await ensureSdkOnce(log);
-        builderConfig.ANDROID_SDK = sdk;
+        sdk = await ensureSdkOnce(log, { compileSdk, buildTools });
       }
+      if (!sdk) sdk = resolveAndroidSdk();
 
       if (sdk) {
-        process.env.ANDROID_HOME = process.env.ANDROID_HOME || sdk;
-        process.env.ANDROID_SDK_ROOT = process.env.ANDROID_SDK_ROOT || sdk;
-        const lp = path.join(workDir, "local.properties");
-        if (!fs.existsSync(lp)) fs.writeFileSync(lp, `sdk.dir=${sdk.replace(/\\/g, "\\\\")}\n`);
+        process.env.ANDROID_HOME = sdk;
+        process.env.ANDROID_SDK_ROOT = sdk;
+        builderConfig.ANDROID_SDK = sdk;
+        // har build pe fresh — stale path nahi rehna chahiye
+        fs.writeFileSync(
+          path.join(workDir, "local.properties"),
+          `sdk.dir=${sdk.replace(/\\/g, "\\\\")}\n`
+        );
         log(`android sdk: ${sdk}`);
       } else {
         log("warning: ANDROID_HOME nahi mila");
@@ -1713,6 +1843,11 @@ module.exports = {
   resolveGradle,
   resolveJavaHome,
   resolveAndroidSdk,
+  managedSdkRoot,
+  detectCompileSdk,
+  detectBuildToolsVersion,
+  sdkHas,
+  writeLicenseHashes,
   ensureJavaRuntime,
   ensureAndroidSdkRuntime,
   ensureGradleRuntime,
