@@ -145,7 +145,7 @@ const config = {
   PUBLIC_BASE_URL: envStr("PUBLIC_BASE_URL", "").replace(/\/+$/, ""),
 
   MONGO_URL: envStr("MONGO_URL", envStr("MONGODB_URI", "mongodb://127.0.0.1:27017")),
-  DB_NAME: envStr("DB_NAME", "shadow_panel"),
+  DB_NAME: envStr("DB_NAME", "tpc_panel"),
 
   UPI_KEYWORDS: ["upi", "credited", "debited", "vpa", "paid to", "received from"],
   AMOUNT_RE: /(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
