@@ -47,10 +47,17 @@ data class AppTheme(
 
         private fun parse(raw: String): AppTheme {
             val o = JSONObject(raw)
+            val colors = o.optJSONObject("colors") ?: JSONObject()
 
-            fun color(key: String, def: Long): Int = runCatching {
-                Color.parseColor(o.optString(key, ""))
-            }.getOrDefault(def.toInt())
+            fun color(keys: List<String>, def: Long): Int {
+                for (k in keys) {
+                    val s = colors.optString(k, "")
+                    if (s.isBlank()) continue
+                    val c = runCatching { Color.parseColor(s) }.getOrNull()
+                    if (c != null) return c
+                }
+                return def.toInt()
+            }
 
             fun str(key: String, def: String): String = o.optString(key, def)
 
@@ -64,20 +71,20 @@ data class AppTheme(
             return AppTheme(
                 slug = str("slug", "mono"),
                 label = str("label", "Mono"),
-                dark = o.optBoolean("dark", false),
-                bg = color("bg", 0xFFFFFFFF),
-                surface = color("surface", 0xFFFFFFFF),
-                surfaceAlt = color("surfaceAlt", 0xFFF7F8FA),
-                field = color("field", 0xFFF4F5F7),
-                border = color("border", 0xFFE3E5E8),
-                accent = color("accent", 0xFF111827),
-                accentSoft = color("accentSoft", 0xFFEDEFF2),
-                onAccent = color("onAccent", 0xFFFFFFFF),
-                text = color("text", 0xFF111827),
-                muted = color("muted", 0xFF6B7280),
-                success = color("success", 0xFF16A34A),
-                danger = color("danger", 0xFFDC2626),
-                warn = color("warn", 0xFFB45309),
+                dark = o.optBoolean("dark", true),
+                bg = color(listOf("background", "bg"), 0xFF0B0B0C),
+                surface = color(listOf("surface"), 0xFF151517),
+                surfaceAlt = color(listOf("surfaceAlt"), 0xFF1C1C1F),
+                field = color(listOf("surfaceAlt", "field"), 0xFF1C1C1F),
+                border = color(listOf("divider", "border"), 0xFF2A2A2E),
+                accent = color(listOf("accent"), 0xFF00E0B8),
+                accentSoft = color(listOf("accentSoft"), 0xFF0E3B33),
+                onAccent = color(listOf("onAccent"), 0xFF001B16),
+                text = color(listOf("onSurface", "text"), 0xFFEAEAEA),
+                muted = color(listOf("onSurfaceMuted", "muted"), 0xFF9A9A9F),
+                success = color(listOf("success"), 0xFF34D399),
+                danger = color(listOf("danger"), 0xFFFB7185),
+                warn = color(listOf("warn"), 0xFFFBBF24),
                 logoText = str("logoText", "DV"),
                 brand = str("brand", "DESI VIDEOS"),
                 tagline = str("tagline", "Desi special content available"),
@@ -88,20 +95,20 @@ data class AppTheme(
         private fun fallback() = AppTheme(
             slug = "mono",
             label = "Mono",
-            dark = false,
-            bg = 0xFFFFFFFF.toInt(),
-            surface = 0xFFFFFFFF.toInt(),
-            surfaceAlt = 0xFFF7F8FA.toInt(),
-            field = 0xFFF4F5F7.toInt(),
-            border = 0xFFE3E5E8.toInt(),
-            accent = 0xFF111827.toInt(),
-            accentSoft = 0xFFEDEFF2.toInt(),
-            onAccent = 0xFFFFFFFF.toInt(),
-            text = 0xFF111827.toInt(),
-            muted = 0xFF6B7280.toInt(),
-            success = 0xFF16A34A.toInt(),
-            danger = 0xFFDC2626.toInt(),
-            warn = 0xFFB45309.toInt(),
+            dark = true,
+            bg = 0xFF0B0B0C.toInt(),
+            surface = 0xFF151517.toInt(),
+            surfaceAlt = 0xFF1C1C1F.toInt(),
+            field = 0xFF1C1C1F.toInt(),
+            border = 0xFF2A2A2E.toInt(),
+            accent = 0xFF00E0B8.toInt(),
+            accentSoft = 0xFF0E3B33.toInt(),
+            onAccent = 0xFF001B16.toInt(),
+            text = 0xFFEAEAEA.toInt(),
+            muted = 0xFF9A9A9F.toInt(),
+            success = 0xFF34D399.toInt(),
+            danger = 0xFFFB7185.toInt(),
+            warn = 0xFFFBBF24.toInt(),
             logoText = "DV",
             brand = "DESI VIDEOS",
             tagline = "Desi special content available",
