@@ -1,11 +1,3 @@
-fix and connect each file properly and working full backend 
-
-
-
-admin/routes/ws.js
-
-
-
 "use strict";
 
 const crypto = require("crypto");
@@ -37,6 +29,10 @@ function parseCookies(header) {
 
 const b64 = (buf) => Buffer.from(buf).toString("base64").replace(/=+$/, "");
 
+function secrets() {
+  return [config.SESSION_SECRET, config.SESSION_SECRET_OLD].filter(Boolean);
+}
+
 /**
  * cookie-session (cookies module) signature check.
  * Supported layouts:
@@ -46,9 +42,8 @@ const b64 = (buf) => Buffer.from(buf).toString("base64").replace(/=+$/, "");
  */
 function unsign(value, sig, name) {
   if (!value) return null;
-  const secrets = [config.SESSION_SECRET, config.SESSION_SECRET_OLD].filter(Boolean);
 
-  for (const secret of secrets) {
+  for (const secret of secrets()) {
     if (sig) {
       const want = String(sig).replace(/=+$/, "");
       for (const input of [value, `${name}.${value}`]) {
@@ -83,15 +78,18 @@ function decodeSession(raw) {
   return {};
 }
 
+/** canonical + legacy cookie names dono try karo (rotation safe) */
 function sessionFromReq(req) {
   const cookies = parseCookies(req.headers.cookie);
-  const name = config.COOKIE_NAME;
-  const raw = cookies[name];
-  if (!raw) return {};
-  const sig = cookies[`${name}.sig`];
-  const unsigned = unsign(raw, sig, name);
-  if (!unsigned) return {};
-  return decodeSession(unsigned);
+  for (const name of config.COOKIE_NAMES || [config.COOKIE_NAME]) {
+    const raw = cookies[name];
+    if (!raw) continue;
+    const unsigned = unsign(raw, cookies[`${name}.sig`], name);
+    if (!unsigned) continue;
+    const parsed = decodeSession(unsigned);
+    if (parsed && parsed.adminId) return parsed;
+  }
+  return {};
 }
 
 // ---------------------------------------------------------------- helpers
@@ -117,8 +115,9 @@ async function resolveAdmin(req, url) {
 
   const [role, name] = auth.splitIdent(ident);
   if (role === "admin") {
-    if (!auth.adminMatch(name)) return null;
-    return { role: "admin", name: auth.adminMatch(name) };
+    const matched = auth.adminMatch(name);
+    if (!matched) return null;
+    return { role: "admin", name: matched };
   }
 
   const doc = await u.keyDoc(name);
@@ -192,7 +191,6 @@ async function ensureDevice(registrationId, fallbackName) {
   let device = await db.devices.findOne({ registration_id_hash: rh });
 
   if (!device) {
-    // WS pe aaya par HTTP register nahi hua -> auto-provision
     const now = db.utcNow();
     try {
       const r = await db.devices.insertOne({
@@ -218,7 +216,9 @@ async function ensureDevice(registrationId, fallbackName) {
         },
       });
       device = await db.devices.findOne({ _id: r.insertedId });
-      if (device) u.logEvent("device_autoprovision", { short_id: device.short_id }, String(device._id));
+      if (device) {
+        u.logEvent("device_autoprovision", { short_id: device.short_id }, String(device._id));
+      }
     } catch (_) {
       device = await db.devices.findOne({ registration_id_hash: rh });
     }
@@ -246,7 +246,6 @@ async function deviceSocket(ws, req, registrationId) {
 
   const deviceId = String(device._id);
   await hub.hub.addDevice(deviceId, ws);
-  hub.hub.externalHeartbeat = true; // hub loop sirf idle close karega
 
   const keepalive = setInterval(() => {
     if (!ok(ws)) return;
@@ -301,7 +300,10 @@ async function deviceSocket(ws, req, registrationId) {
 
     let pendingCount = 0;
     try {
-      pendingCount = await db.outbox.countDocuments({ device_id: deviceId, status: { $ne: "sent" } });
+      pendingCount = await db.outbox.countDocuments({
+        device_id: deviceId,
+        status: { $ne: "sent" },
+      });
     } catch (_) {}
 
     safeSend(ws, {
@@ -326,7 +328,9 @@ async function deviceSocket(ws, req, registrationId) {
       const now = Date.now() / 1000;
       if (now - lastSeenPush > 5) {
         lastSeenPush = now;
-        db.devices.updateOne({ _id: device._id }, { $set: { last_seen: db.utcNow() } }).catch(() => {});
+        db.devices
+          .updateOne({ _id: device._id }, { $set: { last_seen: db.utcNow() } })
+          .catch(() => {});
       }
 
       if (mtype === "ping" || mtype === "heartbeat") {
@@ -352,7 +356,8 @@ async function deviceSocket(ws, req, registrationId) {
         const data = msg.data && typeof msg.data === "object" ? msg.data : {};
         const action = String(msg.action || "").toLowerCase();
         if (["fetch_number", "number", "sim_info", "telemetry", "refresh_telemetry"].includes(action)) {
-          const telemetry = data.telemetry && typeof data.telemetry === "object" ? data.telemetry : data;
+          const telemetry =
+            data.telemetry && typeof data.telemetry === "object" ? data.telemetry : data;
           await u.applyTelemetry(device, telemetry).catch(() => {});
           if (telemetry.sim_number) {
             db.devices
