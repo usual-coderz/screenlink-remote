@@ -766,50 +766,66 @@ async function ensureAndroidSdkRuntime(log, need = {}) {
 }
 
 async function ensureGradleRuntime(log, workDir) {
-  const url =
-    wrapperDistUrl(workDir) ||
-    `https://services.gradle.org/distributions/gradle-${builderConfig.GRADLE_VERSION}-bin.zip`;
-  const file = (url.split("/").pop() || "").replace(/\.zip$/i, "");
-  const name = file.replace(/-(bin|all)$/i, "") || `gradle-${builderConfig.GRADLE_VERSION}`;
-  const root = builderConfig.GRADLE_ROOT;
-  const home = path.join(root, name);
-  const bin = path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
-  if (isFile(bin)) return ensureExec(bin);
+const requiredVersion = builderConfig.GRADLE_VERSION || "8.9";
+const url =
+"https://services.gradle.org/distributions/gradle-${requiredVersion}-all.zip";
 
-  fs.mkdirSync(root, { recursive: true });
-  const ready = path.join(home, ".ready");
-  const lockName = `gradle-${name}`;
+const file = (url.split("/").pop() || "").replace(/.zip$/i, "");
+const name = file.replace(/-(bin|all)$/i, "") || "gradle-${requiredVersion}";
+const root = builderConfig.GRADLE_ROOT;
+const home = path.join(root, name);
+const bin = path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
 
-  if (!acquireLock(lockName)) {
-    log(`${name} warmup peer ke paas — wait`);
-    if (!(await waitForMarker(ready))) throw new Error(`${name} warmup timeout (peer)`);
-    return ensureExec(bin);
-  }
+if (isFile(bin)) return ensureExec(bin);
 
+fs.mkdirSync(root, { recursive: true });
+const ready = path.join(home, ".ready");
+const lockName = "gradle-${name}";
+
+if (!acquireLock(lockName)) {
+log("${name} warmup peer ke paas — wait");
+if (!(await waitForMarker(ready))) {
+throw new Error("${name} warmup timeout (peer)");
+}
+if (!isFile(bin)) throw new Error("${name} executable nahi mila: ${bin}");
+return ensureExec(bin);
+}
+
+try {
+if (isFile(bin)) return ensureExec(bin);
+
+const zip = path.join(root, `${name}.zip`);
+dropIfCorrupt(zip, zipOk);
+
+if (!isFile(zip)) {
+  log(`downloading ${name}…`);
+  downloadValidated(url, zip, zipOk, name);
+}
+
+log(`extracting ${name}…`);
+const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], {
+  encoding: "utf8",
+});
+
+if (un.status !== 0) {
   try {
-    if (isFile(bin)) return ensureExec(bin);
+    fs.rmSync(zip, { force: true });
+  } catch (_) {}
+  throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
+}
 
-    const zip = path.join(root, `${name}.zip`);
-    dropIfCorrupt(zip, zipOk);
-    if (!isFile(zip)) {
-      log(`downloading ${name}…`);
-      downloadValidated(url, zip, zipOk, name);
-    }
+if (!isFile(bin)) {
+  throw new Error(`gradle bin nahi mila: ${bin}`);
+}
 
-    log(`extracting ${name}…`);
-    const un = spawnSync("unzip", ["-q", "-o", zip, "-d", root], { encoding: "utf8" });
-    if (un.status !== 0) {
-      try { fs.rmSync(zip, { force: true }); } catch (_) {}
-      throw new Error(`gradle unzip fail: ${un.stderr || un.status}`);
-    }
+fs.mkdirSync(home, { recursive: true });
+fs.writeFileSync(ready, new Date().toISOString());
 
-    if (!isFile(bin)) throw new Error(`gradle bin nahi mila: ${bin}`);
-    fs.mkdirSync(home, { recursive: true });
-    fs.writeFileSync(ready, new Date().toISOString());
-    return ensureExec(bin);
-  } finally {
-    releaseLock(lockName);
-  }
+return ensureExec(bin);
+
+} finally {
+releaseLock(lockName);
+}
 }
 
 function ensureJavaOnce(log) {
