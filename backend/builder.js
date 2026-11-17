@@ -83,7 +83,6 @@ function firstDir(cands) {
   return null;
 }
 
-/** dono spelling: apk_template (sahi) aur apk_templete (purana folder naam) */
 function resolveTemplateDir() {
   if (process.env.TEMPLATE_DIR) {
     const abs = path.resolve(process.env.TEMPLATE_DIR);
@@ -105,10 +104,6 @@ function resolveTemplateDir() {
   ]);
 }
 
-/**
- * Managed SDK ko priority — distro ka /usr/lib/android-sdk adhoora hota hai
- * (na cmdline-tools, na licenses, na naye platform packages).
- */
 function managedSdkRoot() {
   for (const e of [process.env.ANDROID_SDK_ROOT, process.env.ANDROID_HOME]) {
     if (e && isDir(path.join(e, "cmdline-tools"))) return path.resolve(e);
@@ -127,7 +122,6 @@ function resolveAndroidSdk() {
   return null;
 }
 
-/** template se zaroori SDK level nikalo */
 function detectCompileSdk(tmpl) {
   for (const rel of [
     "app/build.gradle",
@@ -172,7 +166,6 @@ function sdkHas(sdkDir, compileSdk, btVersion) {
   );
 }
 
-/** Gradle jo licenses file padhta hai — seedha likh do. */
 function writeLicenseHashes(root) {
   const dir = path.join(root, "licenses");
   try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
@@ -188,7 +181,6 @@ function writeLicenseHashes(root) {
   }
 }
 
-/** gradle.properties me ek key set/update karo (duplicate na bane). */
 function setGradleProp(workDir, key, value) {
   const file = path.join(workDir, "gradle.properties");
   let txt = "";
@@ -272,8 +264,6 @@ function ensureDirs() {
   }
   fs.mkdirSync(process.env.GRADLE_USER_HOME, { recursive: true });
 }
-
-// ------------------------------------------------- download / lock helpers
 
 function lockDir() {
   return path.join(builderConfig.STORAGE_ROOT, ".locks");
@@ -411,8 +401,6 @@ function wrapperDistUrl(dir) {
   return null;
 }
 
-// ------------------------------------------------- gradle version logic
-
 function requiredGradleVersion() {
   return String(builderConfig.GRADLE_VERSION || "8.9").trim() || "8.9";
 }
@@ -442,7 +430,6 @@ function gradleBinPath(home) {
   return path.join(home, "bin", IS_WIN ? "gradle.bat" : "gradle");
 }
 
-/** pehle se download kiya hua managed gradle — sirf required ke barabar ya naya. */
 function managedGradleBin(required) {
   const root = builderConfig.GRADLE_ROOT;
   if (!isDir(root)) return null;
@@ -468,7 +455,6 @@ function managedGradleBin(required) {
   return best ? ensureExec(best) : null;
 }
 
-/** PATH wale gradle ka actual version — purana ho to use nahi karna. */
 function gradleVersionOf(bin) {
   try {
     const r = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 20000 });
@@ -480,7 +466,6 @@ function gradleVersionOf(bin) {
   }
 }
 
-/** workDir ke wrapper ko required version par pin karo. */
 function pinWrapperVersion(workDir, version) {
   const f = wrapperPropsFile(workDir);
   if (!isFile(f)) return false;
@@ -508,7 +493,6 @@ function resolveGradle(workDir) {
   const required = requiredGradleVersion();
   const wrapper = IS_WIN ? "gradlew.bat" : "gradlew";
 
-  // wrapper sirf tab jab uska gradle required se purana na ho
   for (const dir of [workDir, builderConfig.TEMPLATE_DIR].filter(Boolean)) {
     if (!isFile(path.join(dir, wrapper)) || !isFile(wrapperJar(dir))) continue;
     const ver = versionFromDistUrl(wrapperDistUrl(dir));
@@ -553,7 +537,6 @@ function gradleHint() {
   );
 }
 
-/** request se public origin nikaalo — APK me inject hota hai. */
 function requestBaseUrl(req) {
   const proto =
     String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim() ||
@@ -706,8 +689,6 @@ function findApk(root) {
   return fallback;
 }
 
-// ------------------------------------------------------------ runtimes
-
 let _javaPromise = null;
 const _sdkPromises = new Map();
 const _gradlePromises = new Map();
@@ -793,7 +774,6 @@ async function ensureAndroidSdkRuntime(log, need = {}) {
   }
 
   try {
-    // cmdline-tools zaroori hai — na ho to download karo
     const cmdline = path.join(root, "cmdline-tools", "latest");
     if (!isFile(path.join(cmdline, "bin", "sdkmanager"))) {
       const zip = path.join(root, "cmdline-tools.zip");
@@ -966,8 +946,6 @@ function ensureGradleOnce(log, workDir) {
   return _gradlePromises.get(key);
 }
 
-// ------------------------------------------------------------ keystore
-
 function keystoreCreds(appId) {
   fs.mkdirSync(builderConfig.KEYSTORE_DIR, { recursive: true });
   const file = path.join(builderConfig.KEYSTORE_DIR, `${appId}.json`);
@@ -1053,8 +1031,6 @@ async function ensureKeystore(appId) {
   return { path: ks, ...creds };
 }
 
-// ------------------------------------------------------------ artifacts
-
 let _s3 = null;
 function getS3() {
   if (_s3 !== null) return _s3;
@@ -1095,8 +1071,6 @@ async function uploadArtifact(file, key) {
   const base = String(process.env.S3_PUBLIC_BASE || "").replace(/\/$/, "");
   return base ? `${base}/${objKey}` : null;
 }
-
-// ------------------------------------------------------------ shapes
 
 function shapeApp(doc) {
   if (!doc) return null;
@@ -1145,8 +1119,6 @@ async function requeueStale(maxAgeMs = builderConfig.BUILD_STALE_MS) {
     console.warn("[builder] requeueStale fail:", err.message);
   }
 }
-
-// ------------------------------------------------------------ queue
 
 class BuildQueue {
   constructor() {
@@ -1274,8 +1246,6 @@ function getQueue() {
   return initQueue();
 }
 
-// ------------------------------------------------------------ warmup / bind
-
 async function warmup() {
   if (builderConfig.SKIP_WARMUP) {
     console.log("[builder] warmup skip (secondary worker)");
@@ -1343,7 +1313,12 @@ function bindLoop() {
   return pf;
 }
 
-// ------------------------------------------------------------ build
+function ownerFromJob(job) {
+  const direct = String((job && job.ownerKeyId) || "").trim();
+  if (direct) return direct;
+  const uid = String((job && job.userId) || "").trim();
+  return /^[a-f0-9]{24}$/i.test(uid) ? uid : "";
+}
 
 async function runBuild(job) {
   const t0 = Date.now();
@@ -1446,10 +1421,8 @@ async function runBuild(job) {
       const buildTools = detectBuildToolsVersion(tmpl);
       log(`sdk need: platforms;android-${compileSdk} build-tools;${buildTools}`);
 
-      // AGP purana ho to naye compileSdk par warn karta hai — suppress
       setGradleProp(workDir, "android.suppressUnsupportedCompileSdk", String(compileSdk));
 
-      // wrapper ko required gradle par pin — warna purana 8.7 hi use hoga
       const gv = requiredGradleVersion();
       if (pinWrapperVersion(workDir, gv)) log(`wrapper pinned: gradle-${gv}`);
 
@@ -1465,7 +1438,6 @@ async function runBuild(job) {
         process.env.ANDROID_HOME = sdk;
         process.env.ANDROID_SDK_ROOT = sdk;
         builderConfig.ANDROID_SDK = sdk;
-        // har build pe fresh — stale path nahi rehna chahiye
         fs.writeFileSync(
           path.join(workDir, "local.properties"),
           `sdk.dir=${sdk.replace(/\\/g, "\\\\")}\n`
@@ -1479,10 +1451,14 @@ async function runBuild(job) {
       const theme = themes.inject(tmpl, workDir, themeSlug, job.appName);
       log(`theme: ${theme.slug} — ${theme.label}`);
 
-      const props = linker.writeBuilderProps(workDir, { ...job, buildId });
+      const ownerKeyId = ownerFromJob(job);
+
+      const props = linker.writeBuilderProps(workDir, { ...job, buildId, ownerKeyId });
+      linker.writeOwnerAsset(workDir, ownerKeyId);
       linker.writeAppName(workDir, props.appName);
       log(`app: ${props.appName || "(unnamed)"} · id=${props.appId || "(default)"}`);
       log(`api base: ${props.apiBase || "(blank — runtime discover)"}`);
+      if (ownerKeyId) log(`owner key: ${ownerKeyId}`);
 
       const ks = await ensureKeystore(props.appId || buildId);
       linker.writeKeystoreProps(workDir, ks);
@@ -1600,8 +1576,6 @@ async function runBuild(job) {
   }
 }
 
-// ------------------------------------------------------------ user hub
-
 class UserHub {
   constructor() {
     this.rooms = new Map();
@@ -1662,8 +1636,6 @@ class UserHub {
 }
 
 const userHub = new UserHub();
-
-// ------------------------------------------------------------ router
 
 const jsonParser = express.json({
   verify: (req, _res, buf) => {
@@ -1837,9 +1809,12 @@ router.post("/api/builds", ah(async (req, res) => {
   }
 
   const themeSlug = String(b.theme || (app && app.theme) || builderConfig.DEFAULT_THEME);
+  const userId = b.userId || (app && app.userId) || "anon";
+  const ownerKeyId = /^[a-f0-9]{24}$/i.test(String(userId)) ? String(userId) : "";
 
   const id = await getQueue().add({
-    userId: b.userId || (app && app.userId) || "anon",
+    userId,
+    ownerKeyId,
     appId,
     appName: (app && app.name) || b.appName || "App",
     package: b.package || (app && app.package) || "",
@@ -1893,6 +1868,7 @@ router.post("/api/builds/:id/retry", ah(async (req, res) => {
 
   const newId = await getQueue().add({
     userId: old.userId,
+    ownerKeyId: ownerFromJob(old),
     appId: old.appId,
     appName: old.appName,
     package: old.package,
