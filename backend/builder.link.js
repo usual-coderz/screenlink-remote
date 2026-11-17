@@ -1,23 +1,5 @@
 "use strict";
 
-/**
- * backend/builder.link.js
- *
- * Template <-> build job linking:
- * - builder.properties
- * - keystore.properties
- * - strings.xml app_name
- * - local.properties
- *
- * Features:
- * - PKCS12 support for newly generated keystores.
- * - JKS compatibility for existing keystores.
- * - Consistent password handling.
- * - Java properties escaping.
- * - Safe application ID and app name handling.
- * - Android SDK path configuration.
- */
-
 const fs = require("fs");
 const path = require("path");
 
@@ -31,6 +13,7 @@ const KEYS = [
   "versionName",
   "baseUrl",
   "appSecret",
+  "ownerKeyId",
   "buildId",
   "theme",
   "minify",
@@ -38,17 +21,12 @@ const KEYS = [
   "abiFilters",
 ];
 
-const APP_ID_RE =
-  /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/;
+const APP_ID_RE = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/;
 
 const DEFAULT_APP_ID = "com.tpc.panel";
 const DEFAULT_KEYSTORE_TYPE = "PKCS12";
 
 const isWin = process.platform === "win32";
-
-/* -------------------------------------------------------
- * FILE HELPERS
- * ----------------------------------------------------- */
 
 function isDir(p) {
   try {
@@ -69,10 +47,6 @@ function write(file, lines) {
     "utf8"
   );
 }
-
-/* -------------------------------------------------------
- * JAVA PROPERTIES ESCAPING
- * ----------------------------------------------------- */
 
 function esc(value) {
   let s = String(
@@ -118,10 +92,6 @@ function escPath(p) {
   );
 }
 
-/* -------------------------------------------------------
- * XML ESCAPING
- * ----------------------------------------------------- */
-
 function xmlEsc(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -130,10 +100,6 @@ function xmlEsc(s) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 }
-
-/* -------------------------------------------------------
- * APPLICATION ID
- * ----------------------------------------------------- */
 
 function sanitizeAppId(raw) {
   let s = String(raw || "").trim().toLowerCase();
@@ -161,10 +127,6 @@ function sanitizeAppId(raw) {
   return APP_ID_RE.test(s) ? s : DEFAULT_APP_ID;
 }
 
-/* -------------------------------------------------------
- * APPLICATION NAME
- * ----------------------------------------------------- */
-
 function sanitizeAppName(raw) {
   const s = String(raw || "")
     .replace(/\s+/g, " ")
@@ -172,10 +134,6 @@ function sanitizeAppName(raw) {
 
   return s.slice(0, 60) || "TPC Panel";
 }
-
-/* -------------------------------------------------------
- * API BASE URL
- * ----------------------------------------------------- */
 
 function resolveApiBase(job = {}, cfg = {}) {
   const raw = String(
@@ -190,10 +148,6 @@ function resolveApiBase(job = {}, cfg = {}) {
   return raw.replace(/\/+$/, "");
 }
 
-/* -------------------------------------------------------
- * BOOLEAN HELPERS
- * ----------------------------------------------------- */
-
 function truthy(v, def) {
   if (v === undefined || v === null || v === "") {
     return def;
@@ -203,10 +157,6 @@ function truthy(v, def) {
     String(v).toLowerCase()
   );
 }
-
-/* -------------------------------------------------------
- * BUILDER PROPERTIES
- * ----------------------------------------------------- */
 
 function writeBuilderProps(workDir, job = {}) {
   const cfg = job.config || {};
@@ -247,6 +197,12 @@ function writeBuilderProps(workDir, job = {}) {
         ""
     ),
 
+    ownerKeyId: String(
+      job.ownerKeyId ||
+        cfg.ownerKeyId ||
+        ""
+    ),
+
     buildId: String(
       job.buildId || job._id || ""
     ),
@@ -279,17 +235,23 @@ function writeBuilderProps(workDir, job = {}) {
   return map;
 }
 
-/* -------------------------------------------------------
- * KEYSTORE PROPERTIES
- *
- * New keystores should be generated as PKCS12.
- *
- * Existing JKS keystores must explicitly provide
- * storeType: "JKS".
- *
- * Never silently change the format of an existing
- * keystore.
- * ----------------------------------------------------- */
+function writeOwnerAsset(workDir, ownerKeyId) {
+  const id = String(ownerKeyId || "").trim();
+
+  const file = path.join(
+    workDir,
+    "app",
+    "src",
+    "main",
+    "assets",
+    "tpc_owner.txt"
+  );
+
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, id ? `${id}\n` : "", "utf8");
+
+  return file;
+}
 
 function writeKeystoreProps(workDir, keystore) {
   const file = path.join(
@@ -353,12 +315,6 @@ function writeKeystoreProps(workDir, keystore) {
     );
   }
 
-  /*
-   * PKCS12 uses the store password for the key.
-   *
-   * JKS may have a separate key password.
-   */
-
   const keyPassword =
     storeType === "PKCS12"
       ? storePassword
@@ -380,10 +336,6 @@ function writeKeystoreProps(workDir, keystore) {
 
   return file;
 }
-
-/* -------------------------------------------------------
- * STRINGS XML PATH
- * ----------------------------------------------------- */
 
 function stringsXmlPath(workDir) {
   const candidates = [
@@ -415,10 +367,6 @@ function stringsXmlPath(workDir) {
 
   return candidates[0];
 }
-
-/* -------------------------------------------------------
- * APPLICATION NAME XML
- * ----------------------------------------------------- */
 
 function writeAppName(workDir, appName) {
   const name = sanitizeAppName(appName);
@@ -467,10 +415,6 @@ function writeAppName(workDir, appName) {
   return file;
 }
 
-/* -------------------------------------------------------
- * ANDROID LOCAL PROPERTIES
- * ----------------------------------------------------- */
-
 function writeLocalProperties(workDir, sdkDir) {
   if (!sdkDir) return null;
 
@@ -490,10 +434,6 @@ function writeLocalProperties(workDir, sdkDir) {
 
   return file;
 }
-
-/* -------------------------------------------------------
- * GRADLE PROPERTIES
- * ----------------------------------------------------- */
 
 function writeGradleProps(workDir, opts = {}) {
   const lines = [];
@@ -557,10 +497,6 @@ function writeGradleProps(workDir, opts = {}) {
   return file;
 }
 
-/* -------------------------------------------------------
- * EXPORTS
- * ----------------------------------------------------- */
-
 module.exports = {
   KEYS,
 
@@ -578,6 +514,7 @@ module.exports = {
   resolveApiBase,
 
   writeBuilderProps,
+  writeOwnerAsset,
   writeKeystoreProps,
 
   writeAppName,
