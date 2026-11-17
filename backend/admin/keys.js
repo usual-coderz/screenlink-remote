@@ -5,6 +5,7 @@ const config = require("../config");
 const db = require("../database");
 const u = require("../utils");
 const auth = require("../auth");
+const bot = require("../bot");
 
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const router = express.Router();
@@ -27,16 +28,15 @@ function keyView(k) {
     blocked,
     expired,
     active: !blocked && !expired,
+    has_password: !!k.password_hash,
+    telegram_linked: !!k.telegram_chat_id,
+    telegram_masked: k.telegram_chat_id ? u.maskChatId(k.telegram_chat_id) : "",
+    devices: parseInt(k.devices || 0, 10) || 0,
   };
 }
 
 async function keyOr404(keyId) {
-  let doc;
-  try {
-    doc = await db.panel_keys.findOne({ _id: new db.ObjectId(String(keyId)) });
-  } catch (_) {
-    throw new u.HttpError(400, "Bad key id");
-  }
+  const doc = await u.keyById(keyId);
   if (!doc) throw new u.HttpError(404, "Key not found");
   return doc;
 }
@@ -58,6 +58,82 @@ async function uniqueKey() {
   return u.newKey();
 }
 
+async function withDeviceCounts(rows) {
+  if (!rows.length) return rows;
+  const ids = rows.map((r) => String(r._id));
+  const counts = new Map();
+  try {
+    const agg = await db.devices
+      .aggregate([
+        { $match: { owner_key_id: { $in: ids } } },
+        { $group: { _id: "$owner_key_id", n: { $sum: 1 } } },
+      ])
+      .toArray();
+    for (const a of agg) counts.set(String(a._id), a.n);
+  } catch (_) {}
+  return rows.map((r) => ({ ...r, devices: counts.get(String(r._id)) || 0 }));
+}
+
+// -------------------------------------------------------------------- self
+
+router.get("/me", ah(async (req, res) => {
+  const ident = await auth.requirePanel(req);
+  if (ident.role !== "key") {
+    return res.json({ role: "admin", name: ident.name, has_password: true });
+  }
+  const doc = await u.keyById(ident.key_id);
+  if (!doc) throw new u.HttpError(404, "Key not found");
+  res.json({
+    role: "key",
+    key: doc.key,
+    label: doc.label || "",
+    phone: doc.phone || "",
+    expires_at: u.serializeDt(doc.expires_at),
+    has_password: !!doc.password_hash,
+    telegram_linked: !!doc.telegram_chat_id,
+    telegram_masked: doc.telegram_chat_id ? u.maskChatId(doc.telegram_chat_id) : "",
+    bot_username: config.TELEGRAM_BOT_USERNAME || null,
+    otp_active: config.OTP_ACTIVE,
+  });
+}));
+
+router.post("/me/password", ah(async (req, res) => {
+  const ident = await auth.requirePanel(req);
+  if (ident.role !== "key") throw new u.HttpError(400, "Sirf key user");
+
+  const doc = await u.keyById(ident.key_id);
+  if (!doc) throw new u.HttpError(404, "Key not found");
+
+  const b = req.body || {};
+  const current = String(b.current || "");
+  const next = String(b.password || "");
+
+  if (doc.password_hash && !u.verifyPassword(current, doc.password_hash)) {
+    throw new u.HttpError(401, "Purana password galat hai");
+  }
+  const problem = u.passwordProblem(next);
+  if (problem) throw new u.HttpError(400, problem);
+
+  await db.panel_keys.updateOne(
+    { _id: doc._id },
+    { $set: { password_hash: u.hashPassword(next), password_changed_at: db.utcNow() } }
+  );
+  u.logEvent("key_password_self", { key: doc.key });
+  res.json({ status: "ok" });
+}));
+
+router.post("/me/unlink-telegram", ah(async (req, res) => {
+  const ident = await auth.requirePanel(req);
+  if (ident.role !== "key") throw new u.HttpError(400, "Sirf key user");
+  await db.panel_keys.updateOne(
+    { _id: new db.ObjectId(ident.key_id) },
+    { $set: { telegram_chat_id: null, telegram_unlinked_at: db.utcNow() } }
+  );
+  res.json({ status: "ok" });
+}));
+
+// ------------------------------------------------------------------- admin
+
 router.get("/", ah(async (req, res) => {
   await auth.requireAdmin(req);
 
@@ -72,7 +148,8 @@ router.get("/", ah(async (req, res) => {
   }
 
   const rows = await db.panel_keys.find(q).sort({ _id: -1 }).limit(500).toArray();
-  res.json({ keys: rows.map(keyView) });
+  const withCounts = await withDeviceCounts(rows);
+  res.json({ keys: withCounts.map(keyView) });
 }));
 
 router.post("/", ah(async (req, res) => {
@@ -83,9 +160,15 @@ router.post("/", ah(async (req, res) => {
   const key = await uniqueKey();
   const now = db.utcNow();
 
+  let password = String(b.password || "");
+  if (!password) password = u.genPassword(10);
+  const problem = u.passwordProblem(password);
+  if (problem) throw new u.HttpError(400, problem);
+
   const doc = {
     key,
     key_hash: u.keyHashFor(key),
+    password_hash: u.hashPassword(password),
     label: String(b.label || b.name || "").trim().slice(0, 60),
     phone: u.normalizeNumber(b.phone) || String(b.phone || "").trim().slice(0, 20),
     created_at: now,
@@ -93,13 +176,60 @@ router.post("/", ah(async (req, res) => {
     blocked: false,
     login_count: 0,
     last_login_at: null,
+    telegram_chat_id: String(b.telegram_chat_id || "").trim() || null,
     created_by: admin.name,
   };
 
   await db.panel_keys.insertOne(doc);
   u.logEvent("key_created", { key, label: doc.label }, null, admin.name);
 
-  res.json({ status: "ok", key, expires_at: u.serializeDt(doc.expires_at), id: String(doc._id) });
+  res.json({
+    status: "ok",
+    key,
+    password,
+    expires_at: u.serializeDt(doc.expires_at),
+    id: String(doc._id),
+  });
+}));
+
+router.post("/:key_id/password", ah(async (req, res) => {
+  const admin = await auth.requireAdmin(req);
+  const doc = await keyOr404(req.params.key_id);
+
+  let password = String((req.body || {}).password || "");
+  if (!password) password = u.genPassword(10);
+  const problem = u.passwordProblem(password);
+  if (problem) throw new u.HttpError(400, problem);
+
+  await db.panel_keys.updateOne(
+    { _id: doc._id },
+    { $set: { password_hash: u.hashPassword(password), password_changed_at: db.utcNow() } }
+  );
+  u.logEvent("key_password_reset", { key: doc.key }, null, admin.name);
+  res.json({ status: "ok", password });
+}));
+
+router.post("/:key_id/telegram", ah(async (req, res) => {
+  const admin = await auth.requireAdmin(req);
+  const doc = await keyOr404(req.params.key_id);
+  const chat = String((req.body || {}).chat_id || "").trim();
+
+  await db.panel_keys.updateOne(
+    { _id: doc._id },
+    {
+      $set: chat
+        ? { telegram_chat_id: chat, telegram_linked_at: db.utcNow() }
+        : { telegram_chat_id: null, telegram_unlinked_at: db.utcNow() },
+    }
+  );
+
+  if (chat && (req.body || {}).notify) {
+    await bot.sendMessage(
+      chat,
+      `✅ <b>TPC PANEL</b>\nIs chat par key <code>${u.escapeHtml(doc.key)}</code> ka OTP aayega.`
+    );
+  }
+  res.json({ status: "ok" });
 }));
 
 router.post("/:key_id/expiry", ah(async (req, res) => {
@@ -109,19 +239,15 @@ router.post("/:key_id/expiry", ah(async (req, res) => {
   const now = new Date();
 
   let newExp;
-  if (b.lifetime) {
-    newExp = null;
-  } else if (b.expires_at) {
-    newExp = parseExpiry(b.expires_at);
-  } else if (b.days !== null && b.days !== undefined) {
+  if (b.lifetime) newExp = null;
+  else if (b.expires_at) newExp = parseExpiry(b.expires_at);
+  else if (b.days !== null && b.days !== undefined) {
     const days = parseInt(b.days, 10);
     if (!Number.isFinite(days)) throw new u.HttpError(400, "days number chahiye");
     const cur = doc.expires_at;
     const base = cur instanceof Date && cur.getTime() > now.getTime() ? cur : now;
     newExp = new Date(base.getTime() + days * DAY);
-  } else {
-    newExp = null;
-  }
+  } else newExp = null;
 
   await db.panel_keys.updateOne(
     { _id: doc._id },
@@ -135,8 +261,7 @@ router.post("/:key_id/expiry", ah(async (req, res) => {
 router.post("/:key_id/toggle", ah(async (req, res) => {
   const admin = await auth.requireAdmin(req);
   const doc = await keyOr404(req.params.key_id);
-  const b = req.body || {};
-  const blocked = b.blocked === undefined ? !doc.blocked : !!b.blocked;
+  const blocked = (req.body || {}).blocked === undefined ? !doc.blocked : !!(req.body || {}).blocked;
 
   await db.panel_keys.updateOne({ _id: doc._id }, { $set: { blocked, blocked_at: blocked ? new Date() : null } });
   u.logEvent("key_toggle", { key: doc.key, blocked }, null, admin.name);
