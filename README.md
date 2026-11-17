@@ -1,3 +1,4 @@
+
 # repo root me rakho setup.sh, phir:
 sudo DOMAIN=shadow-rat.duckdns.org \
      VPS_IP=129.121.170.138 \
@@ -7,3 +8,4 @@ sudo DOMAIN=shadow-rat.duckdns.org \
 backend/builder.js —
 backend/builder.link.js
 APK — TpcService.kt
+backend/server.js
