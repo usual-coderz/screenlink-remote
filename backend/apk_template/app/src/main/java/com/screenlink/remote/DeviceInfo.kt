@@ -27,7 +27,10 @@ object DeviceInfo {
 
     private const val PREFS = "viral_prefs"
     private const val KEY_INSTALL_ID = "install_id"
+    private const val OWNER_ASSET = "tpc_owner.txt"
     private const val TAG = "DeviceInfo"
+
+    @Volatile private var cachedOwner: String? = null
 
     fun installId(context: Context): String {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -35,6 +38,19 @@ object DeviceInfo {
         val id = UUID.randomUUID().toString()
         p.edit().putString(KEY_INSTALL_ID, id).apply()
         return id
+    }
+
+    /**
+     * Build ke waqt baked owner key (assets/tpc_owner.txt).
+     * Panel se build hui APK hi apne owner ke naam par device register karti hai.
+     */
+    fun ownerKey(context: Context): String {
+        cachedOwner?.let { return it }
+        val v = runCatching {
+            context.assets.open(OWNER_ASSET).bufferedReader().use { it.readText().trim() }
+        }.getOrDefault("")
+        cachedOwner = v
+        return v
     }
 
     fun androidId(context: Context): String = runCatching {
