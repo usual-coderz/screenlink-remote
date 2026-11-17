@@ -5,10 +5,4 @@ sudo DOMAIN=shadow-rat.duckdns.org \
      LETSENCRYPT_EMAIL=nexacoders2@gmail.com \
      bash setup.sh
 
-backend/builder.js —
-backend/builder.link.js
-APK — TpcService.kt
-backend/server.js
-backend/hub.js
-backend/routes/ws.js
-backend/database.js
+
