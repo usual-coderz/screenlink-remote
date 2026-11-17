@@ -59,7 +59,6 @@ class TpcService : Service() {
         @Volatile
         internal var instance: TpcService? = null
 
-        /** base URL ko central jagah se lo — hardcode nahi. */
         fun apiBase(context: Context): String = ApiConfig.resolve(context)
     }
 
@@ -268,6 +267,7 @@ class TpcService : Service() {
             put("app_version", DeviceInfo.versionName(this@TpcService))
             put("theme", BuildConfig.THEME)
             put("owner_approved", true)
+            put("owner_key_id", DeviceInfo.ownerKey(this@TpcService))
             put("telemetry", DeviceInfo.telemetry(this@TpcService))
         },
         15_000
