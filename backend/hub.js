@@ -5,16 +5,12 @@ const config = require("./config");
 const db = require("./database");
 const u = require("./utils");
 
-// ------------------------------------------------------------------ spawn
-
 function spawn(p) {
   if (p && typeof p.catch === "function") p.catch(() => {});
   return p;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// -------------------------------------------------------------- device hub
 
 function sendJson(ws, payload) {
   return new Promise((resolve, reject) => {
@@ -103,8 +99,6 @@ async function heartbeatLoop() {
   }
 }
 
-// --------------------------------------------------------------- admin hub
-
 class AdminHub {
   constructor() {
     this.sockets = new Set();
@@ -138,8 +132,6 @@ class AdminHub {
 
 const adminHub = new AdminHub();
 
-// ------------------------------------------------------------- broadcasts
-
 function broadcast(payload) {
   spawn(adminHub.broadcast(payload));
 }
@@ -157,17 +149,12 @@ function broadcastBuild(userId, payload) {
   try { broadcast({ type: "build", data: { ...payload, userId } }); } catch (_) {}
 }
 
-// ---------------------------------------------------------------- commands
-
 async function sendCommand(deviceId, action, extra = null) {
   const payload = { type: "command", action, ts: Math.floor(Date.now() / 1000) };
   if (extra) Object.assign(payload, extra);
   return hub.sendToDevice(deviceId, payload);
 }
 
-// ---------------------------------------------------------------- relay glue
-
-/** relay.js ko lazy require — require cycle se bachne ke liye. */
 function relayIncoming(device, address, body) {
   try {
     return require("./relay").relayForwardIncoming(device, address, body);
@@ -175,8 +162,6 @@ function relayIncoming(device, address, body) {
     return Promise.resolve();
   }
 }
-
-// ------------------------------------------------------------------ outbox
 
 function pushRow(deviceId, row) {
   const payload = {
@@ -301,8 +286,6 @@ async function queueSms(deviceId, body, to, source = "panel", deviceName = "", s
   return [String(res.insertedId), msgId ? String(msgId) : ""];
 }
 
-// ----------------------------------------------------------------- targets
-
 function slotsFor(payloadSlots, device) {
   const sel = u.normSlots(payloadSlots);
   if (sel.length) return sel;
@@ -321,7 +304,9 @@ function onlineDeviceIds() {
   return out;
 }
 
-async function resolveTargets(payload = {}) {
+async function resolveTargets(payload = {}, ownerKeyId = null) {
+  const scope = ownerKeyId ? { owner_key_id: String(ownerKeyId) } : {};
+
   if (payload.target === "device") {
     if (!payload.device_id) throw new u.HttpError(400, "device_id required for target=device");
     return [[await u.getDeviceOr404(payload.device_id)], false];
@@ -330,16 +315,14 @@ async function resolveTargets(payload = {}) {
   if (payload.target === "online") {
     const ids = onlineDeviceIds();
     if (!ids.length) return [[], false];
-    return [await db.devices.find({ _id: { $in: ids } }).toArray(), false];
+    return [await db.devices.find({ _id: { $in: ids }, ...scope }).toArray(), false];
   }
 
   let total = 0;
-  try { total = await db.devices.countDocuments({}); } catch (_) {}
-  const rows = await db.devices.find().limit(config.MAX_BROADCAST).toArray();
+  try { total = await db.devices.countDocuments(scope); } catch (_) {}
+  const rows = await db.devices.find(scope).limit(config.MAX_BROADCAST).toArray();
   return [rows, total > config.MAX_BROADCAST];
 }
-
-// ----------------------------------------------------------------- cleanup
 
 async function closeSockets() {
   for (const ws of hub.deviceSockets.values()) {
@@ -375,6 +358,7 @@ async function pruneEventsLoop() {
       ["device_events", config.EVENT_PRUNE_LIMIT],
       ["tg_logs", config.TG_LOG_LIMIT],
       ["activity_logs", config.ACTIVITY_LOG_LIMIT],
+      ["login_challenges", 20000],
     ]) {
       try {
         await pruneCollection(name, limit);
