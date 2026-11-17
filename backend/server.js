@@ -11,8 +11,6 @@ const { execSync } = require("child_process");
 
 const config = require("./config");
 
-// ---------------------------------------------------------- argv / flags
-
 const argv = process.argv.slice(2);
 const VALUE_FLAGS = new Set(["--port", "--host", "--workers"]);
 
@@ -25,7 +23,6 @@ function argValue(name) {
 }
 const hasFlag = (n) => argv.includes(n);
 
-/** Procfile `$PORT` positional aata hai — flags ke values ko chhod ke pehla numeric token. */
 function positionalPort() {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -63,7 +60,6 @@ if (!Number.isFinite(PORT) || PORT <= 0 || PORT > 65535) {
   process.exit(1);
 }
 
-// queue ownership + worker mode — builder require se PEHLE decide
 if (WORKER_ONLY) {
   process.env.BUILDER_WORKER_MODE = process.env.BUILDER_WORKER_MODE || "inline";
 } else if (WORKERS > 1) {
@@ -73,7 +69,6 @@ if (WORKER_ONLY) {
 }
 if (!QUEUE_OWNER) process.env.BUILDER_WORKER_MODE = "api";
 
-// queue sirf owner chalaye; secondary workers warmup bhi na karein
 if (process.env.BUILDER_START_QUEUE === undefined) {
   process.env.BUILDER_START_QUEUE = QUEUE_OWNER ? "1" : "0";
 }
@@ -81,23 +76,19 @@ if (!QUEUE_OWNER && process.env.BUILDER_SKIP_WARMUP === undefined) {
   process.env.BUILDER_SKIP_WARMUP = "1";
 }
 
-// ---------------------------------------------------------------- modules
-
 const db = require("./database");
 const u = require("./utils");
 const hub = require("./hub");
 const relay = require("./relay");
+const bot = require("./bot");
 const builder = require("./builder");
 
 const devicesRoutes = require("./routes/devices");
 const adminRoutes = require("./admin/admin");
 const wsRoutes = require("./routes/ws");
 
-// ----------------------------------------------------------------- helpers
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Kabhi hang nahi hota: error aur timeout dono null pe resolve. */
 function withTimeout(label, ms, fn) {
   return new Promise((resolve) => {
     let done = false;
@@ -111,7 +102,6 @@ function withTimeout(label, ms, fn) {
   });
 }
 
-/** Infinite loop ko await mat karo — spawn karke chhod do. */
 const spawnLoop = (label, fn) => {
   Promise.resolve()
     .then(fn)
@@ -129,14 +119,10 @@ const which = (bin) => {
   }
 };
 
-// ------------------------------------------------------------ middleware
-
-/** builder.verifyApp ko byte-exact body chahiye — yahin capture karo. */
 function rawBodyCapture(req, _res, buf) {
   if (buf && buf.length) req.rawBody = buf.toString("utf8");
 }
 
-/** DB ready na ho to bhi ye paths chalne chahiye (login, register, health). */
 const DB_EXEMPT = [
   "/health",
   "/version",
@@ -146,6 +132,8 @@ const DB_EXEMPT = [
   "/pair",
   "/panel/login",
   "/panel/access",
+  "/panel/otp/verify",
+  "/panel/otp/resend",
   "/panel/me",
   "/admin/auth/status",
   "/api/builder/config",
@@ -195,8 +183,6 @@ function securityHeaders(req, res, next) {
   next();
 }
 
-// ------------------------------------------------------------------- app
-
 function createApp() {
   const app = express();
   app.disable("x-powered-by");
@@ -205,7 +191,6 @@ function createApp() {
 
   app.use(securityHeaders);
 
-  // raw body capture — builder HMAC ke liye zaroori
   app.use(express.json({ limit: "8mb", verify: rawBodyCapture }));
   app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
@@ -222,7 +207,6 @@ function createApp() {
     })
   );
 
-  // ---------------- health (DB se pehle) ----------------
   app.get("/health/live", (req, res) => res.json({ status: "ok", pid: process.pid }));
 
   app.get("/health/ready", (req, res) =>
@@ -239,6 +223,8 @@ function createApp() {
       db: db.status(),
       devices_online: hub.hub ? hub.hub.onlineCount : 0,
       relay_authorized: !!relay.relayState.authorized,
+      bot_running: bot.enabled(),
+      otp_active: config.OTP_ACTIVE,
       build_queue: builder.getQueue().stats(),
       pid: process.pid,
       uptime_s: Math.round(process.uptime()),
@@ -274,7 +260,6 @@ function createApp() {
     });
   });
 
-  // ---------------- public ----------------
   app.get("/", (req, res) =>
     res.json({
       app: "TPC PANEL",
@@ -282,6 +267,7 @@ function createApp() {
       version: config.VERSION,
       owner: "https://t.me/icivan",
       relay: relay.TELETHON_OK ? "mtproto" : "unavailable",
+      bot: bot.enabled() ? "on" : "off",
       builder: builder.config.WORKER_MODE,
       admin: "/admin",
       pid: process.pid,
@@ -291,7 +277,6 @@ function createApp() {
   app.get("/favicon.ico", (req, res) => res.status(204).end());
   app.get("/version", (req, res) => res.json({ version: config.VERSION }));
 
-  // ---------------- admin dashboard ----------------
   const serveAdmin = (req, res, next) => {
     if (!fs.existsSync(config.ADMIN_FILE)) {
       return next(new u.HttpError(404, "Admin dashboard file not found"));
@@ -301,12 +286,13 @@ function createApp() {
   };
   app.get(["/admin", "/admin/", "/panel"], serveAdmin);
 
-  // ---------------- routes ----------------
   app.use(rateLimit({ name: "auth", windowMs: 60000, max: 60 }), (req, res, next) => {
     const p = req.path;
     if (
       p === "/panel/login" ||
       p === "/panel/access" ||
+      p === "/panel/otp/verify" ||
+      p === "/panel/otp/resend" ||
       p === "/pair" ||
       p === "/devices/register"
     ) {
@@ -319,11 +305,9 @@ function createApp() {
 
   app.use(builder.router);
 
-  // relay admin mount pehle, warna root mount shadow kar dega
   app.use("/admin/relay", relay.router);
   app.use(relay.router);
 
-  // device + admin routes: DB ready hona chahiye (exempt list chhod ke)
   const guarded = (mw) => (req, res, next) => {
     if (db.isReady() || isExempt(req.path)) return mw(req, res, next);
     res.setHeader("Retry-After", "3");
@@ -333,7 +317,6 @@ function createApp() {
   app.use(guarded(devicesRoutes));
   app.use(guarded(adminRoutes));
 
-  // ---------------- errors ----------------
   app.use((req, res) => res.status(404).json({ detail: "Not found" }));
 
   app.use((err, req, res, _next) => {
@@ -344,8 +327,6 @@ function createApp() {
 
   return app;
 }
-
-// -------------------------------------------------------------------- ws
 
 function attachWs(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
@@ -398,7 +379,6 @@ function attachWs(server) {
     }
   });
 
-  // dangling socket cleanup
   const sweep = setInterval(() => {
     for (const ws of wss.clients) {
       if (ws.isAlive === false) {
@@ -416,9 +396,6 @@ function attachWs(server) {
   return wss;
 }
 
-// ----------------------------------------------------------------- listen
-
-/** Port bind — EADDRINUSE pe short retry, warna saaf error. */
 async function listenWithRetry(server, port, host, attempts = 6) {
   for (let i = 1; i <= attempts; i++) {
     try {
@@ -461,13 +438,6 @@ function armListenWatchdog(server, port) {
   if (t.unref) t.unref();
 }
 
-// ------------------------------------------------------------- background
-
-/**
- * Listener ke BAAD chalta hai. Sirf queue owner heavy init karta hai —
- * secondary workers sirf apna DB pool banate hain, warna relay/gramJS
- * do baar connect hota hai aur SDK warmup race karta hai.
- */
 async function runStartupTasks() {
   if (!db.isReady()) await withTimeout("mongo", 20000, () => db.initDbWithRetry());
 
@@ -485,14 +455,14 @@ async function runStartupTasks() {
   await withTimeout("loadBans", 10000, () => relay.loadBans());
   await withTimeout("loadRelayConfig", 10000, () => relay.loadRelayConfig());
   await withTimeout("startRelay", 30000, () => relay.startRelay());
+  await withTimeout("bot", 15000, () => bot.start());
 
-  // infinite loops — await mat karo
   spawnLoop("pruneEvents", () => hub.spawn(hub.pruneEventsLoop()));
   spawnLoop("heartbeat", () => hub.spawn(hub.heartbeatLoop()));
 
   await withTimeout("builderInit", 20000, async () => {
     builder.ensureDirs();
-    builder.bindLoop(); // queue start + warmup khud handle karta hai
+    builder.bindLoop();
   });
 
   console.log(
@@ -500,8 +470,6 @@ async function runStartupTasks() {
     `mode=${builder.config.WORKER_MODE}`
   );
 }
-
-// ----------------------------------------------------------------- start
 
 async function start() {
   const listenPort = SPREAD && cluster.worker ? PORT + (cluster.worker.id - 1) : PORT;
@@ -531,16 +499,15 @@ async function start() {
     console.log(
       `TPC PANEL v${config.VERSION} up — pid=${process.pid} ${HOST}:${listenPort} ` +
       `mode=${builder.config.WORKER_MODE} workers=${WORKERS} ` +
-      `admins=${Object.keys(config.ADMINS).length} secret=${config.SESSION_SECRET_SRC}`
+      `admins=${Object.keys(config.ADMINS).length} secret=${config.SESSION_SECRET_SRC} ` +
+      `bot=${bot.enabled() ? "on" : "off"} otp=${config.OTP_ACTIVE ? "on" : "off"}`
     );
 
-    // pehla page load healthy DB pe jaye — max 15s wait, phir bhi bind rehta hai
     if (!db.isReady()) {
       await withTimeout("mongo-prime", 15000, () => db.initDbWithRetry());
     }
     if (db.isReady()) console.log("[startup] db primed — dashboard data available");
 
-    // fire-and-forget: listener ab kabhi block nahi hoga
     runStartupTasks().catch((e) => console.error("[startup] chain fail:", e.message));
   }
 
@@ -549,6 +516,7 @@ async function start() {
     if (done) return;
     done = true;
     console.log(`[shutdown] ${sig}`);
+    try { await bot.stop(); } catch (_) {}
     try { await builder.getQueue().stop(); } catch (_) {}
     try { await relay.stopRelay(); } catch (_) {}
     try { await hub.closeSockets(); } catch (_) {}
@@ -564,8 +532,6 @@ async function start() {
 
   return server;
 }
-
-// --------------------------------------------------------------- cluster
 
 function startClusterPrimary() {
   console.log(`[cluster] primary pid=${process.pid} — ${WORKERS} workers fork`);
