@@ -19,6 +19,7 @@ const HASH_FIELDS = new Set([
   "password_hash",
   "key_hash",
   "session_token_hash",
+  "otp_hash",
 ]);
 
 // ------------------------------------------------------------------ hashing
@@ -31,12 +32,104 @@ function keyHashFor(key) {
   return hashValue(normalizeKey(key));
 }
 
-function safeJsonParse(s, def = null) {
+function safeEq(a, b) {
   try {
-    return JSON.parse(s);
+    const ba = Buffer.from(String(a), "utf8");
+    const bb = Buffer.from(String(b), "utf8");
+    return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
   } catch (_) {
-    return def;
+    return false;
   }
+}
+
+// --------------------------------------------------------------- passwords
+
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_LEN = 64;
+
+function hashPassword(plain) {
+  const pw = String(plain || "");
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(pw, salt, SCRYPT_LEN, {
+    N: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+    maxmem: 64 * 1024 * 1024,
+  });
+  return [
+    "scrypt",
+    SCRYPT_N,
+    SCRYPT_R,
+    SCRYPT_P,
+    salt.toString("base64url"),
+    key.toString("base64url"),
+  ].join("$");
+}
+
+function verifyPassword(plain, stored) {
+  const s = String(stored || "");
+  if (!s.startsWith("scrypt$")) return false;
+  const parts = s.split("$");
+  if (parts.length !== 6) return false;
+
+  const [, n, r, p, saltB64, hashB64] = parts;
+  const salt = Buffer.from(saltB64, "base64url");
+  const want = Buffer.from(hashB64, "base64url");
+
+  let got;
+  try {
+    got = crypto.scryptSync(String(plain || ""), salt, want.length, {
+      N: parseInt(n, 10) || SCRYPT_N,
+      r: parseInt(r, 10) || SCRYPT_R,
+      p: parseInt(p, 10) || SCRYPT_P,
+      maxmem: 64 * 1024 * 1024,
+    });
+  } catch (_) {
+    return false;
+  }
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+
+function passwordProblem(plain) {
+  const pw = String(plain || "");
+  if (pw.length < config.PASSWORD_MIN) return `Password kam se kam ${config.PASSWORD_MIN} character`;
+  if (pw.length > 128) return "Password bahut lamba (max 128)";
+  return null;
+}
+
+function genPassword(len = 10) {
+  const A = config.KEY_ALPHABET;
+  const n = Math.max(8, Math.min(len, 32));
+  return Array.from({ length: n }, () => A[crypto.randomInt(A.length)]).join("");
+}
+
+// --------------------------------------------------------------------- OTP
+
+function genOtp(len = config.OTP_LEN) {
+  const n = Math.max(4, Math.min(len, 10));
+  let out = "";
+  for (let i = 0; i < n; i += 1) out += String(crypto.randomInt(10));
+  return out;
+}
+
+function otpHash(code, salt) {
+  return hashValue(`${salt}:${code}`);
+}
+
+function maskChatId(id) {
+  const s = String(id || "");
+  if (s.length <= 4) return "••••";
+  return "•••" + s.slice(-4);
+}
+
+function escapeHtml(s) {
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // ------------------------------------------------------------- normalizers
@@ -58,15 +151,10 @@ function normChannelId(raw) {
   return /^-?\d+$/.test(s) ? String(parseInt(s, 10)) : s;
 }
 
-/**
- * Channel ko compare karne ke liye canonical key.
- * numeric id -> digits (aur -100 prefix strip), username -> lowercase.
- */
 function chanKey(v) {
   if (v === null || v === undefined) return "";
   const s0 = String(v).trim().replace(/^@+/, "");
   if (!s0) return "";
-
   if (/^-?\d+$/.test(s0)) {
     let s = s0.replace(/[^\d]/g, "");
     if (s.startsWith("100") && s.length > 10) s = s.slice(3);
@@ -94,6 +182,10 @@ function normalizeKey(raw) {
   return String(raw || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 }
 
+function safeJsonParse(s, def = null) {
+  try { return JSON.parse(s); } catch (_) { return def; }
+}
+
 // ------------------------------------------------------------- serializers
 
 function serializeDt(v) {
@@ -110,12 +202,8 @@ function serializeDocument(doc) {
   if (!doc) return out;
 
   for (const [k, v] of Object.entries(doc)) {
-    if (k === "_id") {
-      out.id = String(v);
-      continue;
-    }
+    if (k === "_id") { out.id = String(v); continue; }
     if (HASH_FIELDS.has(k)) continue;
-
     if (v && typeof v === "object" && !(v instanceof Date) && !(v instanceof db.ObjectId)) {
       out[k] = Array.isArray(v) ? v.map(serializeDt) : v;
     } else {
@@ -162,10 +250,7 @@ function sanitizeTelemetry(raw) {
     const key = k0.slice(0, 60);
 
     const scalar = sanitizeScalar(value);
-    if (scalar !== undefined) {
-      clean[key] = scalar;
-      continue;
-    }
+    if (scalar !== undefined) { clean[key] = scalar; continue; }
 
     if (Array.isArray(value)) {
       clean[key] = value
@@ -215,7 +300,6 @@ function simSlotCount(device) {
 function resolveDeviceNumber(device) {
   if (!device) return "";
   const t = device.telemetry || {};
-
   for (const cand of [t.sim_number, t.phone_number, device.sim_number, device.phone_number]) {
     const n = normalizeNumber(cand);
     if (n) return n;
@@ -393,7 +477,7 @@ function deviceInstallState(d) {
 }
 
 function viewDevice(d, includeHash = false) {
-  const hub = require("./hub"); // lazy -> load-time cycle avoid
+  const hub = require("./hub");
   const s = serializeDocument(d);
 
   s.short_id = deviceShortId(d);
@@ -401,6 +485,8 @@ function viewDevice(d, includeHash = false) {
   s.live_number = resolveDeviceNumber(d);
   s.entered_number = normalizeNumber(d.phone_number) || d.phone_number || "";
   s.auto_sender = autoSenderPlain(d);
+  s.owner_key_id = d.owner_key_id ? String(d.owner_key_id) : null;
+  s.owner_label = d.owner_label || "";
 
   const t = d.telemetry || {};
   s.install_state = deviceInstallState(d);
@@ -424,6 +510,30 @@ async function getDeviceOr404(deviceId) {
   }
   if (!d) throw new HttpError(404, "Device not found");
   return d;
+}
+
+/** key user sirf apna device dekh sakta hai */
+function assertDeviceAccess(device, ident) {
+  if (!device) throw new HttpError(404, "Device not found");
+  if (!ident || ident.role === "admin") return device;
+  const owner = device.owner_key_id ? String(device.owner_key_id) : null;
+  if (!owner || owner !== String(ident.owner_key_id)) {
+    throw new HttpError(403, "Ye device aapka nahi hai");
+  }
+  return device;
+}
+
+function ownerFilter(ident) {
+  if (!ident || ident.role === "admin") return {};
+  return { owner_key_id: String(ident.owner_key_id) };
+}
+
+async function ownedDeviceIds(ident) {
+  if (!ident || ident.role === "admin") return null;
+  const rows = await db.devices
+    .find({ owner_key_id: String(ident.owner_key_id) }, { projection: { _id: 1 } })
+    .toArray();
+  return rows.map((r) => String(r._id));
 }
 
 // ----------------------------------------------------------------- messages
@@ -472,6 +582,14 @@ async function keyDoc(key) {
   }
 }
 
+async function keyById(id) {
+  try {
+    return await db.panel_keys.findOne({ _id: new db.ObjectId(String(id)) });
+  } catch (_) {
+    return null;
+  }
+}
+
 function keyActive(doc) {
   if (!doc) return false;
   if (doc.blocked) return false;
@@ -480,11 +598,30 @@ function keyActive(doc) {
   return true;
 }
 
+async function adminDoc(username) {
+  const name = String(username || "").trim().toLowerCase();
+  if (!name) return null;
+  try {
+    return await db.panel_admins.findOne({ username_lc: name });
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   HttpError,
   HASH_FIELDS,
   hashValue,
   keyHashFor,
+  safeEq,
+  hashPassword,
+  verifyPassword,
+  passwordProblem,
+  genPassword,
+  genOtp,
+  otpHash,
+  maskChatId,
+  escapeHtml,
   safeJsonParse,
   normalizeNumber,
   normChannelId,
@@ -512,9 +649,14 @@ module.exports = {
   deviceInstallState,
   viewDevice,
   getDeviceOr404,
+  assertDeviceAccess,
+  ownerFilter,
+  ownedDeviceIds,
   dedupeKey,
   insertMessage,
   newKey,
   keyDoc,
+  keyById,
   keyActive,
+  adminDoc,
 };
