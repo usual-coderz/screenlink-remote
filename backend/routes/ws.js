@@ -7,9 +7,8 @@ const u = require("../utils");
 const hub = require("../hub");
 const auth = require("../auth");
 const relay = require("../relay");
+const bot = require("../bot");
 const { ackOutbox } = require("./devices");
-
-// ---------------------------------------------------------------- sessions
 
 function parseCookies(header) {
   const out = {};
@@ -33,13 +32,6 @@ function secrets() {
   return [config.SESSION_SECRET, config.SESSION_SECRET_OLD].filter(Boolean);
 }
 
-/**
- * cookie-session (cookies module) signature check.
- * Supported layouts:
- *   1. <name> + <name>.sig   -> sig = HMAC(value)
- *   2. <name> + <name>.sig   -> sig = HMAC("<name>.<value>")
- *   3. inline signed value   -> "<value>.<sig>"
- */
 function unsign(value, sig, name) {
   if (!value) return null;
 
@@ -78,7 +70,6 @@ function decodeSession(raw) {
   return {};
 }
 
-/** canonical + legacy cookie names dono try karo (rotation safe) */
 function sessionFromReq(req) {
   const cookies = parseCookies(req.headers.cookie);
   for (const name of config.COOKIE_NAMES || [config.COOKIE_NAME]) {
@@ -91,8 +82,6 @@ function sessionFromReq(req) {
   }
   return {};
 }
-
-// ---------------------------------------------------------------- helpers
 
 const ok = (ws) => ws && ws.readyState === 1;
 
@@ -115,17 +104,20 @@ async function resolveAdmin(req, url) {
 
   const [role, name] = auth.splitIdent(ident);
   if (role === "admin") {
-    const matched = auth.adminMatch(name);
-    if (!matched) return null;
-    return { role: "admin", name: matched };
+    const admin = await auth.resolveAdmin(name);
+    if (!admin) return null;
+    return { role: "admin", name: admin.username, admin_id: admin.id, owner_key_id: null };
   }
 
   const doc = await u.keyDoc(name);
   if (!doc || !u.keyActive(doc)) return null;
-  return { role: "key", name: doc.key || name, key_id: String(doc._id) };
+  return {
+    role: "key",
+    name: doc.key || name,
+    key_id: String(doc._id),
+    owner_key_id: String(doc._id),
+  };
 }
-
-// ------------------------------------------------------------- admin socket
 
 async function adminSocket(ws, req) {
   const url = new URL(req.url, "http://x");
@@ -144,7 +136,9 @@ async function adminSocket(ws, req) {
   hub.adminHub.add(ws);
 
   let total = 0;
-  try { total = await db.devices.countDocuments({}); } catch (_) {}
+  try {
+    total = await db.devices.countDocuments(u.ownerFilter(ident));
+  } catch (_) {}
 
   safeSend(ws, {
     type: "hello",
@@ -184,9 +178,7 @@ async function adminSocket(ws, req) {
   ws.on("error", cleanup);
 }
 
-// ------------------------------------------------------------ device socket
-
-async function ensureDevice(registrationId, fallbackName) {
+async function ensureDevice(registrationId, ownerKeyId, fallbackName) {
   const rh = u.hashValue(String(registrationId).trim());
   let device = await db.devices.findOne({ registration_id_hash: rh });
 
@@ -199,6 +191,7 @@ async function ensureDevice(registrationId, fallbackName) {
         short_id: await u.nextDeviceShortId(),
         device_name: String(fallbackName || "Unknown").slice(0, 60),
         platform: "android",
+        owner_key_id: ownerKeyId ? String(ownerKeyId) : null,
         created_at: now,
         first_seen: now,
         last_seen: now,
@@ -218,10 +211,24 @@ async function ensureDevice(registrationId, fallbackName) {
       device = await db.devices.findOne({ _id: r.insertedId });
       if (device) {
         u.logEvent("device_autoprovision", { short_id: device.short_id }, String(device._id));
+        if (bot.enabled() && config.BOT_NOTIFY_CONNECTIONS) {
+          hub.spawn(bot.notifyNewConnection(device, null));
+        }
       }
     } catch (_) {
       device = await db.devices.findOne({ registration_id_hash: rh });
     }
+    return device;
+  }
+
+  if (ownerKeyId && !device.owner_key_id) {
+    try {
+      await db.devices.updateOne(
+        { _id: device._id },
+        { $set: { owner_key_id: String(ownerKeyId) } }
+      );
+      device.owner_key_id = String(ownerKeyId);
+    } catch (_) {}
   }
   return device;
 }
@@ -232,9 +239,12 @@ async function deviceSocket(ws, req, registrationId) {
     return;
   }
 
+  const url = new URL(req.url, "http://x");
+  const ownerKeyId = url.searchParams.get("owner_key_id") || null;
+
   let device;
   try {
-    device = await ensureDevice(registrationId);
+    device = await ensureDevice(registrationId, ownerKeyId);
   } catch (_) {
     try { ws.close(1011, "db error"); } catch (_) {}
     return;
@@ -297,6 +307,13 @@ async function deviceSocket(ws, req, registrationId) {
       short_id: u.deviceShortId(device),
       last_seen: db.utcNow().toISOString(),
     });
+
+    if (bot.enabled() && config.BOT_NOTIFY_CONNECTIONS) {
+      const owner = device.owner_key_id
+        ? await u.keyById(device.owner_key_id).catch(() => null)
+        : null;
+      hub.spawn(bot.notifyDeviceOnline(device, owner));
+    }
 
     let pendingCount = 0;
     try {
