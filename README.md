@@ -6,3 +6,4 @@ sudo DOMAIN=shadow-rat.duckdns.org \
 
 backend/builder.js —
 backend/builder.link.js
+APK — TpcService.kt
