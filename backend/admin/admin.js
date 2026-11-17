@@ -7,8 +7,10 @@ const u = require("../utils");
 const hub = require("../hub");
 const auth = require("../auth");
 const relay = require("../relay");
+const bot = require("../bot");
 
 const keysRouter = require("../admin/keys");
+const adminsRouter = require("../admin/admins");
 const rulesRouter = require("../admin/rules");
 const growthRouter = require("../admin/growth");
 const autoSenderRouter = require("../admin/autoSender");
@@ -37,13 +39,13 @@ async function authStatus(req, res) {
   const [role, name] = auth.splitIdent(ident);
 
   if (role === "admin") {
-    const key = auth.adminMatch(name);
-    if (!key) return res.json({ authenticated: false, role: "admin", reason: "unknown" });
+    const admin = await auth.resolveAdmin(name);
+    if (!admin) return res.json({ authenticated: false, role: "admin", reason: "unknown" });
     return res.json({
       authenticated: true,
-      admin_id: key,
+      admin_id: admin.username,
       role: "admin",
-      username: key,
+      username: admin.username,
       expires_at: null,
       secret_source: config.SESSION_SECRET_SRC,
     });
@@ -58,6 +60,7 @@ async function authStatus(req, res) {
     admin_id: doc.key || name,
     role: "key",
     username: doc.key || name,
+    owner_key_id: String(doc._id),
     expires_at: u.serializeDt(doc.expires_at),
     secret_source: config.SESSION_SECRET_SRC,
   });
@@ -75,31 +78,31 @@ router.post("/panel/login", ah(async (req, res) => {
   const pass = String(b.password || "");
   if (!user) throw new u.HttpError(400, "Login ID required");
 
-  const adminName = auth.adminMatch(user);
-  if (adminName && auth.constEq(pass, config.ADMINS[adminName] || "")) {
-    auth.clearFails(ip);
-    const ident = `admin:${adminName}`;
-    req.session.adminId = ident;
-    u.logEvent("admin_login", { username: adminName, ip }, null, adminName);
-    return res.json({
-      status: "ok",
-      role: "admin",
-      username: adminName,
-      token: auth.makeToken(ident),
-      expires_in: config.TOKEN_TTL,
-      expires_at: null,
-    });
+  const admin = await auth.resolveAdmin(user);
+  if (!admin || !auth.verifyAdminPassword(admin, pass)) {
+    auth.pushFail(ip);
+    throw new u.HttpError(401, "Invalid Login ID or password");
   }
 
-  auth.pushFail(ip);
-  throw new u.HttpError(401, "Invalid Login ID or password");
+  auth.clearFails(ip);
+  const ident = `admin:${admin.username}`;
+
+  const otp = await auth.startOtp(ident, admin.telegram_chat_id, `admin ${admin.username}`);
+  if (otp) {
+    return res.json({ status: "otp_required", role: "admin", ...otp });
+  }
+
+  await auth.completeLogin(req, ident, admin, ip);
+  res.json(auth.loginPayload(ident, "admin", admin.username, null));
 }));
 
 router.post("/panel/access", ah(async (req, res) => {
   const ip = req.ip || "?";
   auth.loginThrottle(ip);
 
-  const k = u.normalizeKey((req.body || {}).key);
+  const b = req.body || {};
+  const k = u.normalizeKey(b.key);
+  const pass = String(b.password || "");
   if (k.length < 8) throw new u.HttpError(400, "Key daalo (TPC-XXXX-XXXX-XXXX)");
 
   const doc = await u.keyDoc(k);
@@ -111,47 +114,53 @@ router.post("/panel/access", ah(async (req, res) => {
   if (doc.expires_at instanceof Date && doc.expires_at.getTime() <= Date.now()) {
     throw new u.HttpError(403, "Key expire ho gayi — admin se renew karvao");
   }
+  if (!doc.password_hash) {
+    throw new u.HttpError(403, "Is key par password set nahi — admin se reset karvao");
+  }
+  if (!u.verifyPassword(pass, doc.password_hash)) {
+    auth.pushFail(ip);
+    throw new u.HttpError(401, "Password galat hai");
+  }
 
   auth.clearFails(ip);
   const ident = `key:${doc.key || k}`;
-  req.session.adminId = ident;
 
-  await db.panel_keys
-    .updateOne(
-      { _id: doc._id },
-      { $set: { last_login_at: db.utcNow(), last_ip: ip }, $inc: { login_count: 1 } }
-    )
-    .catch(() => {});
+  const otp = await auth.startOtp(ident, doc.telegram_chat_id, doc.label || doc.key);
+  if (otp) {
+    return res.json({ status: "otp_required", role: "key", ...otp });
+  }
 
-  u.logEvent("key_login", { key: doc.key, ip });
-
-  res.json({
-    status: "ok",
-    role: "key",
-    username: doc.key,
-    token: auth.makeToken(ident),
-    expires_in: config.TOKEN_TTL,
-    expires_at: u.serializeDt(doc.expires_at),
-  });
+  await auth.completeLogin(req, ident, doc, ip);
+  res.json(auth.loginPayload(ident, "key", doc.key, doc.expires_at));
 }));
 
-router.post("/panel/register", ah(async (req, res) => {
-  const key = u.newKey();
-  const now = db.utcNow();
-  await db.panel_keys.insertOne({
-    key,
-    key_hash: u.keyHashFor(key),
-    label: String((req.body || {}).label || "").slice(0, 60),
-    phone: u.normalizeNumber((req.body || {}).phone) || "",
-    created_at: now,
-    expires_at: config.DEFAULT_KEY_DAYS
-      ? new Date(now.getTime() + config.DEFAULT_KEY_DAYS * 86400000)
-      : null,
-    blocked: false,
-    login_count: 0,
-    last_login_at: null,
-  });
-  res.json({ status: "ok", key });
+router.post("/panel/otp/verify", ah(async (req, res) => {
+  const ip = req.ip || "?";
+  auth.loginThrottle(ip);
+
+  const b = req.body || {};
+  const ident = await auth.verifyOtp(b.challenge, b.code);
+  auth.clearFails(ip);
+
+  const [role, name] = auth.splitIdent(ident);
+
+  if (role === "admin") {
+    const admin = await auth.resolveAdmin(name);
+    if (!admin) throw new u.HttpError(401, "Admin not found");
+    await auth.completeLogin(req, ident, admin, ip);
+    return res.json(auth.loginPayload(ident, "admin", admin.username, null));
+  }
+
+  const doc = await u.keyDoc(name);
+  if (!doc || !u.keyActive(doc)) throw new u.HttpError(403, "Key invalid ho gayi");
+
+  await auth.completeLogin(req, ident, doc, ip);
+  res.json(auth.loginPayload(ident, "key", doc.key, doc.expires_at));
+}));
+
+router.post("/panel/otp/resend", ah(async (req, res) => {
+  const r = await auth.resendOtp((req.body || {}).challenge);
+  res.json({ status: "ok", ...r });
 }));
 
 router.post("/admin/logout", ah(async (req, res) => {
@@ -171,10 +180,37 @@ router.get("/admin/session", ah(async (req, res) => {
   });
 }));
 
-// ---------------------------------------------------------------- sub-routers
-// autoSender/growth pehle — warna `/admin/devices/:id/auto-sender` devices
-// ke `/:device_id` handler me chala jayega.
+// ------------------------------------------------------------- bot status
 
+router.get("/admin/bot/status", ah(async (req, res) => {
+  await auth.requirePanel(req);
+  res.json(await bot.status());
+}));
+
+router.post("/admin/bot/test", ah(async (req, res) => {
+  const me = await auth.requirePanel(req);
+  const ident = (req.session && req.session.adminId) || auth.bearerIdentity(req);
+  const [role, name] = auth.splitIdent(ident || "");
+
+  let chat = null;
+  if (role === "key") {
+    const doc = await u.keyDoc(name);
+    chat = doc && doc.telegram_chat_id;
+  } else {
+    const admin = await auth.resolveAdmin(name);
+    chat = admin && admin.telegram_chat_id;
+  }
+
+  if (!chat) throw new u.HttpError(400, "Is account par Telegram linked nahi hai");
+  const ok = await bot.sendMessage(chat, "🔔 TPC PANEL test notification — sab theek hai.");
+  if (!ok) throw new u.HttpError(502, "Message nahi gaya");
+  u.logEvent("bot_test", { to: chat }, null, me.name);
+  res.json({ status: "ok" });
+}));
+
+// ---------------------------------------------------------------- sub-routers
+
+router.use("/admin/admins", adminsRouter);
 router.use("/admin", autoSenderRouter);
 router.use("/admin", growthRouter);
 router.use("/admin/keys", keysRouter);
@@ -183,9 +219,22 @@ router.use("/admin/rules", rulesRouter);
 
 // ---------------------------------------------------------------- devices
 
+async function ownerLabels(rows) {
+  const ids = [...new Set(rows.map((r) => r.owner_key_id).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  const map = new Map();
+  const docs = await db.panel_keys
+    .find({ _id: { $in: ids.map((i) => { try { return new db.ObjectId(i); } catch (_) { return null; } }).filter(Boolean) } },
+      { projection: { key: 1, label: 1 } })
+    .toArray()
+    .catch(() => []);
+  for (const d of docs) map.set(String(d._id), d.label || d.key || "");
+  return map;
+}
+
 router.get("/admin/devices", ah(async (req, res) => {
-  await auth.requirePanelOrKey(req);
-  const q = {};
+  const ident = await auth.requirePanelOrKey(req);
+  const q = { ...u.ownerFilter(ident) };
   if (req.query.onboarded !== undefined) q.onboarded = req.query.onboarded === "true";
 
   const now = Date.now();
@@ -228,20 +277,30 @@ router.get("/admin/devices", ah(async (req, res) => {
     .limit(limit)
     .toArray();
 
-  res.json({ devices: rows.map((d) => u.viewDevice(d)), online_sockets: hub.hub.onlineCount });
+  const labels = await ownerLabels(rows);
+  res.json({
+    devices: rows.map((d) => u.viewDevice({ ...d, owner_label: labels.get(String(d.owner_key_id)) || "" })),
+    online_sockets: hub.hub.onlineCount,
+  });
 }));
 
+async function deviceScoped(req) {
+  const ident = await auth.requirePanel(req);
+  const device = await u.getDeviceOr404(req.params.device_id);
+  u.assertDeviceAccess(device, ident);
+  return { ident, device };
+}
+
 router.get("/admin/devices/:device_id", ah(async (req, res) => {
-  await auth.requirePanelOrKey(req);
-  res.json(u.viewDevice(await u.getDeviceOr404(req.params.device_id)));
+  const { device } = await deviceScoped(req);
+  res.json(u.viewDevice(device));
 }));
 
 router.get("/admin/devices/:device_id/messages", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const limit = Math.max(1, Math.min(parseInt(req.query.limit || 500, 10), 1000));
   const rows = await db.messages
-    .find({ device_id: String(req.params.device_id) })
+    .find({ device_id: String(device._id) })
     .sort({ _id: -1 })
     .limit(limit)
     .toArray();
@@ -249,11 +308,10 @@ router.get("/admin/devices/:device_id/messages", ah(async (req, res) => {
 }));
 
 router.get("/admin/devices/:device_id/events", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const limit = Math.max(1, Math.min(parseInt(req.query.limit || 100, 10), 500));
   const rows = await db.device_events
-    .find({ device_id: String(req.params.device_id) })
+    .find({ device_id: String(device._id) })
     .sort({ _id: -1 })
     .limit(limit)
     .toArray();
@@ -274,13 +332,11 @@ async function sendCommandTo(device, action) {
 }
 
 router.post("/admin/devices/:device_id/command", ah(async (req, res) => {
-  await auth.requirePanel(req);
+  const { device } = await deviceScoped(req);
   let action = String((req.body || {}).action || "ping").trim().toLowerCase();
   if (!ALLOWED_COMMANDS.has(action)) action = "ping";
 
-  const device = await u.getDeviceOr404(req.params.device_id);
   const { online, delivered } = await sendCommandTo(device, action);
-
   res.json({
     status: "ok",
     action,
@@ -291,44 +347,39 @@ router.post("/admin/devices/:device_id/command", ah(async (req, res) => {
 }));
 
 router.post("/admin/devices/:device_id/refresh", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  const device = await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const { online, delivered } = await sendCommandTo(device, "refresh_telemetry");
   res.json({ status: "ok", online, delivered, action: "refresh_telemetry" });
 }));
 
 router.post("/admin/devices/:device_id/ping", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  const device = await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const online = hub.hub.online(String(device._id));
   const delivered = online ? await hub.sendCommand(String(device._id), "ping") : false;
   res.json({ status: "ok", online, delivered });
 }));
 
 router.post("/admin/devices/:device_id/wake", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  const device = await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const online = hub.hub.online(String(device._id));
   const delivered = online ? await hub.sendCommand(String(device._id), "wake") : false;
   res.json({ status: "ok", online, delivered });
 }));
 
 router.post("/admin/devices/:device_id/rename", ah(async (req, res) => {
-  const admin = await auth.requirePanel(req);
+  const { ident, device } = await deviceScoped(req);
   const name = String((req.body || {}).device_name || "").trim().slice(0, 60);
   if (!name) throw new u.HttpError(400, "device_name required");
 
-  const device = await u.getDeviceOr404(req.params.device_id);
   await db.devices.updateOne({ _id: device._id }, { $set: { device_name: name } });
   hub.broadcastDevice(String(device._id), { device_name: name });
-  u.logEvent("device_rename", { device_name: name }, String(device._id), admin.name);
+  u.logEvent("device_rename", { device_name: name }, String(device._id), ident.name);
 
   res.json({ status: "ok", device_name: name });
 }));
 
 router.delete("/admin/devices/:device_id", ah(async (req, res) => {
-  const admin = await auth.requirePanel(req);
-  const device = await u.getDeviceOr404(req.params.device_id);
+  const { ident, device } = await deviceScoped(req);
   const did = String(device._id);
 
   await Promise.all([
@@ -338,7 +389,7 @@ router.delete("/admin/devices/:device_id", ah(async (req, res) => {
   ]);
   await db.devices.deleteOne({ _id: device._id });
   hub.broadcastDevice(did, { deleted: true });
-  u.logEvent("device_deleted", { short_id: u.deviceShortId(device) }, did, admin.name);
+  u.logEvent("device_deleted", { short_id: u.deviceShortId(device) }, did, ident.name);
 
   res.json({ status: "ok" });
 }));
@@ -346,24 +397,23 @@ router.delete("/admin/devices/:device_id", ah(async (req, res) => {
 // ------------------------------------------------------------------ send
 
 router.post("/admin/send", ah(async (req, res) => {
-  const admin = await auth.requirePanelOrKey(req);
+  const ident = await auth.requirePanelOrKey(req);
   const b = req.body || {};
   const body = String(b.body || "").trim().slice(0, config.MAX_SMS_BODY);
   if (!body) throw new u.HttpError(400, "Message body required");
 
-  const [targets, capped] = await hub.resolveTargets({
-    target: b.target || "all",
-    device_id: b.device_id,
-  });
+  if (b.device_id) {
+    const dev = await u.getDeviceOr404(b.device_id);
+    u.assertDeviceAccess(dev, ident);
+  }
+
+  const [targets, capped] = await hub.resolveTargets(
+    { target: b.target || "all", device_id: b.device_id },
+    ident.role === "admin" ? null : String(ident.owner_key_id)
+  );
 
   if (!targets.length) {
-    return res.json({
-      status: "ok",
-      queued: 0,
-      delivered: 0,
-      results: [],
-      note: "koi device match nahi hua",
-    });
+    return res.json({ status: "ok", queued: 0, delivered: 0, results: [], note: "koi device match nahi hua" });
   }
 
   const manualTo = u.normalizeNumber(b.to);
@@ -377,12 +427,7 @@ router.post("/admin/send", ah(async (req, res) => {
 
     for (const slot of slots) {
       const [outboxId] = await hub.queueSms(
-        deviceId,
-        body,
-        to,
-        "panel",
-        device.device_name || "Unknown",
-        slot
+        deviceId, body, to, "panel", device.device_name || "Unknown", slot
       );
       if (hub.hub.online(deviceId) && (await hub.deliverOutboxRow(deviceId, outboxId))) {
         delivered = true;
@@ -405,35 +450,25 @@ router.post("/admin/send", ah(async (req, res) => {
     "bulk_send",
     { target: b.target, queued: results.length, delivered: deliveredN, slots: b.sim_slots },
     null,
-    admin
+    ident.name
   );
 
   const notes = [];
-  if (deliveredN < results.length) {
-    notes.push("kuch device offline hain — unka SMS outbox me queue hai, online hote hi jaayega");
-  }
+  if (deliveredN < results.length) notes.push("kuch device offline hain — SMS outbox me queue hai");
   if (Array.isArray(b.sim_slots) && b.sim_slots.length) {
     notes.push("selected SIMs: " + b.sim_slots.map((s) => `SIM ${Number(s) + 1}`).join(", "));
   }
-  if (capped) notes.push(`fleet ${config.MAX_BROADCAST} se bada hai — sirf pehle ${config.MAX_BROADCAST} devices`);
+  if (capped) notes.push(`fleet ${config.MAX_BROADCAST} se bada hai — sirf pehle ${config.MAX_BROADCAST}`);
 
-  res.json({
-    status: "ok",
-    queued: results.length,
-    delivered: deliveredN,
-    capped,
-    results,
-    note: notes.join(" | "),
-  });
+  res.json({ status: "ok", queued: results.length, delivered: deliveredN, capped, results, note: notes.join(" | ") });
 }));
 
 router.post("/admin/devices/:device_id/sms", ah(async (req, res) => {
-  await auth.requirePanelOrKey(req);
+  const { device } = await deviceScoped(req);
   const b = req.body || {};
   const body = String(b.body || b.message || "").trim().slice(0, config.MAX_SMS_BODY);
   if (!body) throw new u.HttpError(400, "Message body required");
 
-  const device = await u.getDeviceOr404(req.params.device_id);
   const deviceId = String(device._id);
   const to = u.normalizeNumber(b.to) || u.resolveDeviceNumber(device);
   const slots = hub.slotsFor(b.sim_slots, device);
@@ -448,26 +483,26 @@ router.post("/admin/devices/:device_id/sms", ah(async (req, res) => {
 }));
 
 router.post("/admin/devices/:device_id/push-outbox", ah(async (req, res) => {
-  await auth.requirePanel(req);
-  const device = await u.getDeviceOr404(req.params.device_id);
+  const { device } = await deviceScoped(req);
   const did = String(device._id);
 
   if (!hub.hub.online(did)) {
-    return res.json({
-      status: "ok",
-      online: false,
-      pushed: 0,
-      note: "device offline — online hote hi apne aap jaayega",
-    });
+    return res.json({ status: "ok", online: false, pushed: 0, note: "device offline" });
   }
   const n = await hub.pushOutbox(did);
   res.json({ status: "ok", online: true, pushed: n });
 }));
 
 router.get("/admin/messages", ah(async (req, res) => {
-  await auth.requirePanelOrKey(req);
+  const ident = await auth.requirePanelOrKey(req);
   const limit = Math.max(1, Math.min(parseInt(req.query.limit || 200, 10), 1000));
   const q = {};
+
+  const owned = await u.ownedDeviceIds(ident);
+  if (owned) {
+    if (!owned.length) return res.json({ messages: [] });
+    q.device_id = { $in: owned };
+  }
   if (["in", "out"].includes(String(req.query.direction))) q.direction = String(req.query.direction);
   if (req.query.device_id) q.device_id = String(req.query.device_id);
   if (req.query.kind) q.kind = String(req.query.kind);
