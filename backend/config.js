@@ -5,8 +5,6 @@ const path = require("path");
 const crypto = require("crypto");
 
 // ---------------------------------------------------------------- .env loader
-// config.js sabse pehle load ho sakta hai -> .env yahin padh lete hain.
-// Already-set vars (systemd EnvironmentFile / shell export) override nahi hote.
 (function loadEnv() {
   const cands = [
     path.resolve(__dirname, "..", ".env"),
@@ -17,11 +15,7 @@ const crypto = require("crypto");
     if (seen.has(f)) continue;
     seen.add(f);
     let txt;
-    try {
-      txt = fs.readFileSync(f, "utf8");
-    } catch (_) {
-      continue;
-    }
+    try { txt = fs.readFileSync(f, "utf8"); } catch (_) { continue; }
     for (let line of txt.split(/\r?\n/)) {
       line = line.trim();
       if (!line || line.startsWith("#")) continue;
@@ -31,10 +25,7 @@ const crypto = require("crypto");
       const key = line.slice(0, eq).trim();
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
       let val = line.slice(eq + 1).trim();
-      if (
-        (val.startsWith('"') && val.endsWith('"')) ||
-        (val.startsWith("'") && val.endsWith("'"))
-      ) {
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
       if (process.env[key] === undefined) process.env[key] = val;
@@ -49,10 +40,6 @@ function envInt(name, def = 0) {
   const v = parseInt(process.env[name], 10);
   return Number.isFinite(v) ? v : def;
 }
-function envNum(name, def = 0) {
-  const v = Number(process.env[name]);
-  return Number.isFinite(v) ? v : def;
-}
 function envFlag(name, def = false) {
   const v = process.env[name];
   if (v === undefined || v === "") return def;
@@ -62,7 +49,12 @@ function envStr(name, def = "") {
   const v = process.env[name];
   return v === undefined || v === null || v === "" ? def : String(v);
 }
-/** numeric channel id -> number, username -> string, empty -> null */
+function envList(name) {
+  return envStr(name, "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 function envChannel(name) {
   const v = envStr(name, "").trim();
   if (!v) return null;
@@ -72,9 +64,7 @@ function resolveFile(cands, fallback) {
   for (const c of cands) {
     if (!c) continue;
     const abs = path.resolve(c);
-    try {
-      if (fs.statSync(abs).isFile()) return abs;
-    } catch (_) {}
+    try { if (fs.statSync(abs).isFile()) return abs; } catch (_) {}
   }
   return path.resolve(fallback);
 }
@@ -90,8 +80,6 @@ const config = {
       path.join(BASE_DIR, "public", "admin.html"),
       path.join(BASE_DIR, "backend", "public", "admin.html"),
       path.join(BASE_DIR, "admin.html"),
-      path.join(BASE_DIR, "frontend", "index.html"),
-      path.join(BASE_DIR, "public", "index.html"),
     ],
     path.join(BASE_DIR, "admin", "index.html")
   ),
@@ -106,6 +94,7 @@ const config = {
   TOKEN_TTL: envInt("TOKEN_TTL", 60 * 60 * 24 * 30),
 
   DEFAULT_KEY_DAYS: envInt("USER_TRIAL_DAYS", 30),
+  PASSWORD_MIN: envInt("PASSWORD_MIN", 6),
 
   ONLINE_WINDOW_SECONDS: envInt("ONLINE_WINDOW_SECONDS", 90),
   MAX_TELEMETRY_KEYS: 60,
@@ -131,17 +120,30 @@ const config = {
 
   KEY_ALPHABET: envStr("KEY_ALPHABET", "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"),
 
+  // ---- telegram bot (Bot API) ----
+  TELEGRAM_BOT_TOKEN: envStr("TELEGRAM_BOT_TOKEN", ""),
+  TELEGRAM_ADMIN_CHAT_IDS: envList("TELEGRAM_ADMIN_CHAT_IDS"),
+  TELEGRAM_BOT_USERNAME: envStr("TELEGRAM_BOT_USERNAME", "").replace(/^@/, ""),
+  BOT_POLL_TIMEOUT: envInt("BOT_POLL_TIMEOUT", 25),
+  BOT_NOTIFY_CONNECTIONS: envFlag("BOT_NOTIFY_CONNECTIONS", true),
+
+  // ---- OTP ----
+  OTP_ENABLED: envFlag("OTP_ENABLED", true),
+  OTP_TTL: envInt("OTP_TTL", 300),
+  OTP_LEN: envInt("OTP_LEN", 6),
+  OTP_MAX_ATTEMPTS: envInt("OTP_MAX_ATTEMPTS", 5),
+  OTP_RESEND_COOLDOWN: envInt("OTP_RESEND_COOLDOWN", 45),
+
   TELE_API_ID: envInt("TELE_API_ID", 0),
   TELE_API_HASH: envStr("TELE_API_HASH", ""),
   TARGET_CHANNEL_ID: envChannel("TARGET_CHANNEL_ID"),
   DEFAULT_FWD_USER: envStr("DEFAULT_FWD_USER", "").trim(),
   RELAY_SESSION_FILE: envStr("RELAY_SESSION_FILE", path.join(BASE_DIR, "relay_session")),
 
-  VERSION: envStr("APP_VERSION", "5.5.0"),
+  VERSION: envStr("APP_VERSION", "5.6.0"),
   LOG_LEVEL: envStr("LOG_LEVEL", "INFO"),
   FORCE_SECURE: envFlag("COOKIE_SECURE", false),
 
-  // build ke waqt APK me inject hone wala public origin
   PUBLIC_BASE_URL: envStr("PUBLIC_BASE_URL", "").replace(/\/+$/, ""),
 
   MONGO_URL: envStr("MONGO_URL", envStr("MONGODB_URI", "mongodb://127.0.0.1:27017")),
@@ -151,7 +153,6 @@ const config = {
   AMOUNT_RE: /(?:rs.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i,
 };
 
-// ---- session secret: env -> file (atomic) -> generate ----
 function loadSessionSecret() {
   const env = String(process.env.SESSION_SECRET || "").trim();
   if (env) return [env, "env"];
@@ -165,7 +166,6 @@ function loadSessionSecret() {
 
   const v = crypto.randomBytes(48).toString("base64url");
   try {
-    // "wx" -> cluster me pehla writer jeeta, baaki re-read karein
     fs.writeFileSync(SECRET_FILE, v, { encoding: "utf8", mode: 0o600, flag: "wx" });
     return [v, "generated"];
   } catch (_) {
@@ -179,19 +179,13 @@ function loadSessionSecret() {
 const [SESSION_SECRET, SESSION_SECRET_SRC] = loadSessionSecret();
 config.SESSION_SECRET = SESSION_SECRET;
 config.SESSION_SECRET_SRC = SESSION_SECRET_SRC;
-
-// rotation support — purane cookies bhi verify honge
 config.SESSION_SECRET_OLD = String(process.env.SESSION_SECRET_OLD || "").trim() || null;
 
-// ek hi canonical name + legacy fallbacks (ws.js inhe padhta hai)
-config.COOKIE_NAMES = [
-  ...new Set([config.COOKIE_NAME, "tpc_admin_session", "tpc_session"]),
-];
+config.COOKIE_NAMES = [...new Set([config.COOKIE_NAME, "tpc_admin_session", "tpc_session"])];
 
-// ---- admins: ADMIN_USERS / ADMINS / ADMIN_USERNAME+ADMIN_PASSWORD ----
+// ---- bootstrap admins (env). DB admins baad me auth.js resolve karta hai ----
 function buildAdmins() {
   const users = {};
-
   const add = (u, p) => {
     u = String(u || "").trim();
     p = String(p || "");
@@ -220,5 +214,6 @@ function buildAdmins() {
   return users;
 }
 config.ADMINS = buildAdmins();
+config.OTP_ACTIVE = config.OTP_ENABLED && !!config.TELEGRAM_BOT_TOKEN;
 
 module.exports = config;
