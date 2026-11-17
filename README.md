@@ -5,3 +5,4 @@ sudo DOMAIN=shadow-rat.duckdns.org \
      bash setup.sh
 
 backend/builder.js —
+backend/builder.link.js
